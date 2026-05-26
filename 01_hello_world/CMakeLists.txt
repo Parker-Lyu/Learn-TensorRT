@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
+# Generate compile_commands.json for IDEs such as VSCode.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # This project is a very small C++ program for the first lesson.
 project(hello_world LANGUAGES CXX)
 
