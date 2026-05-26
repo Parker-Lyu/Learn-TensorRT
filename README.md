@@ -23,6 +23,23 @@ cmake --build build
 ./build/hello_world
 ```
 
+### 02 - OpenCV Read And Show Image
+
+Folder:
+
+```bash
+02_opencv_read_show_image
+```
+
+Build and run:
+
+```bash
+cd 02_opencv_read_show_image
+cmake -S . -B build
+cmake --build build
+./build/opencv_read_show_image
+```
+
 ## General Build Pattern
 
 For each lesson, enter the lesson folder first:
@@ -53,4 +70,3 @@ Run the lesson executable from the `build` folder or by using its path:
 
 - A C++17 compiler
 - CMake 3.10 or newer
-
