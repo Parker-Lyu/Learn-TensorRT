@@ -18,6 +18,12 @@ For senior production deployment coverage, also read:
 docs/coverage_matrix.md
 ```
 
+For environment setup, Dev Containers usage, and GPU/TensorRT troubleshooting, use the agent-oriented guide in the first lesson:
+
+```bash
+00_environment_check/agent_env_setup.md
+```
+
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
 
 | Stage | Folder | Goal |
@@ -48,25 +54,6 @@ The project is organized as small lessons. Each lesson should produce one runnab
 | 11 | `23_cpp_interview_katas` | Practice C++ hand-written deployment kernels and data structures. |
 | 12 | `24_benchmark_report` | Produce a clean benchmark report suitable for interviews. |
 
-## Current Lessons
-
-### 01 - Hello World
-
-```bash
-cd 01_hello_world
-cmake -S . -B build
-cmake --build build
-./build/hello_world
-```
-
-### 02 - OpenCV Read And Show Image
-
-```bash
-cd 02_opencv_read_show_image
-cmake -S . -B build
-cmake --build build
-./build/opencv_read_show_image
-```
 
 ## General Build Pattern
 
