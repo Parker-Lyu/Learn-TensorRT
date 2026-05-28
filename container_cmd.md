@@ -8,8 +8,34 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 
 ## Start the container
 
+Run this command from the repository root on the host:
+
 ```bash
-docker run -d --name learn-tensorrt --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -v /home/parker/Projects/Learn-TensorRT:/workspace/Learn-TensorRT -w /workspace/Learn-TensorRT nvcr.io/nvidia/tensorrt:23.10-py3 sleep infinity
+docker run -d \
+  --name learn-tensorrt \
+  --gpus all \
+  --ipc=host \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  -v "$PWD":/workspace/Projects/Learn-TensorRT \
+  -w /workspace/Projects/Learn-TensorRT \
+  nvcr.io/nvidia/tensorrt:23.10-py3 \
+  sleep infinity
+```
+
+If you do not run the command from the repository root, replace `HOST_PROJECT_DIR` with your own absolute host path:
+
+```bash
+docker run -d \
+  --name learn-tensorrt \
+  --gpus all \
+  --ipc=host \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  -v HOST_PROJECT_DIR:/workspace/Projects/Learn-TensorRT \
+  -w /workspace/Projects/Learn-TensorRT \
+  nvcr.io/nvidia/tensorrt:23.10-py3 \
+  sleep infinity
 ```
 
 Explanation:
@@ -21,8 +47,9 @@ Explanation:
 - `--ipc=host`: use the host IPC namespace, which is commonly used for deep learning workloads to avoid shared-memory limits.
 - `--ulimit memlock=-1`: allow unlimited locked memory.
 - `--ulimit stack=67108864`: set the stack size to 64 MB.
-- `-v /home/parker/Projects/Learn-TensorRT:/workspace/Learn-TensorRT`: mount the current project directory into the container.
-- `-w /workspace/Learn-TensorRT`: set the container working directory to the mounted project directory.
+- `-v "$PWD":/workspace/Projects/Learn-TensorRT`: mount the current host repository directory into the container.
+- `HOST_PROJECT_DIR`: a placeholder for your own absolute host path, for example `/home/<user>/Projects/Learn-TensorRT`.
+- `-w /workspace/Projects/Learn-TensorRT`: set the container working directory to the mounted project directory.
 - `nvcr.io/nvidia/tensorrt:23.10-py3`: use the NVIDIA TensorRT 23.10 Python 3 image.
 - `sleep infinity`: keep the container running so it can be entered later with `docker exec`.
 

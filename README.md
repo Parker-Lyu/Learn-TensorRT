@@ -26,6 +26,33 @@ For environment setup, Dev Containers usage, and GPU/TensorRT troubleshooting, u
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
 
+## How To Use
+
+1. Clone this repository on an Ubuntu machine:
+
+```bash
+git clone git@github.com:Parker-Lyu/Learn-TensorRT.git
+cd Learn-TensorRT
+```
+
+2. Use a coding agent such as Codex or Claude Code to prepare the development environment by following the agent guide:
+
+```bash
+00_environment_check/agent_env_setup.md
+```
+
+This course is developed and tested on Ubuntu. Windows or WSL setups may work, but they are not the reference environment and may require extra troubleshooting.
+
+3. Start the TensorRT container and bind-mount this project directory into the container. Keep the course image unchanged unless a lesson explicitly asks for a separate experiment:
+
+```bash
+nvcr.io/nvidia/tensorrt:23.10-py3
+```
+
+4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
+
+5. Start from `00_environment_check`, run the environment checks, and then work through the lessons in order. Happy coding.
+
 | Stage | Folder | Goal |
 | --- | --- | --- |
 | 0 | `00_environment_check` | Verify CUDA, TensorRT, OpenCV, CMake, compiler, and GPU state. |
