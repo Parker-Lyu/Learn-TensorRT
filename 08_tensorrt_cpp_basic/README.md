@@ -7,8 +7,8 @@ Topics:
 - Logger
 - Builder
 - ONNX parser
-- Runtime
-- Engine
+- Runtime creation
+- Engine building
 - Engine deserialization
 - Execution context
 - Tensor names and shapes

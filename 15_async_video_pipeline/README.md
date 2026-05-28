@@ -1,6 +1,6 @@
 # 15 - Async Video Pipeline
 
-Goal: move from single-image inference to a production-like video pipeline.
+Goal: move from single-image inference to a single-stream production-like video pipeline.
 
 Topics:
 

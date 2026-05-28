@@ -10,6 +10,8 @@ Topics:
 - YOLO decode
 - NMS
 - Coordinate scaling
+- Visualization
+- CLI arguments
 - Latency breakdown
 
 Acceptance criteria:

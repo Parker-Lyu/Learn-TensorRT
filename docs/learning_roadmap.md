@@ -121,6 +121,9 @@ Topics:
 - `cudaMemcpy`
 - Pinned host memory
 - `cudaMallocHost`
+- Mapped pinned memory with `cudaHostAllocMapped`
+- Unified Memory with `cudaMallocManaged`
+- Explicit copy, mapped access, and managed memory trade-offs
 - `cudaStream_t`
 - Synchronization
 - Timing with CUDA events
@@ -130,6 +133,8 @@ Acceptance criteria:
 - You can copy buffers between host and device.
 - You can run a simple async copy/inference-like flow with a stream.
 - You can explain why unnecessary synchronization hurts latency.
+- You can explain why mapped pinned memory can remove explicit `cudaMemcpy` calls but still uses PCIe bandwidth on discrete GPUs.
+- You can explain why Unified Memory is convenient but not automatically low-latency.
 
 ### `05_torch_to_onnx`
 
@@ -476,6 +481,10 @@ Topics:
 - HWC to CHW conversion
 - Optional resize or letterbox kernel
 - NVIDIA NPP overview
+- Host-device transfer strategies
+- Mapped pinned memory trade-offs
+- Unified Memory prefetching and page migration risk
+- Decode/capture-to-GPU paths such as NVDEC, DeepStream NVMM, or GPUDirect where available
 - CPU OpenCV versus CUDA preprocessing comparison
 
 Acceptance criteria:
@@ -483,6 +492,8 @@ Acceptance criteria:
 - At least one preprocessing step runs on GPU.
 - The result is numerically checked against the OpenCV implementation.
 - A benchmark compares CPU preprocessing and GPU/NPP preprocessing.
+- Transfer time is measured separately from preprocessing and inference time.
+- You can explain whether a zero-copy-style path is actually faster on the tested hardware.
 
 ### `18_openvino_yolov8`
 
@@ -649,6 +660,8 @@ Deliverables:
 - Throughput table
 - Accuracy notes
 - Environment table
+- Production Dockerfile
+- Development image versus runtime image size comparison
 - Bottleneck analysis
 - Future work
 
@@ -656,6 +669,7 @@ Acceptance criteria:
 
 - A recruiter or interviewer can understand the project in five minutes.
 - You can defend every number in the report.
+- A multi-stage Docker build produces a runtime image that contains only the files needed to run inference.
 
 ## Suggested Weekly Routine
 

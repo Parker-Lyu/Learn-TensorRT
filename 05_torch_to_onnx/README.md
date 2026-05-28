@@ -8,6 +8,8 @@ Topics:
 - ONNX opset
 - Static shape and dynamic shape
 - ONNX Runtime validation
+- `onnxsim`
+- Netron graph inspection
 - ONNX graph inspection
 
 Acceptance criteria:

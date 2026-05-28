@@ -9,6 +9,7 @@ Topics:
 - `std::condition_variable`
 - Thread-safe queue
 - Bounded queue
+- Producer-consumer pattern
 - Backpressure
 - Frame dropping strategy
 - Graceful shutdown
@@ -19,3 +20,4 @@ Acceptance criteria:
 - One consumer thread pops frames and simulates or runs inference.
 - The program handles producer FPS higher than consumer FPS.
 - The program exits cleanly without deadlock.
+- You can explain latency versus throughput trade-offs in queue sizing.
