@@ -3,12 +3,15 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -23,8 +26,16 @@ void print_usage(const char* executable_name) {
               << "  output_dir: outputs\n";
 }
 
-int parse_positive_int(const std::string& text, const char* name) {
-    const int value = std::stoi(text);
+int parse_positive_int(std::string_view text, const char* name) {
+    int value = 0;
+    const char* begin = text.data();
+    const char* end = text.data() + text.size();
+    const auto [parsed_end, error] = std::from_chars(begin, end, value);
+
+    if (text.empty() || error != std::errc() || parsed_end != end) {
+        throw std::runtime_error(std::string(name) + " must be a positive integer, got: " +
+                                 std::string(text));
+    }
     if (value <= 0) {
         throw std::runtime_error(std::string(name) + " must be positive.");
     }
@@ -39,6 +50,10 @@ void write_tensor_binary(const std::filesystem::path& path, const std::vector<fl
 
     output.write(reinterpret_cast<const char*>(tensor.data()),
                  static_cast<std::streamsize>(tensor.size() * sizeof(float)));
+    output.close();
+    if (!output) {
+        throw std::runtime_error("Failed to write tensor binary: " + path.string());
+    }
 }
 
 void write_tensor_preview(const std::filesystem::path& path,
@@ -60,6 +75,11 @@ void write_tensor_preview(const std::filesystem::path& path,
     output << std::fixed << std::setprecision(6);
     for (size_t i = 0; i < value_count; ++i) {
         output << i << ": " << result.input_tensor[i] << '\n';
+    }
+
+    output.close();
+    if (!output) {
+        throw std::runtime_error("Failed to write tensor preview: " + path.string());
     }
 }
 

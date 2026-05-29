@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <stdexcept>
 
 namespace {
@@ -13,33 +14,31 @@ const cv::Scalar kLetterboxColor(114, 114, 114);
 
 void append_nchw_rgb_float(const cv::Mat& letterboxed_bgr,
                            std::vector<float>& output,
-                           int batch_index,
-                           int batch_size) {
+                           int batch_index) {
     if (letterboxed_bgr.empty() || letterboxed_bgr.channels() != 3) {
         throw std::runtime_error("append_nchw_rgb_float expects a non-empty 3-channel image.");
     }
 
     const int height = letterboxed_bgr.rows;
     const int width = letterboxed_bgr.cols;
-    const int image_stride = 3 * height * width;
-    const int batch_offset = batch_index * image_stride;
-
-    (void)batch_size;
+    const std::size_t plane_stride = static_cast<std::size_t>(height) * width;
+    const std::size_t image_stride = 3 * plane_stride;
+    const std::size_t batch_offset = static_cast<std::size_t>(batch_index) * image_stride;
+    if (batch_offset + image_stride > output.size()) {
+        throw std::runtime_error("Output tensor is too small for the requested batch index.");
+    }
 
     for (int y = 0; y < height; ++y) {
+        const cv::Vec3b* row = letterboxed_bgr.ptr<cv::Vec3b>(y);
         for (int x = 0; x < width; ++x) {
-            const cv::Vec3b bgr = letterboxed_bgr.at<cv::Vec3b>(y, x);
-            const int hw_index = y * width + x;
+            const cv::Vec3b& bgr = row[x];
+            const std::size_t hw_index = static_cast<std::size_t>(y) * width + x;
 
-            output[batch_offset + 0 * height * width + hw_index] = bgr[2] * kInv255;
-            output[batch_offset + 1 * height * width + hw_index] = bgr[1] * kInv255;
-            output[batch_offset + 2 * height * width + hw_index] = bgr[0] * kInv255;
+            output[batch_offset + 0 * plane_stride + hw_index] = bgr[2] * kInv255;
+            output[batch_offset + 1 * plane_stride + hw_index] = bgr[1] * kInv255;
+            output[batch_offset + 2 * plane_stride + hw_index] = bgr[0] * kInv255;
         }
     }
-}
-
-float clamp_float(float value, float low, float high) {
-    return std::max(low, std::min(value, high));
 }
 
 }  // namespace
@@ -92,6 +91,9 @@ BatchPreprocessResult preprocess_batch_to_nchw(const std::vector<cv::Mat>& bgr_i
     if (bgr_images.empty()) {
         throw std::runtime_error("preprocess_batch_to_nchw requires at least one image.");
     }
+    if (input_size.width <= 0 || input_size.height <= 0) {
+        throw std::runtime_error("preprocess_batch_to_nchw expects a positive target size.");
+    }
 
     BatchPreprocessResult result;
     result.batch_size = static_cast<int>(bgr_images.size());
@@ -105,7 +107,7 @@ BatchPreprocessResult preprocess_batch_to_nchw(const std::vector<cv::Mat>& bgr_i
         LetterboxInfo info;
         const cv::Mat letterboxed = letterbox_image(bgr_images[batch_index], input_size, info);
         result.letterbox_infos.push_back(info);
-        append_nchw_rgb_float(letterboxed, result.input_tensor, batch_index, result.batch_size);
+        append_nchw_rgb_float(letterboxed, result.input_tensor, batch_index);
     }
 
     return result;
@@ -122,10 +124,10 @@ cv::Rect2f map_box_to_original_image(const cv::Rect2f& box_in_letterbox,
                       static_cast<float>(info.pad_top)) /
                      info.scale;
 
-    const float clamped_x1 = clamp_float(x1, 0.0F, static_cast<float>(info.original_width));
-    const float clamped_y1 = clamp_float(y1, 0.0F, static_cast<float>(info.original_height));
-    const float clamped_x2 = clamp_float(x2, 0.0F, static_cast<float>(info.original_width));
-    const float clamped_y2 = clamp_float(y2, 0.0F, static_cast<float>(info.original_height));
+    const float clamped_x1 = std::clamp(x1, 0.0F, static_cast<float>(info.original_width));
+    const float clamped_y1 = std::clamp(y1, 0.0F, static_cast<float>(info.original_height));
+    const float clamped_x2 = std::clamp(x2, 0.0F, static_cast<float>(info.original_width));
+    const float clamped_y2 = std::clamp(y2, 0.0F, static_cast<float>(info.original_height));
 
     return cv::Rect2f(clamped_x1, clamped_y1, clamped_x2 - clamped_x1, clamped_y2 - clamped_y1);
 }
