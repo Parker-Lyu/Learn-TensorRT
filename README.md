@@ -25,6 +25,7 @@ For environment setup, Dev Containers usage, and GPU/TensorRT troubleshooting, u
 ```
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
+Shared images and other reusable resources live in the root `assets` folder.
 
 ## How To Use
 

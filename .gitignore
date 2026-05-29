@@ -1,6 +1,8 @@
 # CMake build directories
 build/
 cmake-build-*/
+build_check/
+outputs/
 
 # Compiled binaries and object files
 *.o

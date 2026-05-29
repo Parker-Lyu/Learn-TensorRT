@@ -6,8 +6,8 @@
 
 int main(int argc, char* argv[]) {
     // Use the first command line argument as the image path.
-    // If no argument is given, use the sample image in this lesson.
-    const std::string image_path = argc > 1 ? argv[1] : "assets/dog.webp";
+    // If no argument is given, use the shared sample image at the repository root.
+    const std::string image_path = argc > 1 ? argv[1] : "../assets/dog.webp";
 
     // cv::imread loads an image from disk into a cv::Mat object.
     // cv::IMREAD_COLOR tells OpenCV to load the image as a 3-channel color image.

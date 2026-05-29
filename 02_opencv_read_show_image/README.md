@@ -26,6 +26,8 @@ Use the sample image:
 ./build/opencv_read_show_image
 ```
 
+By default, the program reads the shared sample image from `../assets/dog.webp`.
+
 Use your own image:
 
 ```bash
