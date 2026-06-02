@@ -30,6 +30,7 @@ int parse_positive_int(std::string_view text, const char* name) {
     int value = 0;
     const char* begin = text.data();
     const char* end = text.data() + text.size();
+    // from_chars avoids locale rules and exceptions, which keeps CLI parsing predictable.
     const auto [parsed_end, error] = std::from_chars(begin, end, value);
 
     if (text.empty() || error != std::errc() || parsed_end != end) {
@@ -48,6 +49,7 @@ void write_tensor_binary(const std::filesystem::path& path, const std::vector<fl
         throw std::runtime_error("Failed to open tensor binary for writing: " + path.string());
     }
 
+    // Write raw float32 bytes exactly as a TensorRT input buffer would be laid out in memory.
     output.write(reinterpret_cast<const char*>(tensor.data()),
                  static_cast<std::streamsize>(tensor.size() * sizeof(float)));
     output.close();
@@ -64,6 +66,7 @@ void write_tensor_preview(const std::filesystem::path& path,
         throw std::runtime_error("Failed to open tensor preview for writing: " + path.string());
     }
 
+    // The preview is intentionally text so learners can inspect layout without a debugger.
     output << "shape: [" << result.batch_size << ", " << result.channels << ", " << result.height
            << ", " << result.width << "]\n";
     output << "layout: NCHW\n";
@@ -116,6 +119,7 @@ int main(int argc, char* argv[]) {
 
         std::filesystem::create_directories(output_dir);
 
+        // Save the letterboxed image separately so resize and padding can be checked visually.
         LetterboxInfo debug_info;
         const cv::Mat letterboxed = letterbox_image(image, cv::Size(input_width, input_height),
                                                     debug_info);
@@ -124,6 +128,7 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("Failed to write debug image: " + debug_image_path.string());
         }
 
+        // Run the complete preprocessing path used for inference inputs.
         const BatchPreprocessResult result =
             preprocess_batch_to_nchw(std::vector<cv::Mat>{image}, cv::Size(input_width, input_height));
         const std::filesystem::path tensor_bin_path = output_dir / "input_tensor_nchw_float32.bin";
@@ -142,6 +147,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Tensor binary:  " << tensor_bin_path.string() << '\n';
         std::cout << "Tensor preview: " << tensor_preview_path.string() << '\n';
 
+        // A fixed sample box demonstrates how model outputs are recovered after letterbox.
         const cv::Rect2f sample_box(220.0F, 180.0F, 160.0F, 120.0F);
         const cv::Rect2f original_box = map_box_to_original_image(sample_box, info);
         std::cout << "Sample box in network input: x=" << sample_box.x << ", y=" << sample_box.y

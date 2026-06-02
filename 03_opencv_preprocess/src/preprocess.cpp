@@ -12,6 +12,7 @@ namespace {
 constexpr float kInv255 = 1.0F / 255.0F;
 const cv::Scalar kLetterboxColor(114, 114, 114);
 
+// Convert one OpenCV BGR HWC image into the batch tensor as RGB float32 NCHW.
 void append_nchw_rgb_float(const cv::Mat& letterboxed_bgr,
                            std::vector<float>& output,
                            int batch_index) {
@@ -21,6 +22,7 @@ void append_nchw_rgb_float(const cv::Mat& letterboxed_bgr,
 
     const int height = letterboxed_bgr.rows;
     const int width = letterboxed_bgr.cols;
+    // One channel plane stores all H * W pixels for a single color channel.
     const std::size_t plane_stride = static_cast<std::size_t>(height) * width;
     const std::size_t image_stride = 3 * plane_stride;
     const std::size_t batch_offset = static_cast<std::size_t>(batch_index) * image_stride;
@@ -34,6 +36,7 @@ void append_nchw_rgb_float(const cv::Mat& letterboxed_bgr,
             const cv::Vec3b& bgr = row[x];
             const std::size_t hw_index = static_cast<std::size_t>(y) * width + x;
 
+            // OpenCV reads BGR uint8. TensorRT examples commonly feed RGB float values in [0, 1].
             output[batch_offset + 0 * plane_stride + hw_index] = bgr[2] * kInv255;
             output[batch_offset + 1 * plane_stride + hw_index] = bgr[1] * kInv255;
             output[batch_offset + 2 * plane_stride + hw_index] = bgr[0] * kInv255;
@@ -61,10 +64,12 @@ cv::Mat letterbox_image(const cv::Mat& bgr_image, cv::Size input_size, Letterbox
 
     const float scale_w = static_cast<float>(input_size.width) / static_cast<float>(bgr_image.cols);
     const float scale_h = static_cast<float>(input_size.height) / static_cast<float>(bgr_image.rows);
+    // Use the smaller scale so the resized image fits inside the input without cropping.
     info.scale = std::min(scale_w, scale_h);
 
     info.resized_width = static_cast<int>(std::round(bgr_image.cols * info.scale));
     info.resized_height = static_cast<int>(std::round(bgr_image.rows * info.scale));
+    // Rounding can produce edge cases on tiny images; clamp to a valid ROI inside the input.
     info.resized_width = std::max(1, std::min(info.resized_width, input_size.width));
     info.resized_height = std::max(1, std::min(info.resized_height, input_size.height));
 
@@ -72,6 +77,7 @@ cv::Mat letterbox_image(const cv::Mat& bgr_image, cv::Size input_size, Letterbox
     const int pad_height = input_size.height - info.resized_height;
     info.pad_left = pad_width / 2;
     info.pad_top = pad_height / 2;
+    // Put any leftover pixel on the right/bottom so all padding still sums to the target size.
     info.pad_right = pad_width - info.pad_left;
     info.pad_bottom = pad_height - info.pad_top;
 
@@ -81,6 +87,7 @@ cv::Mat letterbox_image(const cv::Mat& bgr_image, cv::Size input_size, Letterbox
 
     cv::Mat letterboxed(input_size, CV_8UC3, kLetterboxColor);
     const cv::Rect roi(info.pad_left, info.pad_top, info.resized_width, info.resized_height);
+    // The ROI is where the resized image lives inside the padded network input.
     resized.copyTo(letterboxed(roi));
 
     return letterboxed;
@@ -100,6 +107,7 @@ BatchPreprocessResult preprocess_batch_to_nchw(const std::vector<cv::Mat>& bgr_i
     result.height = input_size.height;
     result.width = input_size.width;
     result.letterbox_infos.reserve(bgr_images.size());
+    // Allocate the full batch tensor once so each image can write directly to its NCHW slot.
     result.input_tensor.resize(static_cast<size_t>(result.batch_size) * result.channels *
                                result.height * result.width);
 
@@ -115,6 +123,7 @@ BatchPreprocessResult preprocess_batch_to_nchw(const std::vector<cv::Mat>& bgr_i
 
 cv::Rect2f map_box_to_original_image(const cv::Rect2f& box_in_letterbox,
                                      const LetterboxInfo& info) {
+    // Undo letterbox in reverse order: remove padding first, then divide by the resize scale.
     const float x1 = (box_in_letterbox.x - static_cast<float>(info.pad_left)) / info.scale;
     const float y1 = (box_in_letterbox.y - static_cast<float>(info.pad_top)) / info.scale;
     const float x2 = (box_in_letterbox.x + box_in_letterbox.width -
@@ -129,5 +138,6 @@ cv::Rect2f map_box_to_original_image(const cv::Rect2f& box_in_letterbox,
     const float clamped_x2 = std::clamp(x2, 0.0F, static_cast<float>(info.original_width));
     const float clamped_y2 = std::clamp(y2, 0.0F, static_cast<float>(info.original_height));
 
+    // Clamping may shrink boxes that touch padding or extend beyond the image boundary.
     return cv::Rect2f(clamped_x1, clamped_y1, clamped_x2 - clamped_x1, clamped_y2 - clamped_y1);
 }

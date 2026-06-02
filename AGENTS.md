@@ -36,7 +36,10 @@ engineering habits from the beginning, not quick demo shortcuts.
 - Validate inputs in public helper functions, not only in `main`.
 - Check file and resource errors explicitly.
 - Use `const`, `static_cast`, `<algorithm>` utilities, and standard library facilities where appropriate.
-- Keep comments useful for learning intent or non-obvious logic; avoid comments that restate the code.
+- Add suitable comments for teaching code, especially around learning intent, data layout, coordinate
+  transforms, resource ownership, synchronization, and non-obvious API choices.
+- Keep comments concise and useful; avoid line-by-line narration or comments that merely restate the
+  code.
 - Avoid silent failures, hidden assumptions, and clever code that hurts readability.
 
 ## CMake Style
