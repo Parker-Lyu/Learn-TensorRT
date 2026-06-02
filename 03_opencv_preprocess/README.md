@@ -65,12 +65,16 @@ original_y = (input_y - pad_top) / scale
 
 The code clamps mapped boxes to the original image boundary.
 
-## Files
+## Directory Layout
 
-- `main.cpp`: command-line entry point, image loading, output writing, and printed diagnostics.
-- `preprocess.hpp`: small data structures and preprocessing function declarations.
-- `preprocess.cpp`: letterbox, normalization, HWC-to-CHW conversion, and coordinate mapping.
+- `CMakeLists.txt`: target-based build file for this runnable lesson.
+- `include/preprocess.hpp`: small data structures and preprocessing function declarations.
+- `src/main.cpp`: command-line entry point, image loading, output writing, and printed diagnostics.
+- `src/preprocess.cpp`: letterbox, normalization, HWC-to-CHW conversion, and coordinate mapping.
 - `../assets/dog.webp`: shared sample image stored at the repository root.
+
+This layout intentionally mirrors `../03_opencv_preprocess_practice` so the practice starter and
+the reference implementation can be compared file by file.
 
 ## Build
 

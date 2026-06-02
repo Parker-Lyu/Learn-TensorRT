@@ -138,9 +138,9 @@ int main(int argc, char* argv[]) {
                   << result.height << ", " << result.width << "]\n";
         std::cout << "Tensor values:  " << result.input_tensor.size() << " float32 values, "
                   << result.input_tensor.size() * sizeof(float) << " bytes\n";
-        std::cout << "Debug image:    " << debug_image_path << '\n';
-        std::cout << "Tensor binary:  " << tensor_bin_path << '\n';
-        std::cout << "Tensor preview: " << tensor_preview_path << '\n';
+        std::cout << "Debug image:    " << debug_image_path.string() << '\n';
+        std::cout << "Tensor binary:  " << tensor_bin_path.string() << '\n';
+        std::cout << "Tensor preview: " << tensor_preview_path.string() << '\n';
 
         const cv::Rect2f sample_box(220.0F, 180.0F, 160.0F, 120.0F);
         const cv::Rect2f original_box = map_box_to_original_image(sample_box, info);
