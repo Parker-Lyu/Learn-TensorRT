@@ -11,6 +11,24 @@ engineering habits from the beginning, not quick demo shortcuts.
 - Shared images, models, and reusable resources belong in the root `assets/` directory.
 - Generated outputs should go to local output folders and stay out of git.
 
+## Practice Modules
+
+- For lessons that need hand-written practice, keep both a reference lesson and a practice lesson
+  on the main branch.
+- The reference lesson folder, such as `03_opencv_preprocess/`, contains the complete runnable
+  implementation.
+- The practice folder, such as `03_opencv_preprocess_practice/`, contains a buildable starter,
+  TODO comments, and a step-by-step README.
+- The reference and practice folders for the same lesson should mirror each other's directory
+  structure whenever practical, for example `CMakeLists.txt`, `README.md`, `include/*.hpp`, and
+  `src/*.cpp`.
+- Practice code should build and run before the TODOs are implemented, so learners start from a
+  working project skeleton.
+- Practice READMEs should explain what to implement step by step, which files to edit, and what
+  output to expect after each build/run checkpoint.
+- Do not replace a complete lesson with a TODO-only version unless explicitly requested.
+- Do not create, switch, or push solution branches for the user unless explicitly requested.
+
 ## C++ Style
 
 - Use modern C++17 and target-based CMake.
