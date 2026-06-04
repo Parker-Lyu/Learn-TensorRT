@@ -21,6 +21,15 @@ engineering habits from the beginning, not quick demo shortcuts.
 - Do not replace a complete lesson with a TODO-only version unless explicitly requested.
 - Do not create, switch, or push solution branches for the user unless explicitly requested.
 
+## Industrial Code Expectations
+
+- Treat lesson code as production-style teaching code, not throwaway demos.
+- Prefer explicit ownership, error handling, and resource lifetime boundaries.
+- Keep APIs small, testable, and reusable across later TensorRT lessons.
+- Make assumptions visible in names, validation, comments, or README notes.
+- Avoid global mutable state, hidden side effects, magic constants, and hard-coded local paths.
+- Structure code so later lessons can extend it toward long-running inference services.
+
 ## C++ Style
 
 - Use modern C++17 and target-based CMake.
