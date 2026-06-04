@@ -73,8 +73,8 @@ The code clamps mapped boxes to the original image boundary.
 - `src/preprocess.cpp`: letterbox, normalization, HWC-to-CHW conversion, and coordinate mapping.
 - `../assets/dog.webp`: shared sample image stored at the repository root.
 
-This layout intentionally mirrors `../03_opencv_preprocess_practice` so the practice starter and
-the reference implementation can be compared file by file.
+The lesson keeps preprocessing declarations, implementation, and command-line wiring separate so
+each part can evolve without turning the example into one large source file.
 
 ## Build
 

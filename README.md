@@ -60,7 +60,6 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 | 1 | `01_hello_world` | Build a minimal C++17 project with CMake. |
 | 1 | `02_opencv_read_show_image` | Load and inspect images with OpenCV. |
 | 1 | `03_opencv_preprocess` | Implement resize, letterbox, normalize, HWC-to-CHW, and batch buffer preparation. |
-| 1 | `03_opencv_preprocess_practice` | Rebuild lesson 03 by hand from a TODO starter and step-by-step checks. |
 | 2 | `04_cuda_memory_stream` | Learn CUDA memory allocation, host/device copies, and streams. |
 | 2 | `05_torch_to_onnx` | Export YOLOv8n from PyTorch to ONNX and validate the graph. |
 | 3 | `06_trtexec_engine` | Build and benchmark TensorRT engines with `trtexec`. |
