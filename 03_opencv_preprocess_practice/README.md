@@ -3,9 +3,10 @@
 This is the hand-written practice version of `../03_opencv_preprocess`.
 
 The goal is to rebuild the same preprocessing pipeline step by step without copying the complete
-lesson implementation. Keep this folder on `main` as a public exercise module. When you want to
-write your own full solution, create your own branch or compare against `../03_opencv_preprocess`
-only after finishing each step.
+lesson implementation. This folder is intentionally kept on `main` as a public exercise module, so
+learners can write their own practice solution here directly without switching branches. If you want
+to preserve your work separately, commit your changes locally or keep a personal copy; compare
+against `../03_opencv_preprocess` only after finishing each step.
 
 ## Final Target
 
