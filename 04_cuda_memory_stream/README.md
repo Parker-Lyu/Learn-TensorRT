@@ -118,6 +118,95 @@ unified memory: prefetched kernel access                 0.008 ms             n/
 Exact numbers depend on GPU, PCIe generation, CPU memory speed, current clocks, and whether the
 first run paid extra initialization cost.
 
+## Visual Mental Model
+
+If you are new to CUDA, read this section before the bullet list below. The important idea is not
+"copy is slow" or "streams are magic"; it is that CPU memory, GPU memory, and queued GPU work live
+behind different boundaries.
+
+### One Inference-Like Stream
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CPU as CPU code
+    participant Stream as CUDA stream queue
+    participant Copy as GPU copy engine
+    participant SM as GPU kernel engine
+
+    CPU->>Stream: enqueue H2D copy
+    CPU->>Stream: enqueue kernel launch
+    CPU->>Stream: enqueue D2H copy
+    Note over CPU,Stream: CPU returns after queueing work unless it reaches a sync boundary.
+
+    Stream->>Copy: run H2D copy
+    Copy-->>Stream: copy finished
+    Stream->>SM: run kernel
+    SM-->>Stream: kernel finished
+    Stream->>Copy: run D2H copy
+    Copy-->>Stream: output copy finished
+
+    CPU->>Stream: cudaStreamSynchronize
+    Stream-->>CPU: output is now safe to read on CPU
+```
+
+The stream is an ordered queue. Work submitted to the same stream runs in order, so TensorRT-style
+code usually queues input copy, inference, and output copy on one stream, then synchronizes only
+when CPU code really needs the output.
+
+### Memory Choices
+
+```mermaid
+flowchart TB
+    subgraph Host["CPU host memory"]
+        Pageable["Pageable memory<br/>std::vector<float>"]
+        Pinned["Pinned memory<br/>cudaMallocHost"]
+        Mapped["Mapped pinned memory<br/>cudaHostAllocMapped"]
+        Managed["Unified Memory<br/>cudaMallocManaged"]
+    end
+
+    subgraph GPU["GPU side"]
+        DeviceIn["Device input buffer<br/>cudaMalloc"]
+        DeviceOut["Device output buffer<br/>cudaMalloc"]
+        Kernel["Kernel or TensorRT enqueue"]
+    end
+
+    Pageable -->|"may need hidden staging first"| Staging["Temporary pinned staging buffer"]
+    Staging -->|"DMA over PCIe"| DeviceIn
+    Pinned -->|"async DMA over PCIe"| DeviceIn
+    DeviceIn --> Kernel
+    Kernel --> DeviceOut
+    DeviceOut -->|"async DMA over PCIe"| Pinned
+
+    Mapped -->|"device pointer aliases host pages"| Kernel
+    Kernel -->|"reads/writes host memory over PCIe"| Mapped
+
+    Managed -->|"prefetch migrates pages before timing"| DeviceIn
+    DeviceOut -->|"pages may migrate back when CPU reads"| Managed
+```
+
+This lesson compares four ways to feed the same simple kernel. The output can be correct in all
+paths, but the data movement cost and synchronization behavior can be very different.
+
+### How To Read The Key Takeaways
+
+```mermaid
+flowchart LR
+    A["Want async H2D/D2H copy"] --> B{"Is host memory pinned?"}
+    B -- "yes" --> C["cudaMemcpyAsync can use DMA<br/>and overlap with queued GPU work"]
+    B -- "no" --> D["runtime may stage or block<br/>async behavior becomes less useful"]
+
+    E["Want no explicit copy"] --> F{"Use mapped pinned memory?"}
+    F -- "yes" --> G["kernel accesses host memory directly<br/>good for tiny data, risky for large tensors"]
+
+    H["Want simpler ownership"] --> I{"Use Unified Memory?"}
+    I -- "yes" --> J["simpler pointer model<br/>but page migration must be controlled"]
+
+    K["Want correct timing"] --> L{"What boundary is measured?"}
+    L -- "CUDA event" --> M["GPU work in the stream"]
+    L -- "CPU timer" --> N["host-side wall time around queueing or sync"]
+```
+
 ## Key Takeaways
 
 - `cudaMemcpyAsync` only behaves like a useful asynchronous transfer when the host memory is pinned.
