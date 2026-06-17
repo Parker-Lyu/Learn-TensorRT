@@ -23,6 +23,24 @@ Deliverables:
 - `check_env.sh`
 - `env_report.md`
 
+Python packages used by the early export and validation lessons are part of this baseline
+environment, not something to rediscover in each later lesson. Install them inside the Dev
+Container:
+
+```bash
+python3 -m pip install --no-cache-dir \
+  ultralytics \
+  onnx==1.21.0 \
+  onnxruntime==1.23.2
+```
+
+Optional ONNX graph simplifiers can also be installed here if you plan to run export commands with
+graph simplification enabled:
+
+```bash
+python3 -m pip install --no-cache-dir onnxslim onnxsim
+```
+
 Run the environment check from inside the Dev Container:
 
 ```bash
@@ -48,5 +66,5 @@ Acceptance criteria:
 - `nvidia-smi` works inside the container.
 - `nvcc --version` works inside the container.
 - TensorRT C++ libraries such as `libnvinfer.so*` are visible.
-- Python can import `onnx` and `onnxruntime`.
+- Python can import `ultralytics`, `onnx`, and `onnxruntime`.
 - Basic C++ build tools are available.

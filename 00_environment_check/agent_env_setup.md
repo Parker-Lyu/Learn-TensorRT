@@ -134,7 +134,10 @@ Choose `learn-tensorrt`.
 Inside the Dev Container, install the Python dependencies required by the early lessons:
 
 ```bash
-python3 -m pip install --no-cache-dir onnx==1.21.0 onnxruntime==1.23.2
+python3 -m pip install --no-cache-dir \
+  ultralytics \
+  onnx==1.21.0 \
+  onnxruntime==1.23.2
 ```
 
 If the network is slow or unstable, especially in mainland China, use a domestic PyPI mirror such as Aliyun:
@@ -146,8 +149,16 @@ python3 -m pip install \
   --retries 10 \
   -i https://mirrors.aliyun.com/pypi/simple/ \
   --trusted-host mirrors.aliyun.com \
+  ultralytics \
   onnx==1.21.0 \
   onnxruntime==1.23.2
+```
+
+Install optional ONNX graph simplifiers here too if later export experiments need graph
+simplification:
+
+```bash
+python3 -m pip install --no-cache-dir onnxslim onnxsim
 ```
 
 Then run the environment check:
@@ -163,7 +174,7 @@ Minimum pass conditions:
 - `trtexec --help` runs and reports TensorRT.
 - `libnvinfer.so*` exists under a standard library path.
 - `cmake`, `g++`, and `python3` are available.
-- Python can import `onnx` and `onnxruntime`.
+- Python can import `ultralytics`, `onnx`, and `onnxruntime`.
 - The repository path is writable.
 
 ## Agent Rules
@@ -181,7 +192,10 @@ The base TensorRT image already contains many packages, but this course requires
 Install them inside the Dev Container:
 
 ```bash
-python3 -m pip install --no-cache-dir onnx==1.21.0 onnxruntime==1.23.2
+python3 -m pip install --no-cache-dir \
+  ultralytics \
+  onnx==1.21.0 \
+  onnxruntime==1.23.2
 ```
 
 If the network is slow or unstable, especially in mainland China, use a domestic mirror:
@@ -193,6 +207,14 @@ python3 -m pip install \
   --retries 10 \
   -i https://mirrors.aliyun.com/pypi/simple/ \
   --trusted-host mirrors.aliyun.com \
+  ultralytics \
   onnx==1.21.0 \
   onnxruntime==1.23.2
+```
+
+Optional graph simplification packages belong in this baseline setup when needed, not in individual
+lesson READMEs:
+
+```bash
+python3 -m pip install --no-cache-dir onnxslim onnxsim
 ```

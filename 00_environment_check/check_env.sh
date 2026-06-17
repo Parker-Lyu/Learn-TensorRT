@@ -79,6 +79,7 @@ run_check "Required Python package imports" python3 - <<'PY'
 import importlib.util
 
 required = [
+    "ultralytics",
     "onnx",
     "onnxruntime",
 ]

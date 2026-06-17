@@ -45,27 +45,11 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 - `../assets/yolov8n.pt`: shared YOLOv8n weights used by later lessons.
 - `../assets/dog.webp`: shared sample image.
 
-## Dependencies
+## Prerequisites
 
-The TensorRT container usually already provides most Python packages used here. If a package is
-missing, install it inside the container:
-
-```bash
-python3 -m pip install ultralytics onnx onnxruntime opencv-python numpy
-```
-
-Graph simplification is optional. Install one of the supported simplifiers if you want to run with
-`--simplify`:
-
-```bash
-python3 -m pip install onnxslim
-```
-
-or:
-
-```bash
-python3 -m pip install onnxsim
-```
+Complete `../00_environment_check` before running this lesson. Environment setup, including Python
+packages for Ultralytics export, ONNX inspection, ONNX Runtime validation, and optional graph
+simplification, is documented there so this lesson can focus on export and validation behavior.
 
 ## Export
 
