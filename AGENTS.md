@@ -26,9 +26,13 @@ engineering habits from the beginning, not quick demo shortcuts.
 - Treat lesson code as production-style teaching code, not throwaway demos.
 - Prefer explicit ownership, error handling, and resource lifetime boundaries.
 - Keep APIs small, testable, and reusable across later TensorRT lessons.
+- When a lesson introduces reusable deployment logic, prefer library-style modules with clear
+  headers, source files, and narrow public APIs before wiring them into `main`.
 - Make assumptions visible in names, validation, comments, or README notes.
 - Avoid global mutable state, hidden side effects, magic constants, and hard-coded local paths.
 - Structure code so later lessons can extend it toward long-running inference services.
+- Preserve a path from lesson code to a final portfolio project with separable preprocessing,
+  inference, postprocessing, pipeline, and reporting components.
 
 ## C++ Style
 
@@ -48,7 +52,34 @@ engineering habits from the beginning, not quick demo shortcuts.
 - Each C++ lesson should have its own `CMakeLists.txt`.
 - Use `target_compile_features(<target> PRIVATE cxx_std_17)`.
 - Prefer target-specific include paths, libraries, and properties.
+- For lessons with reusable components, build those components as explicit library targets and link
+  a small executable target on top.
+- Prefer modular CMake that can later grow into root-level `cmake/`, `src/`, and `tests/`
+  organization without rewriting the lesson code.
 - Keep build artifacts in ignored build directories.
+
+## Testing Style
+
+- For C++ lessons that implement reusable algorithms or resource wrappers, add focused tests when
+  practical, especially for preprocessing, postprocessing, queues, batching, and RAII behavior.
+- Prefer Google Test for multi-case C++ tests once a lesson grows beyond a single smoke-test
+  executable.
+- Include defensive cases for invalid inputs, empty data, extreme image aspect ratios, boundary
+  coordinates, overlapping boxes, and resource-initialization failures where relevant.
+- Keep tests runnable from the lesson build directory and document the command in that lesson's
+  README.
+- Do not claim coverage percentages unless the repository actually measures them.
+
+## Container And Delivery Style
+
+- Use the pinned TensorRT development container from `00_environment_check` as the default build and
+  test environment.
+- Do not install CUDA, TensorRT, or OpenCV directly on the host unless the user explicitly asks for a
+  host-native experiment.
+- Add Dockerfiles only when a lesson explicitly targets packaging or runtime delivery; keep early
+  lessons focused on container usage rather than image-authoring ceremony.
+- When Docker packaging is introduced, separate development images from lean runtime images and
+  document what files must be copied into the runtime image.
 
 ## Verification
 

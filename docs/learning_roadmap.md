@@ -29,6 +29,46 @@ After finishing this repository, you should be able to:
 - Understand the minimum LLM inference concepts needed for modern deployment interviews.
 - Present the project as an interview-ready deployment case study.
 
+## Engineering Architecture Track
+
+The early lessons stay small so each topic is runnable and understandable. As the course progresses,
+the same code should grow toward a portfolio-quality C++ deployment project instead of remaining a
+set of disconnected demos.
+
+Architectural habits to carry through the course:
+
+- Keep reusable logic behind small C++ APIs, with headers and source files separated when the lesson
+  has more than one concept.
+- Prefer CMake library targets for reusable components, then link a small executable for the lesson
+  artifact.
+- Add focused tests for reusable algorithms and resource wrappers once a lesson has meaningful edge
+  cases.
+- Use the pinned TensorRT Dev Container as the normal development environment; introduce Dockerfile
+  authoring later when packaging and runtime delivery become the lesson goal.
+- Treat Unified Memory and zero-copy-style paths as performance trade-offs to measure, not as magic
+  shortcuts. `cudaMallocManaged` simplifies ownership but can still page migrate on discrete GPUs.
+
+By the final portfolio stage, the strongest version of the project should resemble this shape:
+
+```text
+industrial_deployment_trtexec/
+├── .github/workflows/          # CI for CMake configure/build/tests where runners support it.
+├── cmake/                      # Reusable CMake helpers for OpenCV, TensorRT, CUDA, and warnings.
+├── src/
+│   ├── preprocess/             # Letterbox, layout conversion, CPU/CUDA/NPP preprocessing variants.
+│   ├── inference/              # TensorRT runtime, engine, context, buffers, and stream wrappers.
+│   ├── postprocess/            # Decode, NMS, coordinate mapping, and result formatting.
+│   ├── pipeline/               # Producer-consumer, batching, async, and multi-stream scheduling.
+│   └── app/                    # Small executables that assemble the reusable components.
+├── tests/                      # Google Test cases for reusable algorithms and resource wrappers.
+├── tools/                      # Export, engine-build, benchmark, and report helpers.
+├── Dockerfile                  # Lean runtime image introduced near the final packaging lesson.
+└── CMakeLists.txt
+```
+
+This final structure is a destination, not a reason to overload lesson 01. Each lesson should still
+produce one runnable artifact and one concise README.
+
 ## Learning Flow
 
 Use this roadmap as the default plan. The modules are ordered by dependency and interview story, not by calendar time.
@@ -94,6 +134,7 @@ Acceptance criteria:
 Purpose:
 
 - Implement YOLO-style preprocessing outside the model framework.
+- Start separating reusable preprocessing logic from the executable entry point.
 
 Topics:
 
@@ -109,6 +150,8 @@ Acceptance criteria:
 
 - Given an input image, the program writes a preprocessed tensor or debug image.
 - You can explain how image coordinates map back to original image coordinates.
+- Letterbox and coordinate-mapping helpers validate invalid inputs and are easy to test from a
+  focused test target.
 
 ### `04_cuda_memory_stream`
 
@@ -295,6 +338,7 @@ Acceptance criteria:
 Purpose:
 
 - Build the main portfolio artifact: end-to-end YOLOv8n TensorRT C++ inference.
+- Begin converging lesson code into reusable preprocessing, inference, and postprocessing modules.
 
 Topics:
 
@@ -306,12 +350,16 @@ Topics:
 - Coordinate scaling
 - Visualization
 - CLI arguments
+- Library targets for reusable components
+- Focused tests for preprocessing and postprocessing edge cases
 
 Acceptance criteria:
 
 - The program accepts an image path and engine path.
 - It saves an output image with detection boxes.
 - It reports preprocessing, inference, postprocessing, and total latency.
+- Reusable preprocessing, inference, and postprocessing code is not trapped inside `main`.
+- Focused tests cover representative invalid input and boundary cases.
 
 ### `11_nsight_performance_diagnosis`
 
@@ -748,8 +796,11 @@ Topics:
 
 Acceptance criteria:
 
-- Each kata has a small C++ implementation and test input.
+- Each kata has a small C++ implementation and either a focused executable check or Google Test
+  coverage.
 - You can write IoU, NMS, letterbox mapping, and a bounded queue without looking up code.
+- Destructive edge cases are covered for empty inputs, extreme coordinates, overlapping boxes, and
+  queue boundary behavior.
 
 ### `24_benchmark_report`
 
@@ -764,6 +815,8 @@ Deliverables:
 - Throughput table
 - Accuracy notes
 - Environment table
+- Test evidence table
+- CI/build notes
 - Production Dockerfile
 - Development image versus runtime image size comparison
 - Bottleneck analysis
@@ -773,6 +826,9 @@ Acceptance criteria:
 
 - A recruiter or interviewer can understand the project in five minutes.
 - You can defend every number in the report.
+- The final report points to the reusable module structure and the tests that protect core
+  preprocessing, postprocessing, and resource-management behavior.
+- CI or a documented local equivalent configures, builds, and runs the available tests.
 - A multi-stage Docker build produces a runtime image that contains only the files needed to run inference.
 
 ## Suggested Lesson Routine
