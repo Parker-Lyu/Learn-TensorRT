@@ -110,9 +110,10 @@ Example table:
 ```text
 Path                                                     avg time    copy bandwidth     check
 ---------------------------------------------------------------------------------------------
-pinned host: async H2D + kernel + D2H                    0.334 ms        5.84 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           0.194 ms       10.06 GiB/s      pass
-unified memory: prefetched kernel access                 0.008 ms             n/a      pass
+pageable host: H2D + kernel + D2H                        3.657 ms        2.50 GiB/s      pass
+pinned host: async H2D + kernel + D2H                    1.523 ms        6.01 GiB/s      pass
+mapped pinned: kernel reads/writes host memory           0.846 ms       10.82 GiB/s      pass
+unified memory: prefetched kernel access                 0.036 ms             n/a      pass
 ```
 
 Exact numbers depend on GPU, PCIe generation, CPU memory speed, current clocks, and whether the
@@ -188,25 +189,6 @@ flowchart TB
 This lesson compares four ways to feed the same simple kernel. The output can be correct in all
 paths, but the data movement cost and synchronization behavior can be very different.
 
-### How To Read The Key Takeaways
-
-```mermaid
-flowchart LR
-    A["Want async H2D/D2H copy"] --> B{"Is host memory pinned?"}
-    B -- "yes" --> C["cudaMemcpyAsync can use DMA<br/>and overlap with queued GPU work"]
-    B -- "no" --> D["runtime may stage or block<br/>async behavior becomes less useful"]
-
-    E["Want no explicit copy"] --> F{"Use mapped pinned memory?"}
-    F -- "yes" --> G["kernel accesses host memory directly<br/>good for tiny data, risky for large tensors"]
-
-    H["Want simpler ownership"] --> I{"Use Unified Memory?"}
-    I -- "yes" --> J["simpler pointer model<br/>but page migration must be controlled"]
-
-    K["Want correct timing"] --> L{"What boundary is measured?"}
-    L -- "CUDA event" --> M["GPU work in the stream"]
-    L -- "CPU timer" --> N["host-side wall time around queueing or sync"]
-```
-
 ## Key Takeaways
 
 - `cudaMemcpyAsync` only behaves like a useful asynchronous transfer when the host memory is pinned.
@@ -236,3 +218,41 @@ Acceptance criteria:
 - It uses CUDA events for timing.
 - It validates the output for every supported path.
 - You can explain why unnecessary synchronization hurts latency.
+
+## Appendix: CUDA Function Qualifiers
+
+CUDA uses function qualifiers to say where a function runs and who is allowed to call it. In this
+lesson, `transform_kernel` is marked with `__global__` because CPU code launches it onto the GPU
+stream.
+
+| Qualifier | Runs on | Called from | Return type | Typical use |
+| --- | --- | --- | --- | --- |
+| `__global__` | GPU device | Host code, and on supported devices also device code with dynamic parallelism | Must return `void` | Kernel entry points launched with `<<<grid, block, shared_memory, stream>>>`. This is the boundary where CPU code queues GPU work. |
+| `__device__` | GPU device | Device code | Any supported device-callable type | Helper functions used by kernels, such as math, indexing, coordinate transforms, or small reusable operations. |
+| `__host__` | CPU host | Host code | Normal C++ return types | Ordinary CPU functions. CUDA treats unqualified C++ functions as host functions by default. |
+| `__host__ __device__` | CPU host and GPU device | Host code and device code | Any type valid in both compilation modes | Small utilities that should compile for both sides, as long as they avoid APIs or language features unavailable on the device. |
+
+The important distinction is that `__global__` describes a kernel launch boundary, while
+`__device__` describes GPU-only helper code. A `__global__` function is queued from the CPU and runs
+many threads on the GPU; a `__device__` function is called by those GPU threads like a normal helper.
+
+## Appendix: CUDA Allocation Choices
+
+| API | Allocates | Key characteristics | Typical use in inference code |
+| --- | --- | --- | --- |
+| `cudaMalloc` | Device memory | Memory lives in GPU device memory. CPU code cannot directly dereference the pointer. Data must be moved with copies such as `cudaMemcpyAsync`, or produced by GPU work. | Tensor input/output bindings, intermediate device buffers, and any buffer that kernels or TensorRT enqueue calls access repeatedly. |
+| `cudaMallocHost` | Pinned host memory | Allocates page-locked CPU memory. It costs more to allocate than normal pageable memory, but enables efficient DMA transfers and useful `cudaMemcpyAsync` behavior. Free with `cudaFreeHost`. | Reusable CPU staging buffers for input upload and output download, especially when copies should overlap with GPU work on streams. |
+| `cudaHostAlloc` | Pinned host memory with selectable flags | More configurable pinned allocation. It can allocate ordinary pinned memory, mapped pinned memory, portable pinned memory, or write-combined pinned memory depending on flags. Free with `cudaFreeHost`. | Special host buffers when you need mapped host access, cross-context portability, write-mostly upload staging, or a combination of these behaviors. |
+| `cudaMallocManaged` | Unified Memory | Allocates one managed pointer visible to CPU and GPU. Pages migrate between processors on demand or through explicit `cudaMemPrefetchAsync`. Convenience is high, but uncontrolled migration can add latency. Free with `cudaFree`. | Teaching, prototypes, irregular data structures, or workloads where simpler ownership matters more than tightly controlled latency. Use prefetching before latency-sensitive GPU work. |
+
+`cudaHostAlloc` flag summary:
+
+| Flag | Meaning | Notes |
+| --- | --- | --- |
+| `cudaHostAllocDefault` | Default pinned host allocation | Similar intent to `cudaMallocHost`: page-locked host memory suitable for faster transfers. |
+| `cudaHostAllocMapped` | Maps the host allocation into the device address space | Use `cudaHostGetDevicePointer` to get the device-visible pointer. On a discrete GPU, kernel reads and writes still travel over PCIe, so this is usually better for small or sparse access than large image tensors. |
+| `cudaHostAllocPortable` | Makes the pinned allocation portable across CUDA contexts | Useful in multi-context programs. Most simple single-device lessons do not need it. |
+| `cudaHostAllocWriteCombined` | Allocates write-combined host memory | Can improve CPU-to-GPU upload bandwidth for CPU write-only staging, but CPU reads from this memory are slow. Avoid it for buffers the CPU must read back often. |
+
+Flags can be combined with bitwise OR when the combination makes sense, for example
+`cudaHostAllocMapped | cudaHostAllocPortable`.
