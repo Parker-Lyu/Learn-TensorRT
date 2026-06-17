@@ -63,6 +63,7 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 | 2 | `04_cuda_memory_stream` | Learn CUDA memory allocation, host/device copies, and streams. |
 | 2 | `05_torch_to_onnx` | Export YOLOv8n from PyTorch to ONNX and validate the graph. |
 | 3 | `06_trtexec_engine` | Build and benchmark TensorRT engines with `trtexec`. |
+| 3 | `06a_polygraphy_precision_alignment` | Use Polygraphy to compare ONNX Runtime and TensorRT outputs when accuracy drifts. |
 | 3 | `07_tensorrt_raii_resource` | Manage TensorRT and CUDA resources with RAII and smart pointers. |
 | 3 | `08_tensorrt_cpp_basic` | Write minimal TensorRT C++ engine loading and inference code. |
 | 4 | `09_yolov8_trt_python` | Run YOLOv8n TensorRT inference in Python for fast debugging. |
@@ -76,7 +77,9 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 | 7 | `17_cuda_preprocess_npp` | Move preprocessing hotspots to CUDA kernels or NVIDIA NPP. |
 | 8 | `18_openvino_yolov8` | Deploy the same ONNX model with OpenVINO for CPU-focused comparison. |
 | 9 | `19_onnx_graph_surgery_plugin` | Handle unsupported operators with graph surgery and TensorRT plugins. |
+| 9 | `19a_custom_tensorrt_plugin` | Build, load, and validate a small custom TensorRT plugin. |
 | 10 | `20_deepstream_gstreamer_multistream` | Run production-style multi-stream inference with DeepStream and GStreamer. |
+| 10 | `20a_jetson_orin_xavier_dla_deployment` | Document Jetson Orin/Xavier deployment, cross compilation, and DLA constraints. |
 | 10 | `21_cpp_shared_library_python_binding` | Package C++ inference as a shared library and call it from Python. |
 | 11 | `22_llm_inference_intro` | Learn the entry-level LLM inference concepts relevant to deployment roles. |
 | 11 | `23_cpp_interview_katas` | Practice C++ hand-written deployment kernels and data structures. |

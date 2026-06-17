@@ -11,15 +11,17 @@ After finishing this repository, you should be able to:
 - Export a PyTorch YOLO model to ONNX.
 - Inspect and simplify ONNX graphs.
 - Build TensorRT FP32, FP16, and INT8 engines.
+- Use Polygraphy to compare PyTorch, ONNX Runtime, and TensorRT outputs when accuracy drifts.
 - Write TensorRT C++ inference code without relying on framework wrappers.
 - Manage TensorRT, CUDA, and OpenCV resources safely with RAII.
 - Implement image preprocessing and detection postprocessing.
 - Build a thread-safe producer-consumer inference pipeline.
 - Run dynamic batch inference with TensorRT optimization profiles.
 - Process multiple video streams with clear scheduling, batching, and dropped-frame policies.
-- Debug unsupported operators with ONNX GraphSurgeon and TensorRT plugin strategy.
+- Debug unsupported operators with ONNX GraphSurgeon and a runnable TensorRT custom plugin.
 - Use Nsight Systems to prove where CPU/GPU time is spent.
 - Understand DeepStream and GStreamer enough to run multi-stream industrial demos.
+- Understand Jetson Orin/Xavier deployment, cross compilation, and DLA constraints.
 - Package C++ inference as a `.so` and call it from Python.
 - Measure latency, throughput, memory usage, and accuracy changes.
 - Explain performance bottlenecks in CPU preprocessing, GPU inference, memory copies, and synchronization.
@@ -27,23 +29,23 @@ After finishing this repository, you should be able to:
 - Understand the minimum LLM inference concepts needed for modern deployment interviews.
 - Present the project as an interview-ready deployment case study.
 
-## Recommended Pace
+## Learning Flow
 
-Use this roadmap as the default plan. A realistic pace is about 10 weeks if studying full time, or 14 to 16 weeks if studying part time.
+Use this roadmap as the default plan. The modules are ordered by dependency and interview story, not by calendar time.
 
-| Phase | Time | Focus |
-| --- | --- | --- |
-| Phase 0 | 2-3 days | Environment and tooling |
-| Phase 1 | 1 week | C++, CMake, OpenCV basics |
-| Phase 2 | 1-2 weeks | ONNX export and validation |
-| Phase 3 | 2 weeks | TensorRT engine build and basic C++ inference |
-| Phase 4 | 2 weeks | YOLOv8n end-to-end TensorRT C++ pipeline |
-| Phase 5 | 1-2 weeks | Nsight baseline, FP16, INT8, benchmark, accuracy comparison |
-| Phase 6 | 2-3 weeks | Producer-consumer pipeline, dynamic batching, async video, multi-stream video |
-| Phase 7 | 1 week | CUDA/NPP preprocessing optimization and OpenVINO comparison |
-| Phase 8 | 1-2 weeks | Graph surgery, TensorRT plugin strategy, DeepStream, Python binding |
-| Phase 9 | 3-5 days | LLM inference entry point and C++ interview katas |
-| Phase 10 | 2-3 days | Final report and resume material |
+| Phase | Focus |
+| --- | --- |
+| Phase 0 | Environment and tooling |
+| Phase 1 | C++, CMake, OpenCV basics |
+| Phase 2 | ONNX export, validation, and precision alignment |
+| Phase 3 | TensorRT engine build and basic C++ inference |
+| Phase 4 | YOLOv8n end-to-end TensorRT C++ pipeline |
+| Phase 5 | Nsight baseline, FP16, INT8, benchmark, and accuracy comparison |
+| Phase 6 | Producer-consumer pipeline, dynamic batching, async video, and multi-stream video |
+| Phase 7 | CUDA/NPP preprocessing optimization and OpenVINO comparison |
+| Phase 8 | Graph surgery, runnable TensorRT plugin, DeepStream, Jetson/DLA, and Python binding |
+| Phase 9 | LLM inference entry point and C++ interview katas |
+| Phase 10 | Final report and resume material |
 
 ## Directory Plan
 
@@ -178,6 +180,34 @@ Acceptance criteria:
 - You can build `.engine` files from ONNX.
 - You can run `trtexec` benchmark and read latency, throughput, and memory output.
 - You can compare FP32 and FP16 results.
+
+### `06a_polygraphy_precision_alignment`
+
+Purpose:
+
+- Learn a repeatable accuracy-debug workflow when PyTorch, ONNX Runtime, and TensorRT outputs disagree.
+
+Why it matters:
+
+- Real deployment work is not finished when an engine builds successfully.
+- Senior candidates should be able to prove where numerical drift starts instead of guessing whether preprocessing, export, precision mode, or TensorRT parsing caused the issue.
+
+Topics:
+
+- Polygraphy model inspection
+- ONNX Runtime versus TensorRT comparison
+- Saving and comparing input/output tensors
+- Layerwise or tensorwise debug workflow
+- FP32, FP16, and INT8 drift analysis
+- Tolerance selection for deployment reports
+- Reproducible command logs for interview discussion
+
+Acceptance criteria:
+
+- You can run Polygraphy against the YOLO ONNX model and a TensorRT engine.
+- You can compare ONNX Runtime and TensorRT outputs for the same input tensor.
+- You can save mismatch evidence and explain whether the drift comes from export, preprocessing, precision mode, or TensorRT conversion.
+- You can write a short precision-alignment note that belongs in the final benchmark report.
 
 ### `07_tensorrt_raii_resource`
 
@@ -543,6 +573,44 @@ Acceptance criteria:
 - You can edit a small ONNX graph with GraphSurgeon.
 - You can describe the key plugin lifecycle methods: `getOutputDimensions`, `configurePlugin`, `enqueue`, `serialize`, and `clone`.
 
+### `19a_custom_tensorrt_plugin`
+
+Purpose:
+
+- Build one runnable custom TensorRT plugin instead of only describing the plugin strategy.
+
+Why it matters:
+
+- Custom plugin experience is a strong signal for roles that deploy non-standard CV, medical, industrial, or research models.
+- A small complete plugin demonstrates C++ ABI awareness, CUDA kernel integration, TensorRT lifecycle knowledge, and numerical validation.
+
+Suggested plugin scope:
+
+- Implement a compact operator such as `ScaleShift`, `Clip`, or `CustomNormalize`.
+- Keep the operator simple enough that plugin mechanics, serialization, and validation remain the teaching focus.
+
+Topics:
+
+- `IPluginV2DynamicExt`
+- Plugin creator registration
+- CUDA kernel launch from `enqueue`
+- Dynamic shape and data type handling
+- Plugin field collection and parameters
+- Serialization and deserialization
+- Building a plugin shared library
+- Loading plugins with `trtexec --plugins`
+- Loading plugins from C++ runtime code
+- ONNX GraphSurgeon replacement with a plugin node
+- Polygraphy or ONNX Runtime reference comparison
+
+Acceptance criteria:
+
+- A plugin shared library builds with CMake.
+- `trtexec` can load the plugin library and build an engine containing the plugin layer.
+- A small C++ or Python runtime example loads the plugin-backed engine and runs inference.
+- The plugin output is numerically checked against a CPU/Python reference.
+- You can explain the plugin lifecycle from registration to `enqueue` to engine deserialization.
+
 ### `20_deepstream_gstreamer_multistream`
 
 Purpose:
@@ -567,6 +635,42 @@ Acceptance criteria:
 - A TensorRT engine is used through DeepStream configuration.
 - At least two video streams are processed concurrently.
 - You can explain where TensorRT sits inside the GStreamer pipeline.
+
+### `20a_jetson_orin_xavier_dla_deployment`
+
+Purpose:
+
+- Understand how TensorRT deployment changes on Jetson Orin/Xavier edge devices, especially when DLA is involved.
+
+Scope:
+
+- This is an edge-deployment extension. It can be documented on x86 first and fully verified later on a Jetson target.
+
+Why it matters:
+
+- Many CV deployment roles involve edge boxes, robotics, industrial cameras, or embedded NVIDIA platforms rather than only desktop GPUs.
+- Jetson work requires version discipline because JetPack, CUDA, TensorRT, cuDNN, DeepStream, and kernel drivers are tightly coupled.
+
+Topics:
+
+- JetPack, CUDA, TensorRT, cuDNN, and DeepStream version compatibility
+- Native Jetson build versus x86-to-aarch64 cross compilation
+- CMake toolchain file for aarch64 targets
+- Container versus bare-metal deployment on Jetson
+- DLA-supported layer constraints
+- `trtexec --useDLACore`
+- GPU fallback behavior
+- FP16 and INT8 on DLA
+- Power modes, clocks, thermals, and memory bandwidth
+- Orin/Xavier benchmark notes and deployment checklist
+
+Acceptance criteria:
+
+- The lesson documents the target Jetson hardware, JetPack version, TensorRT version, power mode, and clocks.
+- The project has a clear native-build path and a cross-compilation checklist for aarch64.
+- A YOLO TensorRT engine is attempted with DLA, with unsupported layers and GPU fallback recorded.
+- Latency, throughput, memory, and power-mode notes are compared against the desktop GPU baseline when hardware is available.
+- If no Jetson target is available, the lesson still records the exact commands and expected validation steps for future hardware verification.
 
 ### `21_cpp_shared_library_python_binding`
 
@@ -671,7 +775,7 @@ Acceptance criteria:
 - You can defend every number in the report.
 - A multi-stage Docker build produces a runtime image that contains only the files needed to run inference.
 
-## Suggested Weekly Routine
+## Suggested Lesson Routine
 
 For each lesson:
 
@@ -690,6 +794,13 @@ After `06_trtexec_engine`, you should be able to answer:
 - What changes when enabling FP16?
 - What is a dynamic shape optimization profile?
 - What does `trtexec` measure?
+
+After `06a_polygraphy_precision_alignment`, you should be able to answer:
+
+- Why can ONNX Runtime and TensorRT produce different outputs?
+- How do you compare two backends with the same input tensor?
+- How do you decide whether a mismatch is acceptable numerical drift or a deployment bug?
+- How would you debug the first layer where accuracy starts to diverge?
 
 After `07_tensorrt_raii_resource`, you should be able to answer:
 
@@ -718,20 +829,14 @@ After `13_cpp_producer_consumer`, `14_dynamic_batching`, and `16_multistream_vid
 - How do you choose between fairness and latest-frame freshness?
 - What metrics do you report for each stream?
 
-After `22_llm_inference_intro`, you should be able to answer:
-
-- What are prefill and decode?
-- What is KV cache?
-- Why is LLM decoding often memory-bandwidth bound?
-- How is LLM batching different from YOLO image batching?
-- What problems do TensorRT-LLM, OpenVINO GenAI, vLLM, and llama.cpp try to solve?
-
-After `19_onnx_graph_surgery_plugin`, you should be able to answer:
+After `19_onnx_graph_surgery_plugin` and `19a_custom_tensorrt_plugin`, you should be able to answer:
 
 - What do you do when TensorRT does not support an ONNX operator?
 - When should you rewrite PyTorch code instead of writing a plugin?
 - What does ONNX GraphSurgeon do?
 - What are the core responsibilities of a TensorRT dynamic plugin?
+- How is a plugin registered, serialized, deserialized, and called from `enqueue`?
+- How do you validate plugin output against a reference implementation?
 
 After `11_nsight_performance_diagnosis` and `17_cuda_preprocess_npp`, you should be able to answer:
 
@@ -740,12 +845,22 @@ After `11_nsight_performance_diagnosis` and `17_cuda_preprocess_npp`, you should
 - When is GPU preprocessing worth the added complexity?
 - How do you compare two optimization attempts fairly?
 
-After `20_deepstream_gstreamer_multistream` and `21_cpp_shared_library_python_binding`, you should be able to answer:
+After `20_deepstream_gstreamer_multistream`, `20a_jetson_orin_xavier_dla_deployment`, and `21_cpp_shared_library_python_binding`, you should be able to answer:
 
 - What is a GStreamer pipeline?
 - What does `nvstreammux` do?
 - What does zero-copy mean in DeepStream?
+- What changes when deploying on Jetson instead of a desktop GPU?
+- What constraints determine whether a layer can run on DLA?
 - How do you expose a C++ TensorRT engine to Python safely?
+
+After `22_llm_inference_intro`, you should be able to answer:
+
+- What are prefill and decode?
+- What is KV cache?
+- Why is LLM decoding often memory-bandwidth bound?
+- How is LLM batching different from YOLO image batching?
+- What problems do TensorRT-LLM, OpenVINO GenAI, vLLM, and llama.cpp try to solve?
 
 After `24_benchmark_report`, you should be able to answer:
 
@@ -759,4 +874,4 @@ After `24_benchmark_report`, you should be able to answer:
 
 The final story should be:
 
-I took YOLOv8n from PyTorch to ONNX, validated it, built TensorRT FP32/FP16/INT8 engines, implemented a C++ inference pipeline with RAII-managed TensorRT/CUDA resources, OpenCV preprocessing, YOLO postprocessing, producer-consumer video flow, dynamic batching, and multi-stream video scheduling, measured latency and throughput on RTX 2060, diagnosed bottlenecks with Nsight Systems, explored graph surgery and plugin strategy for unsupported operators, compared the same model with OpenVINO CPU inference, ran a DeepStream-style multi-stream path, exposed C++ inference to Python, learned the entry-level LLM inference concepts, and summarized the engineering trade-offs in a benchmark report.
+I took YOLOv8n from PyTorch to ONNX, validated it, used Polygraphy to align ONNX Runtime and TensorRT outputs, built TensorRT FP32/FP16/INT8 engines, implemented a C++ inference pipeline with RAII-managed TensorRT/CUDA resources, OpenCV preprocessing, YOLO postprocessing, producer-consumer video flow, dynamic batching, and multi-stream video scheduling, measured latency and throughput on RTX 2060, diagnosed bottlenecks with Nsight Systems, handled unsupported operators with graph surgery and a runnable custom TensorRT plugin, compared the same model with OpenVINO CPU inference, ran a DeepStream-style multi-stream path, documented Jetson Orin/Xavier DLA deployment constraints, exposed C++ inference to Python, learned the entry-level LLM inference concepts, and summarized the engineering trade-offs in a benchmark report.
