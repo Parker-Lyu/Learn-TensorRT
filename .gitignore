@@ -11,6 +11,8 @@ outputs/
 *.dylib
 *.dll
 *.exe
+__pycache__/
+*.py[cod]
 
 # Editor and system files
 .vscode/
