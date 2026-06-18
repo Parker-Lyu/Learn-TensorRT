@@ -16,5 +16,6 @@ Topics:
 
 Acceptance criteria:
 
-- Each kata has a small implementation and test input.
+- Each kata has a small C++ implementation and either a focused executable check or Google Test coverage.
 - You can write IoU, NMS, letterbox mapping, and a bounded queue without looking up code.
+- Destructive edge cases are covered for empty inputs, extreme coordinates, overlapping boxes, and queue boundary behavior.
