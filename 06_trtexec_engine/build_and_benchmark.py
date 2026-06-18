@@ -285,8 +285,7 @@ def main() -> int:
         if not args.skip_dynamic and not args.dynamic_onnx.exists():
             print(
                 f"Dynamic ONNX not found, skipping dynamic profile build: {args.dynamic_onnx}\n"
-                "Create it with: python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic "
-                "--output 05_torch_to_onnx/outputs/yolov8n_dynamic.onnx"
+                "Create it with: python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic"
             )
 
         args.output_dir.mkdir(parents=True, exist_ok=True)

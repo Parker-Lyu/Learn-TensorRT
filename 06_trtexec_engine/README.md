@@ -1,9 +1,10 @@
 # 06 - trtexec Engine
 
-This lesson builds TensorRT engines from the ONNX model created in lesson 05 and records benchmark
-evidence before any TensorRT C++ runtime code is introduced.
+This lesson builds TensorRT engines from the simplified ONNX models created in lesson 05 and records
+benchmark evidence before any TensorRT C++ runtime code is introduced.
 
-Goal: turn a validated ONNX graph into reproducible TensorRT engine artifacts and benchmark reports.
+Goal: turn validated, simplified ONNX graphs into reproducible TensorRT engine artifacts and
+benchmark reports.
 
 Topics:
 
@@ -22,7 +23,7 @@ Topics:
 It answers three questions before C++ code adds more moving parts:
 
 ```text
-validated ONNX
+validated simplified ONNX
   -> parse and build TensorRT engine
   -> benchmark generated engine
   -> inspect layer/profile evidence
@@ -38,8 +39,8 @@ This lesson also creates engine files that later lessons can load with TensorRT 
 - `summarize_results.py`: converts `trtexec` logs into a compact Markdown benchmark summary.
 - `outputs/`: generated `.engine`, log, timing, layer, profile, manifest, and summary files. This
   folder is ignored by git.
-- `../05_torch_to_onnx/outputs/yolov8n.onnx`: static ONNX model from lesson 05.
-- `../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`: optional dynamic ONNX model from lesson 05.
+- `../05_torch_to_onnx/outputs/yolov8n.onnx`: simplified static ONNX model from lesson 05.
+- `../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`: simplified dynamic ONNX model from lesson 05.
 
 ## Prerequisites
 
@@ -48,19 +49,23 @@ Complete lesson 00 and lesson 05 first:
 ```bash
 bash 00_environment_check/check_env.sh
 python3 05_torch_to_onnx/export_yolov8_onnx.py
+python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/inspect_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
-Optional dynamic ONNX export:
+The lesson 05 export commands simplify both ONNX graphs by default. Inspect the dynamic graph when
+you want explicit evidence for the optimization profile input shape:
 
 ```bash
-python3 05_torch_to_onnx/export_yolov8_onnx.py \
-  --dynamic \
-  --output 05_torch_to_onnx/outputs/yolov8n_dynamic.onnx
+python3 05_torch_to_onnx/inspect_onnx.py \
+  --onnx 05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
+  --report 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
 ```
 
 The dynamic engine build is skipped if the dynamic ONNX file is not present.
+For the normal course path, generate both lesson 05 ONNX files first so lesson 06 builds the static
+and dynamic engines from the same simplified model handoff.
 
 ## Build And Benchmark
 
@@ -74,7 +79,11 @@ The default command builds:
 
 - `outputs/yolov8n_static_fp32.engine`
 - `outputs/yolov8n_static_fp16.engine`
-- `outputs/yolov8n_dynamic_fp16.engine`, only when the dynamic ONNX file exists
+- `outputs/yolov8n_dynamic_fp16.engine`, only when the simplified dynamic ONNX file exists
+
+By default, both static builds consume
+`../05_torch_to_onnx/outputs/yolov8n.onnx`, and the dynamic build consumes
+`../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`.
 
 Each build also writes:
 
@@ -176,9 +185,11 @@ transfer time, and build status parsed from the logs.
 
 Acceptance criteria:
 
-- Static FP32 and FP16 `.engine` files are generated under `outputs/`.
+- Static FP32 and FP16 `.engine` files are generated from the simplified static ONNX under
+  `outputs/`.
 - Full `trtexec` logs and JSON timing/layer/profile artifacts are recorded.
 - `outputs/benchmark_summary.md` records latency, throughput, GPU compute time, transfer time, and
   engine size.
 - You can compare FP32 and FP16 results using measured evidence.
-- If a dynamic ONNX model is present, a dynamic-profile FP16 engine is generated and benchmarked.
+- If the simplified dynamic ONNX model is present, a dynamic-profile FP16 engine is generated and
+  benchmarked.

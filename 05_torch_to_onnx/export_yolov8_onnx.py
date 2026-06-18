@@ -14,6 +14,7 @@ from ultralytics.utils.downloads import attempt_download_asset
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WEIGHTS = REPO_ROOT / "assets" / "yolov8n.pt"
 DEFAULT_OUTPUT = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n.onnx"
+DEFAULT_DYNAMIC_OUTPUT = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n_dynamic.onnx"
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,18 +28,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT,
-        help="Destination ONNX file.",
+        help=(
+            "Destination ONNX file. Defaults to outputs/yolov8n.onnx for static export "
+            "or outputs/yolov8n_dynamic.onnx for --dynamic."
+        ),
     )
     parser.add_argument("--imgsz", type=int, default=640, help="Square export image size.")
     parser.add_argument("--opset", type=int, default=17, help="ONNX opset version.")
     parser.add_argument("--dynamic", action="store_true", help="Export dynamic batch/shape axes.")
     parser.add_argument(
         "--simplify",
-        action="store_true",
-        help="Ask Ultralytics to simplify the ONNX graph. Requires onnxslim or onnxsim.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Simplify the ONNX graph by default. Use --no-simplify for raw export comparisons.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.output is None:
+        args.output = DEFAULT_DYNAMIC_OUTPUT if args.dynamic else DEFAULT_OUTPUT
+    return args
 
 
 def ensure_weights(weights_path: Path) -> Path:

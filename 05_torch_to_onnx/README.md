@@ -1,9 +1,10 @@
 # 05 - Torch To ONNX
 
-This lesson exports YOLOv8n from PyTorch to ONNX and validates that ONNX Runtime produces the same
-raw model output as PyTorch for the same preprocessed tensor.
+This lesson exports YOLOv8n from PyTorch to a simplified ONNX graph and validates that ONNX Runtime
+produces the same raw model output as PyTorch for the same preprocessed tensor.
 
-Goal: build a trustworthy ONNX artifact before using `trtexec` and TensorRT C++ runtime code.
+Goal: build a trustworthy, TensorRT-ready ONNX artifact before using `trtexec` and TensorRT C++
+runtime code.
 
 Topics:
 
@@ -25,7 +26,7 @@ This lesson validates the boundary between training-framework code and deploymen
 
 ```text
 YOLOv8n .pt weights
-  -> export to ONNX
+  -> export to simplified ONNX
   -> inspect input/output names and shapes
   -> run ONNX Runtime on the same NCHW float32 tensor as PyTorch
   -> compare raw [1, 84, 8400] outputs before decode and NMS
@@ -36,24 +37,25 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 
 ## Directory Layout
 
-- `export_yolov8_onnx.py`: downloads or uses `assets/yolov8n.pt`, then exports ONNX.
+- `export_yolov8_onnx.py`: downloads or uses `assets/yolov8n.pt`, then exports simplified ONNX
+  artifacts by default.
 - `inspect_onnx.py`: checks the ONNX model and records tensor names, shapes, opset, and operator
   inventory.
 - `validate_onnx_runtime.py`: runs PyTorch and ONNX Runtime on the same preprocessed image tensor.
-- `outputs/`: generated ONNX model, tensor dumps, and validation reports. This folder is ignored by
-  git.
+- `outputs/`: generated simplified ONNX models, optional raw ONNX comparisons, tensor dumps, and
+  validation reports. This folder is ignored by git.
 - `../assets/yolov8n.pt`: shared YOLOv8n weights used by later lessons.
 - `../assets/dog.webp`: shared sample image.
 
 ## Prerequisites
 
 Complete `../00_environment_check` before running this lesson. Environment setup, including Python
-packages for Ultralytics export, ONNX inspection, ONNX Runtime validation, and optional graph
+packages for Ultralytics export, ONNX inspection, ONNX Runtime validation, and graph
 simplification, is documented there so this lesson can focus on export and validation behavior.
 
 ## Export
 
-Export a static-shape ONNX model:
+Export a simplified static-shape ONNX model:
 
 ```bash
 python3 export_yolov8_onnx.py
@@ -65,16 +67,31 @@ The default command writes:
 outputs/yolov8n.onnx
 ```
 
-Export with dynamic axes for later TensorRT optimization-profile experiments:
+Export a simplified dynamic-shape ONNX model for later TensorRT optimization-profile experiments:
 
 ```bash
-python3 export_yolov8_onnx.py --dynamic --output outputs/yolov8n_dynamic.onnx
+python3 export_yolov8_onnx.py --dynamic
 ```
 
-Export and ask Ultralytics to simplify the graph:
+The dynamic command writes:
+
+```text
+outputs/yolov8n_dynamic.onnx
+```
+
+Graph simplification is enabled by default because lesson 06 uses these files as the canonical
+TensorRT build inputs. Export an unsimplified graph only when you want to compare tool behavior or
+debug a simplifier issue:
 
 ```bash
-python3 export_yolov8_onnx.py --simplify --output outputs/yolov8n_simplified.onnx
+python3 export_yolov8_onnx.py --no-simplify --output outputs/yolov8n_raw.onnx
+```
+
+The default simplified artifacts are the handoff contract to lesson 06:
+
+```text
+outputs/yolov8n.onnx
+outputs/yolov8n_dynamic.onnx
 ```
 
 The default weights path is:
@@ -88,7 +105,7 @@ later lessons can reuse the same file.
 
 ## Inspect
 
-Check the exported model and write a JSON report:
+Check the simplified static model and write a JSON report:
 
 ```bash
 python3 inspect_onnx.py
@@ -116,9 +133,17 @@ Open the ONNX file in Netron and confirm:
 - The output tensor name and shape match the inspection report.
 - The graph does not contain unexpected preprocessing or NMS nodes.
 
+Inspect the dynamic model separately when preparing for TensorRT optimization profiles:
+
+```bash
+python3 inspect_onnx.py \
+  --onnx outputs/yolov8n_dynamic.onnx \
+  --report outputs/onnx_dynamic_inspection.json
+```
+
 ## Validate
 
-Compare PyTorch raw output with ONNX Runtime raw output:
+Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 
 ```bash
 python3 validate_onnx_runtime.py
@@ -179,17 +204,23 @@ project.
 
 ## Checkpoints
 
-- Export both static and dynamic ONNX models and compare their input shapes in `onnx_inspection.json`.
+- Export both simplified static and dynamic ONNX models and compare their input shapes in the
+  inspection reports.
 - Change `--imgsz` to `320` and explain why the output candidate count changes.
 - Open the model in Netron and find the first `Conv` node and the final output tensor.
 - Delete `outputs/yolov8n.onnx`, rerun the export, and confirm the command is reproducible.
+- Export `outputs/yolov8n_raw.onnx` with `--no-simplify` and compare its node count with the
+  simplified graph.
 - Intentionally use a loose and a strict tolerance in validation and explain the difference between
   acceptable float drift and a real export bug.
 
 Acceptance criteria:
 
-- `outputs/yolov8n.onnx` is generated.
+- Simplified `outputs/yolov8n.onnx` and `outputs/yolov8n_dynamic.onnx` are generated.
 - Input and output tensor names are recorded.
 - ONNX checker passes.
-- ONNX Runtime output is compared with PyTorch output on the same image tensor.
+- Static and dynamic inspection reports show the expected static tensor shapes and dynamic
+  `batch`/`height`/`width` axes.
+- ONNX Runtime output from the simplified static ONNX is compared with PyTorch output on the same
+  image tensor.
 - The validation report explains the numerical difference and tolerance.
