@@ -193,3 +193,40 @@ Acceptance criteria:
 - You can compare FP32 and FP16 results using measured evidence.
 - If the simplified dynamic ONNX model is present, a dynamic-profile FP16 engine is generated and
   benchmarked.
+
+## Appendix: trtexec Arguments
+
+`build_and_benchmark.py` builds each engine by assembling a `trtexec` command. These flags define
+the model input, serialized engine output, profiling evidence, benchmark duration, and dynamic-shape
+profile.
+
+| Argument | Purpose | Why this lesson uses it |
+| --- | --- | --- |
+| `trtexec` | TensorRT command-line build and benchmark tool. | Gives a direct ONNX-to-engine boundary test before adding C++ runtime code. |
+| `--onnx=<path>` | Input ONNX graph to parse. | Uses the simplified ONNX artifacts from lesson 05. |
+| `--saveEngine=<path>` | Writes the serialized TensorRT engine. | Produces `.engine` files that later C++ lessons can load. |
+| `--memPoolSize=workspace:<MiB>` | Sets the TensorRT workspace memory pool. | Controls how much temporary GPU memory TensorRT can use while selecting tactics. Larger values can enable faster tactics but use more memory. |
+| `--timingCacheFile=<path>` | Reads and writes TensorRT tactic timing data. | Makes repeated builds faster and more reproducible on the same GPU, driver, CUDA, and TensorRT stack. |
+| `--profilingVerbosity=detailed` | Stores detailed layer metadata in the engine/profile output. | Makes layer inspection more useful when diagnosing performance. |
+| `--dumpLayerInfo` | Prints TensorRT layer information. | Captures the optimized network structure in the log and exported layer file. |
+| `--dumpProfile` | Prints per-layer runtime profiling data. | Shows which layers consume time during benchmark runs. |
+| `--separateProfileRun` | Runs profiling separately from the main timing loop. | Keeps profiling overhead from distorting the primary benchmark timing. |
+| `--exportTimes=<path>` | Writes benchmark timing samples as JSON. | Provides machine-readable latency evidence for summaries and later reports. |
+| `--exportLayerInfo=<path>` | Writes layer information as JSON. | Preserves the optimized TensorRT layer inventory for inspection. |
+| `--exportProfile=<path>` | Writes per-layer profile results as JSON. | Preserves layer timing data for comparison across precision modes and hardware. |
+| `--warmUp=<ms>` | Runs inference before measurement starts. | Reduces first-run noise from lazy initialization, clock ramp-up, and cache effects. |
+| `--duration=<sec>` | Sets benchmark measurement time. | Longer runs give more stable latency and throughput numbers. Short runs are useful for smoke tests. |
+| `--avgRuns=<n>` | Averages timing over groups of inference runs. | Smooths short-run jitter before reporting each timing sample. |
+| `--percentile=50,90,95,99` | Reports selected latency percentiles. | Shows both typical latency and tail latency instead of only an average. |
+| `--fp16` | Allows FP16 tactics and FP16 engine layers where supported. | Builds the FP16 comparison engine and usually improves throughput on modern NVIDIA GPUs. |
+| `--minShapes=<name:shape>` | Minimum shape allowed by a dynamic optimization profile. | Defines the smallest input shape the dynamic engine must support. |
+| `--optShapes=<name:shape>` | Shape TensorRT optimizes most heavily for a dynamic profile. | Tells TensorRT the expected/common shape, usually the main benchmark shape. |
+| `--maxShapes=<name:shape>` | Maximum shape allowed by a dynamic optimization profile. | Defines the largest input shape the dynamic engine must support. |
+| `--shapes=<name:shape>` | Actual input shape used for this benchmark run. | Measures one concrete shape inside the dynamic profile range. |
+
+Dynamic-shape flags are required only for `dynamic_fp16`. Static engines have fixed input dimensions
+from the ONNX graph, so they do not need `--minShapes`, `--optShapes`, `--maxShapes`, or `--shapes`.
+
+Treat serialized TensorRT engines as machine-local artifacts. If you move from an RTX 2060 laptop to
+an RTX 4090 desktop, keep the ONNX and rebuild the `.engine` files on the target machine so tactics
+match that GPU and software stack.
