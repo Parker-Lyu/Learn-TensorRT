@@ -23,6 +23,11 @@ DEFAULT_ENGINE = REPO_ROOT / "06_trtexec_engine" / "outputs" / "yolov8n_static_f
 DEFAULT_INPUTS = LESSON_DIR / "outputs" / "input_data.json"
 DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs"
 POLYGRAPHY_CLI = LESSON_DIR / "polygraphy_cli_compat.py"
+REPORT_SCOPE = "single_input_tensor_alignment"
+REPORT_SCOPE_NOTE = (
+    "This report compares raw model outputs for one controlled input tensor. It is useful "
+    "precision-alignment evidence, but it is not dataset-level detection accuracy validation."
+)
 
 
 @dataclass(frozen=True)
@@ -307,8 +312,14 @@ def write_precision_note(report: dict[str, Any], path: Path) -> None:
         f"- ONNX model: `{report['onnx']}`",
         f"- TensorRT mode: `{report['trt_mode']}`",
         f"- Input data: `{report['inputs']}`",
+        f"- Scope: `{report['scope']}`",
         f"- ONNX Runtime output artifact: `{report['onnxrt_outputs']}`",
         f"- TensorRT comparison artifact: `{report.get('trt_outputs', 'skipped')}`",
+        "",
+        "## Scope",
+        "",
+        f"- {report['scope_note']}",
+        "- Use lesson 12 to compare FP32, FP16, and INT8 detections across a representative image set.",
         "",
         "## Result",
         "",
@@ -336,7 +347,7 @@ def write_precision_note(report: dict[str, Any], path: Path) -> None:
             "",
             "- Confirm the same preprocessed tensor was used for both runners.",
             "- Confirm the ONNX model and TensorRT engine were built from the same export.",
-            "- If FP16 or INT8 is used, loosen tolerance only after checking detection quality.",
+            "- If FP16 is used, loosen tolerance only after checking detection quality on later validation images.",
             "- If drift starts at a specific tensor, use Polygraphy tensorwise inspection before changing postprocessing.",
         ]
     )
@@ -417,6 +428,8 @@ def main() -> int:
             "onnx": str(args.onnx),
             "engine": str(args.engine) if args.engine.exists() else None,
             "inputs": str(args.inputs),
+            "scope": REPORT_SCOPE,
+            "scope_note": REPORT_SCOPE_NOTE,
             "trt_mode": args.trt_mode,
             "skip_trt": args.skip_trt,
             "rtol": args.rtol,

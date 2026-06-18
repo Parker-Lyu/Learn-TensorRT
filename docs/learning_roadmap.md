@@ -11,7 +11,8 @@ After finishing this repository, you should be able to:
 - Export a PyTorch YOLO model to ONNX.
 - Inspect and simplify ONNX graphs.
 - Build TensorRT FP32, FP16, and INT8 engines.
-- Use Polygraphy to compare PyTorch, ONNX Runtime, and TensorRT outputs when accuracy drifts.
+- Use Polygraphy to compare ONNX Runtime and TensorRT outputs for controlled single-input
+  precision alignment, then extend validation to multi-image accuracy regression.
 - Write TensorRT C++ inference code without relying on framework wrappers.
 - Manage TensorRT, CUDA, and OpenCV resources safely with RAII.
 - Implement image preprocessing and detection postprocessing.
@@ -23,7 +24,7 @@ After finishing this repository, you should be able to:
 - Understand DeepStream and GStreamer enough to run multi-stream industrial demos.
 - Understand Jetson Orin/Xavier deployment, cross compilation, and DLA constraints.
 - Package C++ inference as a `.so` and call it from Python.
-- Measure latency, throughput, memory usage, and accuracy changes.
+- Measure latency, throughput, memory usage, tensor drift, and task-level accuracy changes.
 - Explain performance bottlenecks in CPU preprocessing, GPU inference, memory copies, and synchronization.
 - Deploy the same model with OpenVINO for CPU comparison.
 - Understand the minimum LLM inference concepts needed for modern deployment interviews.
@@ -77,10 +78,10 @@ Use this roadmap as the default plan. The modules are ordered by dependency and 
 | --- | --- |
 | Phase 0 | Environment and tooling |
 | Phase 1 | C++, CMake, OpenCV basics |
-| Phase 2 | ONNX export, validation, and precision alignment |
+| Phase 2 | ONNX export, validation, and single-input precision alignment |
 | Phase 3 | TensorRT engine build and basic C++ inference |
 | Phase 4 | YOLOv8n end-to-end TensorRT C++ pipeline |
-| Phase 5 | Nsight baseline, FP16, INT8, benchmark, and accuracy comparison |
+| Phase 5 | Nsight baseline, FP16, INT8, benchmark, and multi-image accuracy comparison |
 | Phase 6 | Producer-consumer pipeline, dynamic batching, async video, and multi-stream video |
 | Phase 7 | CUDA/NPP preprocessing optimization and OpenVINO comparison |
 | Phase 8 | Graph surgery, runnable TensorRT plugin, DeepStream, Jetson/DLA, and Python binding |
@@ -228,29 +229,33 @@ Acceptance criteria:
 
 Purpose:
 
-- Learn a repeatable accuracy-debug workflow when PyTorch, ONNX Runtime, and TensorRT outputs disagree.
+- Learn a repeatable single-input precision-debug workflow when ONNX Runtime and TensorRT outputs
+  disagree.
 
 Why it matters:
 
 - Real deployment work is not finished when an engine builds successfully.
 - Senior candidates should be able to prove where numerical drift starts instead of guessing whether preprocessing, export, precision mode, or TensorRT parsing caused the issue.
+- A one-image tensor comparison is a debugging gate, not a dataset-level release criterion. Later
+  lessons extend it into multi-image drift statistics and decoded detection-quality comparison.
 
 Topics:
 
 - Polygraphy model inspection
 - ONNX Runtime versus TensorRT comparison
-- Saving and comparing input/output tensors
+- Saving and comparing one controlled input tensor and its raw model output
 - Layerwise or tensorwise debug workflow
-- FP32, FP16, and INT8 drift analysis
+- FP32 and FP16 drift analysis for a controlled sample
 - Tolerance selection for deployment reports
 - Reproducible command logs for interview discussion
 
 Acceptance criteria:
 
 - You can run Polygraphy against the YOLO ONNX model and a TensorRT engine.
-- You can compare ONNX Runtime and TensorRT outputs for the same input tensor.
+- You can compare ONNX Runtime and TensorRT outputs for the same single input tensor.
 - You can save mismatch evidence and explain whether the drift comes from export, preprocessing, precision mode, or TensorRT conversion.
-- You can write a short precision-alignment note that belongs in the final benchmark report.
+- You can write a short precision-alignment note that belongs in the final benchmark report and
+  clearly states that multi-image detection validation still follows.
 
 ### `07_tensorrt_raii_resource`
 
@@ -393,16 +398,19 @@ Acceptance criteria:
 
 Purpose:
 
-- Learn practical quantization and its trade-offs.
+- Learn practical quantization and its trade-offs using both speed and accuracy evidence.
 
 Topics:
 
 - Calibration dataset
+- Validation image set separate from calibration data
 - Entropy calibration
 - KL divergence intuition
 - `IInt8EntropyCalibrator2`
 - Calibration table
 - INT8 engine build
+- FP32, FP16, and INT8 tensor drift summary across multiple images
+- Decoded box, class, and confidence comparison
 - Mixed precision fallback
 - Sensitive layer fallback to FP16 or FP32
 - QAT as a fallback when PTQ fails
@@ -413,6 +421,8 @@ Acceptance criteria:
 
 - You can build an INT8 engine.
 - You can compare FP32, FP16, and INT8 latency.
+- You can compare FP32, FP16, and INT8 detection quality on a small representative validation set.
+- You can list changed detections or high-drift examples that deserve visual inspection.
 - You can explain any visible accuracy drop and propose a fallback strategy.
 
 ### `13_cpp_producer_consumer`
@@ -813,7 +823,8 @@ Deliverables:
 - `report.md`
 - Latency table
 - Throughput table
-- Accuracy notes
+- Accuracy notes that separate single-input tensor alignment, multi-image drift statistics, and
+  decoded detection-quality comparison
 - Environment table
 - Test evidence table
 - CI/build notes
@@ -826,6 +837,8 @@ Acceptance criteria:
 
 - A recruiter or interviewer can understand the project in five minutes.
 - You can defend every number in the report.
+- You can explain why a single-input Polygraphy pass is useful but not sufficient for release
+  approval.
 - The final report points to the reusable module structure and the tests that protect core
   preprocessing, postprocessing, and resource-management behavior.
 - CI or a documented local equivalent configures, builds, and runs the available tests.
@@ -856,6 +869,7 @@ After `06a_polygraphy_precision_alignment`, you should be able to answer:
 - Why can ONNX Runtime and TensorRT produce different outputs?
 - How do you compare two backends with the same input tensor?
 - How do you decide whether a mismatch is acceptable numerical drift or a deployment bug?
+- Why is one-image tensor alignment insufficient for release approval?
 - How would you debug the first layer where accuracy starts to diverge?
 
 After `07_tensorrt_raii_resource`, you should be able to answer:
@@ -924,10 +938,12 @@ After `24_benchmark_report`, you should be able to answer:
 - How much faster is FP16 than FP32?
 - Did INT8 help on this model and GPU?
 - What accuracy trade-off did you observe?
+- Which evidence came from single-input tensor alignment, and which came from multi-image detection
+  validation?
 - What would you change for production deployment?
 
 ## Portfolio Story
 
 The final story should be:
 
-I took YOLOv8n from PyTorch to ONNX, validated it, used Polygraphy to align ONNX Runtime and TensorRT outputs, built TensorRT FP32/FP16/INT8 engines, implemented a C++ inference pipeline with RAII-managed TensorRT/CUDA resources, OpenCV preprocessing, YOLO postprocessing, producer-consumer video flow, dynamic batching, and multi-stream video scheduling, measured latency and throughput on RTX 2060, diagnosed bottlenecks with Nsight Systems, handled unsupported operators with graph surgery and a runnable custom TensorRT plugin, compared the same model with OpenVINO CPU inference, ran a DeepStream-style multi-stream path, documented Jetson Orin/Xavier DLA deployment constraints, exposed C++ inference to Python, learned the entry-level LLM inference concepts, and summarized the engineering trade-offs in a benchmark report.
+I took YOLOv8n from PyTorch to ONNX, validated it, used Polygraphy for single-input ONNX Runtime and TensorRT precision alignment, extended validation to multi-image FP32/FP16/INT8 detection-quality checks, built TensorRT FP32/FP16/INT8 engines, implemented a C++ inference pipeline with RAII-managed TensorRT/CUDA resources, OpenCV preprocessing, YOLO postprocessing, producer-consumer video flow, dynamic batching, and multi-stream video scheduling, measured latency and throughput on RTX 2060, diagnosed bottlenecks with Nsight Systems, handled unsupported operators with graph surgery and a runnable custom TensorRT plugin, compared the same model with OpenVINO CPU inference, ran a DeepStream-style multi-stream path, documented Jetson Orin/Xavier DLA deployment constraints, exposed C++ inference to Python, learned the entry-level LLM inference concepts, and summarized the engineering trade-offs in a benchmark report.

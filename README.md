@@ -2,7 +2,7 @@
 
 A focused C++17 learning repository for TensorRT deployment and inference optimization.
 
-The main learning path uses YOLOv8n as the running model, because it is small enough for fast experiments and realistic enough to cover model export, TensorRT engine building, preprocessing, postprocessing, FP16, INT8, async inference, and benchmark reporting.
+The main learning path uses YOLOv8n as the running model, because it is small enough for fast experiments and realistic enough to cover model export, TensorRT engine building, preprocessing, postprocessing, FP16, INT8, async inference, accuracy regression checks, and benchmark reporting.
 
 ## Learning Roadmap
 
@@ -63,13 +63,13 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 | 2 | `04_cuda_memory_stream` | Learn CUDA memory allocation, host/device copies, and streams. |
 | 2 | `05_torch_to_onnx` | Export YOLOv8n from PyTorch to ONNX and validate the graph. |
 | 3 | `06_trtexec_engine` | Build and benchmark TensorRT engines with `trtexec`. |
-| 3 | `06a_polygraphy_precision_alignment` | Use Polygraphy to compare ONNX Runtime and TensorRT outputs when accuracy drifts. |
+| 3 | `06a_polygraphy_precision_alignment` | Use Polygraphy to compare ONNX Runtime and TensorRT outputs for one controlled input tensor. |
 | 3 | `07_tensorrt_raii_resource` | Manage TensorRT and CUDA resources with RAII and smart pointers. |
 | 3 | `08_tensorrt_cpp_basic` | Write minimal TensorRT C++ engine loading and inference code. |
 | 4 | `09_yolov8_trt_python` | Run YOLOv8n TensorRT inference in Python for fast debugging. |
 | 4 | `10_yolov8_trt_cpp` | Implement end-to-end YOLOv8n TensorRT C++ inference. |
 | 5 | `11_nsight_performance_diagnosis` | Diagnose CPU/GPU bottlenecks with Nsight Systems and timeline evidence. |
-| 5 | `12_yolov8_int8_calibration` | Build INT8 engines and compare accuracy/performance with FP16. |
+| 5 | `12_yolov8_int8_calibration` | Build INT8 engines and compare FP32, FP16, and INT8 speed plus dataset-level detection quality. |
 | 6 | `13_cpp_producer_consumer` | Build a thread-safe producer-consumer image pipeline. |
 | 6 | `14_dynamic_batching` | Run TensorRT dynamic batch inference and handle batched buffers. |
 | 6 | `15_async_video_pipeline` | Run video or multi-image async inference with preprocessing and postprocessing overlap. |
@@ -83,7 +83,7 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 | 10 | `21_cpp_shared_library_python_binding` | Package C++ inference as a shared library and call it from Python. |
 | 11 | `22_llm_inference_intro` | Learn the entry-level LLM inference concepts relevant to deployment roles. |
 | 11 | `23_cpp_interview_katas` | Practice C++ hand-written deployment kernels and data structures. |
-| 12 | `24_benchmark_report` | Produce a clean benchmark report suitable for interviews. |
+| 12 | `24_benchmark_report` | Produce a clean benchmark report with latency, throughput, precision-alignment, and accuracy-regression evidence. |
 
 
 ## General Build Pattern

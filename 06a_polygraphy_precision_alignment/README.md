@@ -1,17 +1,22 @@
 # 06a - Polygraphy Precision Alignment
 
-This lesson uses Polygraphy to compare ONNX Runtime and TensorRT outputs with the exact same
+This lesson uses Polygraphy to compare ONNX Runtime and TensorRT outputs with one exact same
 preprocessed YOLOv8n input tensor.
 
 Goal: create a repeatable accuracy-debug workflow for deciding whether backend differences are
 acceptable numerical drift or a deployment bug.
+
+Scope: this is a single-input tensor alignment lesson. It proves that one controlled ONNX Runtime
+run and one controlled TensorRT run are using comparable artifacts and producing numerically similar
+raw model outputs. It is not a dataset-level accuracy regression test and it does not replace
+detection-quality validation on many images.
 
 Topics:
 
 - Polygraphy model inspection
 - ONNX Runtime versus TensorRT comparison
 - Saving input and output tensors
-- FP32, FP16, and INT8 drift analysis
+- FP32 and FP16 single-input drift analysis
 - Absolute and relative tolerance selection
 - First-mismatch debugging workflow
 - Reproducible command logs for benchmark reports
@@ -33,6 +38,18 @@ lesson 05 preprocessed tensor
 
 The raw YOLO output is compared before decode, NMS, visualization, or coordinate mapping. That makes
 it easier to tell whether drift starts in model execution or in later postprocessing code.
+
+In production work, this single-sample check is only the first gate:
+
+```text
+single tensor alignment
+  -> multi-image numerical drift statistics
+  -> decoded box/class/score comparison
+  -> dataset-level detection quality report
+```
+
+Lesson 12 extends this idea when comparing FP32, FP16, and INT8 engines. Lesson 24 should include
+both this precision-alignment note and later accuracy-regression evidence.
 
 ## Directory Layout
 
@@ -171,8 +188,10 @@ python3 06a_polygraphy_precision_alignment/align_precision.py \
 
 Do not loosen tolerance just to make a command pass. The default Polygraphy comparison uses
 elementwise relative and absolute tolerance, while `precision_report.json` still records max error,
-mean error, P99 error, close fraction, and the index of the largest mismatch. Decide whether the
-detection results remain acceptable for the deployment target before calling the drift acceptable.
+mean error, P99 error, close fraction, and the index of the largest mismatch. This report can show
+whether the backend execution is suspicious, but it cannot prove final detector quality by itself.
+Decide whether decoded detections remain acceptable on a representative image set before calling
+FP16 or INT8 drift acceptable.
 
 ## Expected Report Fields
 
@@ -203,6 +222,8 @@ report.
 - Confirm the ONNX model and TensorRT engine came from the same export before debugging
   postprocessing.
 - Save the final `precision_alignment_note.md` as evidence for lesson 24.
+- Explain why a single-input allclose result is useful for debugging but insufficient for release
+  approval.
 
 Acceptance criteria:
 
@@ -210,4 +231,5 @@ Acceptance criteria:
 - Polygraphy can run the same model or engine with TensorRT.
 - ONNX Runtime and TensorRT outputs are compared using the same input tensor.
 - Any mismatch is summarized with max error, mean error, tolerance, and likely cause.
-- The final note explains whether the observed drift is acceptable for the deployment target.
+- The final note states that this is single-input evidence and points to later multi-image
+  detection-quality validation before deployment approval.
