@@ -30,7 +30,7 @@ This lesson keeps the comparison narrow and honest:
 
 ```text
 lesson 05 preprocessed tensor
-  -> Polygraphy input JSON
+  -> Polygraphy data loader reads .npy
   -> ONNX Runtime output
   -> TensorRT output
   -> error summary and precision note
@@ -53,14 +53,13 @@ both this precision-alignment note and later accuracy-regression evidence.
 
 ## Directory Layout
 
-- `make_polygraphy_inputs.py`: converts `05_torch_to_onnx/outputs/input_nchw_float32.npy` into
-  Polygraphy input JSON.
+- `load_npy_input.py`: Polygraphy data loader that feeds the lesson 05 NCHW `.npy` tensor.
 - `align_precision.py`: runs Polygraphy inspection and inference commands, saves logs, and writes a
   compact precision report.
 - `polygraphy_cli_compat.py`: local launcher that keeps Polygraphy working with the repository's
   NumPy 2.x environment without changing system packages.
-- `outputs/`: generated Polygraphy inputs, runner outputs, logs, JSON reports, and Markdown notes.
-  This folder is ignored by git.
+- `outputs/`: generated runner outputs, logs, JSON reports, and Markdown notes. This folder is
+  ignored by git.
 - `../05_torch_to_onnx/outputs/yolov8n.onnx`: validated ONNX model from lesson 05.
 - `../06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: default serialized TensorRT engine
   from lesson 06.
@@ -83,24 +82,30 @@ python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 Polygraphy, ONNX Runtime, TensorRT Python, and `trtexec` should come from the pinned TensorRT
 development container used in lesson 00.
 
-## Create Polygraphy Inputs
+## Input Tensor
 
-Convert the lesson 05 NCHW tensor dump into Polygraphy's JSON format:
-
-```bash
-python3 06a_polygraphy_precision_alignment/make_polygraphy_inputs.py
-```
-
-The default command writes:
+This lesson directly reuses the controlled input tensor saved by lesson 05:
 
 ```text
-06a_polygraphy_precision_alignment/outputs/input_data.json
+05_torch_to_onnx/outputs/input_nchw_float32.npy
+```
+
+`align_precision.py` passes this `.npy` file to Polygraphy through `load_npy_input.py` and
+`--data-loader-script`. The tensor remains in NumPy's binary format; no intermediate input JSON is
+generated.
+
+Use a different input tensor when experimenting with another preprocessed sample:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py \
+  --input-npy path/to/input_nchw_float32.npy \
+  --skip-trt
 ```
 
 Override the input tensor name if the ONNX inspection report shows a different name:
 
 ```bash
-python3 06a_polygraphy_precision_alignment/make_polygraphy_inputs.py --input-name images
+python3 06a_polygraphy_precision_alignment/align_precision.py --input-name images --skip-trt
 ```
 
 ## Smoke Test ONNX Runtime
@@ -132,7 +137,7 @@ The default comparison uses:
 ```text
 ONNX:   05_torch_to_onnx/outputs/yolov8n.onnx
 Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
-Input:  06a_polygraphy_precision_alignment/outputs/input_data.json
+Input:  05_torch_to_onnx/outputs/input_nchw_float32.npy
 ```
 
 The command writes:
@@ -199,7 +204,7 @@ FP16 or INT8 drift acceptable.
 
 - ONNX path
 - engine path
-- input JSON path
+- input `.npy` path and input tensor name
 - TensorRT mode
 - command lines and log paths
 - runner output artifacts

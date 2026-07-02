@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -20,9 +21,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LESSON_DIR = REPO_ROOT / "06a_polygraphy_precision_alignment"
 DEFAULT_ONNX = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n.onnx"
 DEFAULT_ENGINE = REPO_ROOT / "06_trtexec_engine" / "outputs" / "yolov8n_static_fp32.engine"
-DEFAULT_INPUTS = LESSON_DIR / "outputs" / "input_data.json"
+DEFAULT_INPUT_NPY = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "input_nchw_float32.npy"
 DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs"
 POLYGRAPHY_CLI = LESSON_DIR / "polygraphy_cli_compat.py"
+POLYGRAPHY_DATA_LOADER = LESSON_DIR / "load_npy_input.py"
 REPORT_SCOPE = "single_input_tensor_alignment"
 REPORT_SCOPE_NOTE = (
     "This report compares raw model outputs for one controlled input tensor. It is useful "
@@ -44,9 +46,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--onnx", type=Path, default=DEFAULT_ONNX, help="Validated ONNX model from lesson 05.")
     parser.add_argument("--engine", type=Path, default=DEFAULT_ENGINE, help="Serialized TensorRT engine from lesson 06.")
-    parser.add_argument("--inputs", type=Path, default=DEFAULT_INPUTS, help="Polygraphy input JSON.")
+    parser.add_argument("--input-npy", type=Path, default=DEFAULT_INPUT_NPY, help="Lesson 05 NCHW float32 .npy input tensor.")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Artifact directory.")
-    parser.add_argument("--input-name", default="images", help="Input name for the TRT build fallback path.")
+    parser.add_argument("--input-name", default="images", help="Model input tensor name.")
     parser.add_argument("--rtol", type=float, default=1e-3, help="Relative tolerance for report-level allclose.")
     parser.add_argument("--atol", type=float, default=1e-3, help="Absolute tolerance for report-level allclose.")
     parser.add_argument(
@@ -98,18 +100,18 @@ def validate_args(args: argparse.Namespace) -> None:
             f"ONNX model not found: {args.onnx}\n"
             "Run lesson 05 first: python3 05_torch_to_onnx/export_yolov8_onnx.py"
         )
-    if not args.inputs.exists():
+    if not args.input_npy.exists():
         raise FileNotFoundError(
-            f"Polygraphy input JSON not found: {args.inputs}\n"
-            "Create it with: python3 06a_polygraphy_precision_alignment/make_polygraphy_inputs.py"
+            f"input tensor not found: {args.input_npy}\n"
+            "Run lesson 05 first: python3 05_torch_to_onnx/validate_onnx_runtime.py"
         )
+    if not args.input_name:
+        raise ValueError("--input-name cannot be empty")
     if args.trt_mode == "engine" and not args.skip_trt and not args.engine.exists():
         raise FileNotFoundError(
             f"TensorRT engine not found: {args.engine}\n"
             "Run lesson 06 first or use --trt-mode build to let Polygraphy build from ONNX."
         )
-    if args.trt_mode == "build" and not args.input_name:
-        raise ValueError("--input-name cannot be empty when --trt-mode build is used")
 
 
 def command_preview(command: list[str]) -> str:
@@ -118,12 +120,32 @@ def command_preview(command: list[str]) -> str:
     return " ".join(command)
 
 
-def run_command(name: str, command: list[str], log_path: Path, keep_going: bool) -> CommandRecord:
+def polygraphy_data_loader_env(args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    env["POLYGRAPHY_INPUT_NPY"] = str(args.input_npy)
+    env["POLYGRAPHY_INPUT_NAME"] = args.input_name
+    return env
+
+
+def run_command(
+    name: str,
+    command: list[str],
+    log_path: Path,
+    keep_going: bool,
+    env: dict[str, str] | None = None,
+) -> CommandRecord:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n== {name} ==")
     print(command_preview(command))
 
-    completed = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    completed = subprocess.run(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        env=env,
+    )
     log_path.write_text(completed.stdout, encoding="utf-8")
     print(f"log: {log_path}")
     if completed.returncode != 0 and completed.stdout:
@@ -160,8 +182,8 @@ def onnxrt_command(args: argparse.Namespace, output_path: Path, log_path: Path) 
         "run",
         args.onnx,
         "--onnxrt",
-        "--load-inputs",
-        args.inputs,
+        "--data-loader-script",
+        POLYGRAPHY_DATA_LOADER,
         "--save-outputs",
         output_path,
         "--log-file",
@@ -202,8 +224,8 @@ def compare_command(args: argparse.Namespace, output_path: Path, log_path: Path)
 
     command.extend(
         [
-            "--load-inputs",
-            str(args.inputs),
+            "--data-loader-script",
+            str(POLYGRAPHY_DATA_LOADER),
             "--save-outputs",
             str(output_path),
             "--rtol",
@@ -311,7 +333,8 @@ def write_precision_note(report: dict[str, Any], path: Path) -> None:
         "",
         f"- ONNX model: `{report['onnx']}`",
         f"- TensorRT mode: `{report['trt_mode']}`",
-        f"- Input data: `{report['inputs']}`",
+        f"- Input tensor: `{report['input_npy']}`",
+        f"- Input name: `{report['input_name']}`",
         f"- Scope: `{report['scope']}`",
         f"- ONNX Runtime output artifact: `{report['onnxrt_outputs']}`",
         f"- TensorRT comparison artifact: `{report.get('trt_outputs', 'skipped')}`",
@@ -358,13 +381,14 @@ def main() -> int:
     args = parse_args()
     args.onnx = args.onnx.resolve()
     args.engine = args.engine.resolve()
-    args.inputs = args.inputs.resolve()
+    args.input_npy = args.input_npy.resolve()
     args.output_dir = args.output_dir.resolve()
 
     try:
         validate_args(args)
         args.output_dir.mkdir(parents=True, exist_ok=True)
         commands: list[CommandRecord] = []
+        data_loader_env = polygraphy_data_loader_env(args)
 
         onnx_inspect_log = args.output_dir / "inspect_onnx.log"
         commands.append(
@@ -384,6 +408,7 @@ def main() -> int:
                 onnxrt_command(args, onnxrt_outputs, onnxrt_log),
                 onnxrt_log,
                 keep_going=args.keep_going,
+                env=data_loader_env,
             )
         )
 
@@ -409,6 +434,7 @@ def main() -> int:
                     compare_command(args, trt_outputs, compare_log),
                     compare_log,
                     keep_going=True,
+                    env=data_loader_env,
                 )
             )
 
@@ -427,7 +453,8 @@ def main() -> int:
         report = {
             "onnx": str(args.onnx),
             "engine": str(args.engine) if args.engine.exists() else None,
-            "inputs": str(args.inputs),
+            "input_npy": str(args.input_npy),
+            "input_name": args.input_name,
             "scope": REPORT_SCOPE,
             "scope_note": REPORT_SCOPE_NOTE,
             "trt_mode": args.trt_mode,
