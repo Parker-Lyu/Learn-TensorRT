@@ -259,6 +259,14 @@ polygraphy inspect model 05_torch_to_onnx/outputs/yolov8n.onnx \
   --log-format no-colors
 ```
 
+This command does not run inference. It asks Polygraphy to parse the ONNX file and print model
+structure information:
+
+- `inspect model`: inspect a model artifact instead of executing it.
+- `05_torch_to_onnx/outputs/yolov8n.onnx`: the ONNX model exported and validated in lesson 05.
+- `--model-type onnx`: tells Polygraphy how to interpret the file.
+- `--show layers`: includes layer-level details, which helps confirm tensor names and shapes.
+
 The ONNX Runtime smoke run uses the `.npy` input through the lesson data loader:
 
 ```bash
@@ -272,6 +280,17 @@ polygraphy run 05_torch_to_onnx/outputs/yolov8n.onnx \
   --log-format no-colors
 ```
 
+This command runs only the ONNX Runtime backend and saves its raw output tensors:
+
+- `POLYGRAPHY_INPUT_NPY`: path consumed by `load_npy_input.py`; this keeps the controlled input in
+  NumPy's binary `.npy` format.
+- `POLYGRAPHY_INPUT_NAME`: model input tensor name used in the feed dictionary, normally `images`.
+- `run 05_torch_to_onnx/outputs/yolov8n.onnx`: execute the ONNX model.
+- `--onnxrt`: enables the ONNX Runtime runner.
+- `--data-loader-script`: points Polygraphy to the Python function that yields input tensors.
+- `--save-outputs`: writes the runner output in Polygraphy's JSON output format for later loading
+  and reporting.
+
 When `--trt-mode engine` is used, the serialized TensorRT engine is inspected first:
 
 ```bash
@@ -281,6 +300,13 @@ polygraphy inspect model 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
   --log-file 06a_polygraphy_precision_alignment/outputs/inspect_engine.log \
   --log-format no-colors
 ```
+
+This command checks the serialized TensorRT artifact before comparison:
+
+- `06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: the engine built in lesson 06.
+- `--model-type engine`: tells Polygraphy this file is a serialized TensorRT engine, not ONNX.
+- `--show layers`: prints engine layer details when available, useful for confirming the expected
+  artifact is being compared.
 
 The default engine comparison command reuses the saved ONNX Runtime output as the reference and
 feeds the same `.npy` input to TensorRT:
@@ -299,6 +325,19 @@ polygraphy run 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
   --log-file 06a_polygraphy_precision_alignment/outputs/compare_onnxrt_trt.log \
   --log-format no-colors
 ```
+
+This command runs the serialized TensorRT engine and compares it against the saved ONNX Runtime
+reference:
+
+- `run 06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: execute the serialized engine.
+- `--model-type engine`: interprets the input artifact as a TensorRT engine.
+- `--trt`: enables the TensorRT runner.
+- `--load-outputs`: loads the ONNX Runtime outputs saved by the earlier smoke run, so Polygraphy can
+  compare TensorRT output against that reference.
+- `--data-loader-script`: feeds the exact same `.npy` input tensor to TensorRT.
+- `--save-outputs`: saves the TensorRT runner output and comparison artifact.
+- `--rtol` and `--atol`: relative and absolute tolerances used by Polygraphy's elementwise
+  comparison.
 
 When `--trt-mode build` is used, Polygraphy builds a temporary TensorRT engine from the ONNX model
 and compares ONNX Runtime and TensorRT in one run:
@@ -320,5 +359,22 @@ polygraphy run 05_torch_to_onnx/outputs/yolov8n.onnx \
   --log-format no-colors
 ```
 
+This command is useful when a serialized lesson 06 engine is not available:
+
+- `run 05_torch_to_onnx/outputs/yolov8n.onnx`: starts from the ONNX model instead of an engine file.
+- `--onnxrt` and `--trt`: runs both backends in the same Polygraphy invocation.
+- `--trt-min-shapes`, `--trt-opt-shapes`, and `--trt-max-shapes`: define the TensorRT optimization
+  profile for the static YOLO input shape. The `images` prefix must match the model input name.
+- `--data-loader-script`: still feeds the same controlled `.npy` input tensor.
+- `--save-outputs`, `--rtol`, and `--atol`: save runner results and apply the same numerical
+  tolerance policy as the serialized-engine path.
+
 `--rtol`, `--atol`, `--input-name`, `--input-npy`, `--engine`, and `--output-dir` replace the values
 shown above when those options are passed to `align_precision.py`.
+
+Common logging options:
+
+- `--log-file`: stores Polygraphy's detailed console output in `outputs/` so the lesson can keep a
+  reproducible debug record.
+- `--log-format no-colors`: removes terminal color codes from logs, making them easier to search and
+  include in reports.
