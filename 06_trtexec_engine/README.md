@@ -230,3 +230,97 @@ from the ONNX graph, so they do not need `--minShapes`, `--optShapes`, `--maxSha
 Treat serialized TensorRT engines as machine-local artifacts. If you move from an RTX 2060 laptop to
 an RTX 4090 desktop, keep the ONNX and rebuild the `.engine` files on the target machine so tactics
 match that GPU and software stack.
+
+## Review: Generated trtexec Commands
+
+`build_and_benchmark.py` 默认会生成下面这些 `trtexec` 命令。路径按从仓库根目录运行时的相对路径展示，实际脚本会解析成绝对路径。
+
+Static FP32 engine:
+
+```bash
+trtexec \
+  --onnx=05_torch_to_onnx/outputs/yolov8n.onnx \
+  --saveEngine=06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --memPoolSize=workspace:2048 \
+  --timingCacheFile=06_trtexec_engine/outputs/trtexec_timing.cache \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --dumpProfile \
+  --separateProfileRun \
+  --exportTimes=06_trtexec_engine/outputs/yolov8n_static_fp32_times.json \
+  --exportLayerInfo=06_trtexec_engine/outputs/yolov8n_static_fp32_layers.json \
+  --exportProfile=06_trtexec_engine/outputs/yolov8n_static_fp32_profile.json \
+  --warmUp=500 \
+  --duration=5 \
+  --avgRuns=10 \
+  --percentile=50,90,95,99
+```
+
+Static FP16 engine:
+
+```bash
+trtexec \
+  --onnx=05_torch_to_onnx/outputs/yolov8n.onnx \
+  --saveEngine=06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --memPoolSize=workspace:2048 \
+  --timingCacheFile=06_trtexec_engine/outputs/trtexec_timing.cache \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --dumpProfile \
+  --separateProfileRun \
+  --exportTimes=06_trtexec_engine/outputs/yolov8n_static_fp16_times.json \
+  --exportLayerInfo=06_trtexec_engine/outputs/yolov8n_static_fp16_layers.json \
+  --exportProfile=06_trtexec_engine/outputs/yolov8n_static_fp16_profile.json \
+  --warmUp=500 \
+  --duration=5 \
+  --avgRuns=10 \
+  --percentile=50,90,95,99 \
+  --fp16
+```
+
+Dynamic FP16 engine:
+
+```bash
+trtexec \
+  --onnx=05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
+  --saveEngine=06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+  --memPoolSize=workspace:2048 \
+  --timingCacheFile=06_trtexec_engine/outputs/trtexec_timing.cache \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --dumpProfile \
+  --separateProfileRun \
+  --exportTimes=06_trtexec_engine/outputs/yolov8n_dynamic_fp16_times.json \
+  --exportLayerInfo=06_trtexec_engine/outputs/yolov8n_dynamic_fp16_layers.json \
+  --exportProfile=06_trtexec_engine/outputs/yolov8n_dynamic_fp16_profile.json \
+  --warmUp=500 \
+  --duration=5 \
+  --avgRuns=10 \
+  --percentile=50,90,95,99 \
+  --fp16 \
+  --minShapes=images:1x3x320x320 \
+  --optShapes=images:1x3x640x640 \
+  --maxShapes=images:4x3x640x640 \
+  --shapes=images:1x3x640x640
+```
+
+这些命令的目的都是把 lesson 05 生成的 ONNX 模型交给 TensorRT 解析、优化、序列化成 `.engine` 文件，同时记录后续复盘需要的 benchmark 和 profiling 证据。`static_fp32` 用作基线，`static_fp16` 用来观察半精度加速和 engine 大小变化，`dynamic_fp16` 用来学习动态输入尺寸下 optimization profile 的配置方式。
+
+关键参数含义：
+
+- `--onnx`: 输入 ONNX 模型路径。
+- `--saveEngine`: 输出 TensorRT 序列化 engine 路径。
+- `--memPoolSize=workspace:2048`: 设置 TensorRT 构建时可用的 workspace 显存池，单位是 MiB。
+- `--timingCacheFile`: 复用 tactic timing cache，让同一环境下重复构建更快、更稳定。
+- `--profilingVerbosity=detailed`: 保存更详细的 layer 信息，方便分析 TensorRT 如何优化网络。
+- `--dumpLayerInfo` / `--exportLayerInfo`: 打印并导出 TensorRT layer 结构。
+- `--dumpProfile` / `--exportProfile`: 打印并导出逐层耗时数据。
+- `--separateProfileRun`: 将 profiling run 和主 benchmark run 分开，减少 profiling 对总体延迟统计的影响。
+- `--exportTimes`: 导出 benchmark timing samples，供 `summarize_results.py` 汇总。
+- `--warmUp`: 正式计时前预热，减少初始化、缓存和 GPU 频率波动带来的噪声。
+- `--duration`: benchmark 采样持续时间，时间越长通常统计越稳定。
+- `--avgRuns`: 每个 timing sample 内平均的 inference 次数，用于平滑短时抖动。
+- `--percentile=50,90,95,99`: 输出 P50、P90、P95、P99 延迟，便于同时观察典型延迟和尾延迟。
+- `--fp16`: 允许 TensorRT 使用 FP16 tactics 和 FP16 layer，前提是硬件和 layer 支持。
+- `--minShapes` / `--optShapes` / `--maxShapes`: 动态 shape engine 的最小、最优、最大输入范围。
+- `--shapes`: 本次 benchmark 实际运行的输入 shape，必须落在 profile 范围内。
