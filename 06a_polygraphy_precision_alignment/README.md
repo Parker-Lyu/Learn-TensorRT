@@ -238,3 +238,87 @@ Acceptance criteria:
 - Any mismatch is summarized with max error, mean error, tolerance, and likely cause.
 - The final note states that this is single-input evidence and points to later multi-image
   detection-quality validation before deployment approval.
+
+## Polygraphy Command Reference
+
+`align_precision.py` calls Polygraphy through `polygraphy_cli_compat.py`, which applies the local
+NumPy compatibility patch and then forwards arguments to Polygraphy. The displayed command in the
+lesson logs starts with `polygraphy`, but the actual Python launcher is:
+
+```bash
+python3 06a_polygraphy_precision_alignment/polygraphy_cli_compat.py ...
+```
+
+The default ONNX inspection command is:
+
+```bash
+polygraphy inspect model 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --model-type onnx \
+  --show layers \
+  --log-file 06a_polygraphy_precision_alignment/outputs/inspect_onnx.log \
+  --log-format no-colors
+```
+
+The ONNX Runtime smoke run uses the `.npy` input through the lesson data loader:
+
+```bash
+POLYGRAPHY_INPUT_NPY=05_torch_to_onnx/outputs/input_nchw_float32.npy \
+POLYGRAPHY_INPUT_NAME=images \
+polygraphy run 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --onnxrt \
+  --data-loader-script 06a_polygraphy_precision_alignment/load_npy_input.py \
+  --save-outputs 06a_polygraphy_precision_alignment/outputs/onnxrt_outputs.json \
+  --log-file 06a_polygraphy_precision_alignment/outputs/run_onnxrt.log \
+  --log-format no-colors
+```
+
+When `--trt-mode engine` is used, the serialized TensorRT engine is inspected first:
+
+```bash
+polygraphy inspect model 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --model-type engine \
+  --show layers \
+  --log-file 06a_polygraphy_precision_alignment/outputs/inspect_engine.log \
+  --log-format no-colors
+```
+
+The default engine comparison command reuses the saved ONNX Runtime output as the reference and
+feeds the same `.npy` input to TensorRT:
+
+```bash
+POLYGRAPHY_INPUT_NPY=05_torch_to_onnx/outputs/input_nchw_float32.npy \
+POLYGRAPHY_INPUT_NAME=images \
+polygraphy run 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --model-type engine \
+  --trt \
+  --load-outputs 06a_polygraphy_precision_alignment/outputs/onnxrt_outputs.json \
+  --data-loader-script 06a_polygraphy_precision_alignment/load_npy_input.py \
+  --save-outputs 06a_polygraphy_precision_alignment/outputs/trt_compare_outputs.json \
+  --rtol 0.001 \
+  --atol 0.001 \
+  --log-file 06a_polygraphy_precision_alignment/outputs/compare_onnxrt_trt.log \
+  --log-format no-colors
+```
+
+When `--trt-mode build` is used, Polygraphy builds a temporary TensorRT engine from the ONNX model
+and compares ONNX Runtime and TensorRT in one run:
+
+```bash
+POLYGRAPHY_INPUT_NPY=05_torch_to_onnx/outputs/input_nchw_float32.npy \
+POLYGRAPHY_INPUT_NAME=images \
+polygraphy run 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --onnxrt \
+  --trt \
+  --trt-min-shapes images:[1,3,640,640] \
+  --trt-opt-shapes images:[1,3,640,640] \
+  --trt-max-shapes images:[1,3,640,640] \
+  --data-loader-script 06a_polygraphy_precision_alignment/load_npy_input.py \
+  --save-outputs 06a_polygraphy_precision_alignment/outputs/trt_compare_outputs.json \
+  --rtol 0.001 \
+  --atol 0.001 \
+  --log-file 06a_polygraphy_precision_alignment/outputs/compare_onnxrt_trt.log \
+  --log-format no-colors
+```
+
+`--rtol`, `--atol`, `--input-name`, `--input-npy`, `--engine`, and `--output-dir` replace the values
+shown above when those options are passed to `align_precision.py`.
