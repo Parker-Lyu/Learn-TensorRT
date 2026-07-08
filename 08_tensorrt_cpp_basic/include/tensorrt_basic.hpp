@@ -15,6 +15,7 @@ struct InputShape {
 struct AppConfig {
     std::string onnx_path = "../05_torch_to_onnx/outputs/yolov8n.onnx";
     std::string engine_path = "outputs/yolov8n_cpp_basic.engine";
+    std::string timing_cache_path;
     std::vector<InputShape> input_shapes;
     bool load_engine_only = false;
     bool enable_fp16 = false;
@@ -36,10 +37,14 @@ struct TensorSummary {
 struct AppReport {
     std::string onnx_path;
     std::string engine_path;
+    std::string timing_cache_path;
     bool engine_built = false;
     bool fp16_enabled = false;
+    bool timing_cache_loaded = false;
+    bool timing_cache_written = false;
     std::vector<TensorSummary> tensors;
     std::size_t engine_bytes = 0;
+    std::size_t timing_cache_bytes = 0;
     std::size_t total_device_bytes = 0;
     std::size_t total_host_bytes = 0;
     float average_enqueue_ms = 0.0F;

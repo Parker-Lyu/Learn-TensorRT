@@ -12,6 +12,7 @@ Topics:
 - Builder, network definition, builder config, and workspace memory pool
 - ONNX parser through `nvonnxparser`
 - FP32 and optional FP16 engine builds
+- TensorRT timing cache reuse for tactic selection
 - Runtime creation and engine deserialization
 - Execution context creation
 - Tensor names, tensor modes, shapes, data types, and memory locations
@@ -43,7 +44,8 @@ in later lessons; here the learning target is the TensorRT API sequence and the 
 - `src/tensorrt_basic.cpp`: engine building, serialization, deserialization, tensor buffer
   allocation, copy/enqueue/copy flow, and output checksum.
 - `src/main.cpp`: command-line parsing and console report.
-- `outputs/`: generated `.engine` files from this lesson. This folder is ignored by git.
+- `outputs/`: generated `.engine` and timing cache files from this lesson. This folder is ignored
+  by git.
 
 The reusable logic is built as `tensorrt_cpp_basic_lib`; the runnable artifact is
 `tensorrt_cpp_basic`.
@@ -89,8 +91,13 @@ Build an FP16 engine when the GPU supports fast FP16:
 ```
 
 First-time TensorRT builds can take several minutes because tactic selection happens inside the
-C++ builder, just like it did through `trtexec`. Re-run with `--load-engine` when you want a quick
-runtime smoke test after the engine already exists.
+C++ builder, just like it did through `trtexec`. By default, FP32 builds use
+`outputs/tensorrt_timing_fp32.cache` and FP16 builds use
+`outputs/tensorrt_timing_fp16.cache`, so tactics measured for different floating-point precision
+modes do not share one cache file. The builder reads the selected cache before tactic selection and
+writes it after a successful engine build. Re-run a build with the same ONNX, shape, precision mode,
+GPU, driver, CUDA, and TensorRT stack to reuse measured tactic timings. Re-run with `--load-engine`
+when you want a quick runtime smoke test after the engine already exists.
 
 Load an engine that this lesson already built, skipping ONNX parsing and build time:
 
@@ -106,6 +113,7 @@ Build and run the dynamic ONNX model with a single-shape optimization profile:
 ./build/tensorrt_cpp_basic \
   --onnx ../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
   --engine outputs/yolov8n_dynamic_cpp_basic.engine \
+  --timing-cache outputs/tensorrt_timing_dynamic.cache \
   --input-shape images:1x3x640x640
 ```
 
@@ -121,6 +129,7 @@ The program prints:
 
 - ONNX path, unless `--load-engine` was used
 - engine path and serialized engine size
+- timing cache path, whether it was loaded or created, and serialized cache size when building
 - whether the engine was built in this run
 - whether FP16 was both requested and enabled
 - every IO tensor name, mode, memory location, type, shape, and byte count
@@ -135,6 +144,7 @@ ONNX: ../05_torch_to_onnx/outputs/yolov8n.onnx
 Engine: outputs/yolov8n_cpp_basic.engine
 Engine source: built from ONNX
 Engine bytes: 13215908
+Timing cache: outputs/tensorrt_timing_fp32.cache (created, written, bytes=8123456)
 FP16 requested and enabled: no
 Tensor buffers:
   - images [input, device, float32] shape=1x3x640x640 bytes=4915200
@@ -156,6 +166,11 @@ The build path creates:
 IBuilder -> INetworkDefinition -> nvonnxparser::IParser -> IBuilderConfig -> IHostMemory
 ```
 
+When building from ONNX, the lesson attaches an `ITimingCache` to `IBuilderConfig`. If the cache file
+already exists, TensorRT can reuse compatible tactic measurements; after a successful build the cache
+is serialized back to disk. Timing caches are machine- and stack-sensitive, so keep them local to the
+GPU, driver, CUDA, TensorRT version, model shape, and precision experiment that produced them.
+
 The runtime path then creates:
 
 ```text
@@ -175,6 +190,8 @@ does not wrap that one object in the same smart-pointer deleter used for other T
 ## Checkpoints
 
 - Run the default FP32 build, then run `--load-engine` and compare startup time.
+- Delete only `outputs/tensorrt_timing_fp32.cache`, rebuild, and compare build time against a
+  rebuild that keeps the cache file.
 - Build with `--fp16` and compare engine size and average enqueue time against FP32.
 - Delete `outputs/yolov8n_cpp_basic.engine` and explain why a fresh build takes longer than loading.
 - Run the dynamic ONNX command without `--input-shape`, then add it back and explain the error.
@@ -185,6 +202,7 @@ Acceptance criteria:
 
 - A C++ executable builds a TensorRT engine from ONNX using the ONNX parser.
 - The serialized engine is written to `outputs/`.
+- A TensorRT timing cache is read before engine build and written after successful engine build.
 - The engine is deserialized through `IRuntime`.
 - The program creates an execution context, allocates IO buffers, binds tensor addresses by name,
   copies input data to the device, enqueues inference, copies outputs back, and reports a checksum.

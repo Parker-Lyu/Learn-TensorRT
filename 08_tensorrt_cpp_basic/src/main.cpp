@@ -14,11 +14,14 @@ void print_usage(const char* executable_name) {
     std::cout
         << "Usage:\n"
         << "  " << executable_name << " [--onnx PATH] [--engine PATH] [--load-engine]\n"
-        << "       [--fp16] [--workspace-mib N] [--input-shape NAME:D0xD1x...]\n"
+        << "       [--timing-cache PATH] [--fp16] [--workspace-mib N]\n"
+        << "       [--input-shape NAME:D0xD1x...]\n"
         << "       [--warmup N] [--iterations N]\n\n"
         << "Defaults:\n"
-        << "  --onnx    ../05_torch_to_onnx/outputs/yolov8n.onnx\n"
-        << "  --engine  outputs/yolov8n_cpp_basic.engine\n\n"
+        << "  --onnx          ../05_torch_to_onnx/outputs/yolov8n.onnx\n"
+        << "  --engine        outputs/yolov8n_cpp_basic.engine\n"
+        << "  --timing-cache  outputs/tensorrt_timing_fp32.cache, or\n"
+        << "                  outputs/tensorrt_timing_fp16.cache with --fp16\n\n"
         << "Examples:\n"
         << "  " << executable_name << '\n'
         << "  " << executable_name << " --fp16 --engine outputs/yolov8n_cpp_basic_fp16.engine\n"
@@ -115,6 +118,8 @@ int main(int argc, char* argv[]) {
                 config.onnx_path = std::string(require_value("--onnx"));
             } else if (arg == "--engine") {
                 config.engine_path = std::string(require_value("--engine"));
+            } else if (arg == "--timing-cache") {
+                config.timing_cache_path = std::string(require_value("--timing-cache"));
             } else if (arg == "--load-engine") {
                 config.load_engine_only = true;
             } else if (arg == "--fp16") {
@@ -142,6 +147,12 @@ int main(int argc, char* argv[]) {
         std::cout << "Engine source: " << (report.engine_built ? "built from ONNX" : "loaded")
                   << '\n';
         std::cout << "Engine bytes: " << report.engine_bytes << '\n';
+        if (!report.timing_cache_path.empty()) {
+            std::cout << "Timing cache: " << report.timing_cache_path << " ("
+                      << (report.timing_cache_loaded ? "loaded" : "created") << ", "
+                      << (report.timing_cache_written ? "written" : "not written")
+                      << ", bytes=" << report.timing_cache_bytes << ")\n";
+        }
         std::cout << "FP16 requested and enabled: " << (report.fp16_enabled ? "yes" : "no")
                   << '\n';
         std::cout << "Tensor buffers:\n";

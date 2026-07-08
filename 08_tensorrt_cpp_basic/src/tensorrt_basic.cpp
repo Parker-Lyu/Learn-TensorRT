@@ -235,6 +235,30 @@ std::vector<char> read_binary_file(const std::string& path) {
     return bytes;
 }
 
+bool file_exists(const std::string& path) {
+    struct stat status {};
+    return ::stat(path.c_str(), &status) == 0 && S_ISREG(status.st_mode);
+}
+
+std::vector<char> read_optional_binary_file(const std::string& path) {
+    if (path.empty() || !file_exists(path)) {
+        return {};
+    }
+    return read_binary_file(path);
+}
+
+std::string default_timing_cache_path(bool enable_fp16) {
+    return enable_fp16 ? "outputs/tensorrt_timing_fp16.cache"
+                       : "outputs/tensorrt_timing_fp32.cache";
+}
+
+std::string resolve_timing_cache_path(const AppConfig& config) {
+    if (!config.timing_cache_path.empty()) {
+        return config.timing_cache_path;
+    }
+    return default_timing_cache_path(config.enable_fp16);
+}
+
 void make_directory(const std::string& path) {
     if (path.empty()) {
         return;
@@ -474,7 +498,59 @@ void add_single_shape_profile(nvinfer1::IBuilder& builder,
     }
 }
 
-std::vector<char> build_serialized_engine_from_onnx(const AppConfig& config,
+struct TimingCacheResult {
+    bool loaded = false;
+    bool written = false;
+    std::size_t bytes = 0;
+};
+
+TensorRtPtr<nvinfer1::ITimingCache> create_timing_cache(
+    nvinfer1::IBuilderConfig& builder_config,
+    const std::string& path,
+    TimingCacheResult* result) {
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    const std::vector<char> cache_bytes = read_optional_binary_file(path);
+    result->loaded = !cache_bytes.empty();
+
+    TensorRtPtr<nvinfer1::ITimingCache> timing_cache{builder_config.createTimingCache(
+        cache_bytes.empty() ? nullptr : cache_bytes.data(), cache_bytes.size())};
+    if (!timing_cache) {
+        throw std::runtime_error("Failed to create TensorRT timing cache.");
+    }
+
+    if (!builder_config.setTimingCache(*timing_cache, true)) {
+        throw std::runtime_error("Failed to attach TensorRT timing cache.");
+    }
+
+    return timing_cache;
+}
+
+void serialize_timing_cache(nvinfer1::ITimingCache& timing_cache,
+                            const std::string& path,
+                            TimingCacheResult* result) {
+    if (path.empty()) {
+        return;
+    }
+
+    TensorRtPtr<nvinfer1::IHostMemory> serialized{timing_cache.serialize()};
+    if (!serialized) {
+        throw std::runtime_error("Failed to serialize TensorRT timing cache.");
+    }
+
+    write_binary_file(path, serialized->data(), serialized->size());
+    result->written = true;
+    result->bytes = serialized->size();
+}
+
+struct EngineBuildResult {
+    std::vector<char> engine_bytes;
+    TimingCacheResult timing_cache;
+};
+
+EngineBuildResult build_serialized_engine_from_onnx(const AppConfig& config,
                                                     TensorRtLogger& logger,
                                                     bool* fp16_enabled) {
     TensorRtPtr<nvinfer1::IBuilder> builder{nvinfer1::createInferBuilder(logger)};
@@ -520,6 +596,10 @@ std::vector<char> build_serialized_engine_from_onnx(const AppConfig& config,
     }
 
     add_single_shape_profile(*builder, *builder_config, *network, config.input_shapes);
+    const std::string timing_cache_path = resolve_timing_cache_path(config);
+    TimingCacheResult timing_cache_result;
+    TensorRtPtr<nvinfer1::ITimingCache> timing_cache =
+        create_timing_cache(*builder_config, timing_cache_path, &timing_cache_result);
 
     TensorRtPtr<nvinfer1::IHostMemory> serialized{
         builder->buildSerializedNetwork(*network, *builder_config)};
@@ -528,7 +608,13 @@ std::vector<char> build_serialized_engine_from_onnx(const AppConfig& config,
     }
 
     const auto* begin = static_cast<const char*>(serialized->data());
-    return std::vector<char>(begin, begin + serialized->size());
+    EngineBuildResult result;
+    result.engine_bytes = std::vector<char>(begin, begin + serialized->size());
+    if (timing_cache) {
+        serialize_timing_cache(*timing_cache, timing_cache_path, &timing_cache_result);
+    }
+    result.timing_cache = timing_cache_result;
+    return result;
 }
 
 void apply_runtime_input_shapes(nvinfer1::IExecutionContext& context,
@@ -622,12 +708,16 @@ AppReport run_tensorrt_cpp_basic(const AppConfig& config) {
 
     TensorRtLogger logger;
     bool fp16_enabled = false;
+    TimingCacheResult timing_cache_result;
     std::vector<char> engine_bytes;
 
     if (config.load_engine_only) {
         engine_bytes = read_binary_file(config.engine_path);
     } else {
-        engine_bytes = build_serialized_engine_from_onnx(config, logger, &fp16_enabled);
+        EngineBuildResult build_result =
+            build_serialized_engine_from_onnx(config, logger, &fp16_enabled);
+        engine_bytes = std::move(build_result.engine_bytes);
+        timing_cache_result = build_result.timing_cache;
         write_binary_file(config.engine_path, engine_bytes.data(), engine_bytes.size());
     }
 
@@ -654,9 +744,13 @@ AppReport run_tensorrt_cpp_basic(const AppConfig& config) {
     AppReport report;
     report.onnx_path = config.load_engine_only ? "" : config.onnx_path;
     report.engine_path = config.engine_path;
+    report.timing_cache_path = config.load_engine_only ? "" : resolve_timing_cache_path(config);
     report.engine_built = !config.load_engine_only;
     report.fp16_enabled = fp16_enabled;
+    report.timing_cache_loaded = timing_cache_result.loaded;
+    report.timing_cache_written = timing_cache_result.written;
     report.engine_bytes = engine_bytes.size();
+    report.timing_cache_bytes = timing_cache_result.bytes;
 
     for (int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
         const char* name = engine->getIOTensorName(i);
