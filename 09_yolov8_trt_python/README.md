@@ -45,7 +45,7 @@ The default command expects:
 
 ```text
 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
-assets/dog.webp
+assets/img2.jpeg
 ```
 
 ## Run
@@ -61,7 +61,7 @@ Use a specific engine or image:
 ```bash
 python3 infer_yolov8_trt.py \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/dog.webp
+  --image ../assets/img2.jpeg
 ```
 
 Run a dynamic engine by supplying runtime dimensions:
@@ -82,7 +82,7 @@ python3 infer_yolov8_trt.py --reference
 
 Generated files are written to `outputs/`:
 
-- `dog_yolov8_trt_python.jpg`: input image with detections drawn.
+- `img2_yolov8_trt_python.jpg`: input image with detections drawn.
 - `detections.json`: tensor metadata, letterbox parameters, latency breakdown, detections, and
   optional Ultralytics top-detection reference.
 
@@ -107,7 +107,7 @@ Exact detections and latency depend on the engine precision, GPU, TensorRT versi
 
 Acceptance criteria:
 
-- The script runs inference on `assets/dog.webp` with a TensorRT engine.
+- The script runs inference on `assets/img2.jpeg` with a TensorRT engine.
 - It saves an annotated detection image and JSON report.
 - YOLOv8 decode, NMS, and coordinate scaling are implemented in local Python code.
 - Optional Ultralytics reference output can be recorded for debugging.

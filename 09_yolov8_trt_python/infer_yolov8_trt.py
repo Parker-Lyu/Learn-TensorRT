@@ -448,7 +448,7 @@ def run_ultralytics_reference(weights: Path,
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path("../06_trtexec_engine/outputs/yolov8n_static_fp32.engine"))
-    parser.add_argument("--image", type=Path, default=Path("../assets/dog.webp"))
+    parser.add_argument("--image", type=Path, default=Path("../assets/img2.jpeg"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--input-shape", action="append", type=parse_shape, default=[])
     parser.add_argument("--confidence", type=float, default=0.25)
@@ -500,7 +500,7 @@ def main() -> int:
     t3 = time.perf_counter()
 
     annotated = draw_detections(image, detections)
-    output_image = args.output_dir / "dog_yolov8_trt_python.jpg"
+    output_image = args.output_dir / f"{args.image.stem}_yolov8_trt_python.jpg"
     output_json = args.output_dir / "detections.json"
     if not cv2.imwrite(str(output_image), annotated):
         raise RuntimeError(f"failed to write output image: {output_image}")
