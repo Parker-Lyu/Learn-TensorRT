@@ -61,7 +61,7 @@ Use a specific engine or image:
 ```bash
 python3 infer_yolov8_trt.py \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/img2.jpeg
+  --image ../assets/dog.webp
 ```
 
 Run a dynamic engine by supplying runtime dimensions:
