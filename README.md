@@ -52,38 +52,34 @@ nvcr.io/nvidia/tensorrt:23.10-py3
 
 4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
 
-5. Start from `00_environment_check`, run the environment checks, and then work through the lessons in order. Happy coding.
+5. Complete the core lessons in order, writing a report at each checkpoint. Then choose electives
+from the job descriptions you are targeting instead of completing every elective sequentially.
 
-| Stage | Folder | Goal |
+### Core Path
+
+| Stage | Lessons | Outcome |
 | --- | --- | --- |
-| 0 | `00_environment_check` | Verify CUDA, TensorRT, OpenCV, CMake, compiler, and GPU state. |
-| 1 | `01_hello_world` | Build a minimal C++17 project with CMake. |
-| 1 | `02_opencv_read_show_image` | Load and inspect images with OpenCV. |
-| 1 | `03_opencv_preprocess` | Implement resize, letterbox, normalize, HWC-to-CHW, and batch buffer preparation. |
-| 2 | `04_cuda_memory_stream` | Learn CUDA memory allocation, host/device copies, and streams. |
-| 2 | `05_torch_to_onnx` | Export YOLOv8n from PyTorch to ONNX and validate the graph. |
-| 3 | `06_trtexec_engine` | Build and benchmark TensorRT engines with `trtexec`. |
-| 3 | `06a_polygraphy_precision_alignment` | Use Polygraphy to compare ONNX Runtime and TensorRT outputs for one controlled input tensor. |
-| 3 | `07_tensorrt_raii_resource` | Manage TensorRT and CUDA resources with RAII and smart pointers. |
-| 3 | `08_tensorrt_cpp_basic` | Write minimal TensorRT C++ engine loading and inference code. |
-| 4 | `09_yolov8_trt_python` | Run YOLOv8n TensorRT inference in Python for fast debugging. |
-| 4 | `10_yolov8_trt_cpp` | Implement end-to-end YOLOv8n TensorRT C++ inference. |
-| 5 | `11_nsight_performance_diagnosis` | Diagnose CPU/GPU bottlenecks with Nsight Systems and timeline evidence. |
-| 5 | `12_yolov8_int8_calibration` | Build INT8 engines and compare FP32, FP16, and INT8 speed plus dataset-level detection quality. |
-| 6 | `13_cpp_producer_consumer` | Build a thread-safe producer-consumer image pipeline. |
-| 6 | `14_dynamic_batching` | Run TensorRT dynamic batch inference and handle batched buffers. |
-| 6 | `15_async_video_pipeline` | Run video or multi-image async inference with preprocessing and postprocessing overlap. |
-| 6 | `16_multistream_video_pipeline` | Build a multi-camera or multi-video inference pipeline with scheduling and batching. |
-| 7 | `17_cuda_preprocess_npp` | Move preprocessing hotspots to CUDA kernels or NVIDIA NPP. |
-| 8 | `18_openvino_yolov8` | Deploy the same ONNX model with OpenVINO for CPU-focused comparison. |
-| 9 | `19_onnx_graph_surgery_plugin` | Handle unsupported operators with graph surgery and TensorRT plugins. |
-| 9 | `19a_custom_tensorrt_plugin` | Build, load, and validate a small custom TensorRT plugin. |
-| 10 | `20_deepstream_gstreamer_multistream` | Run production-style multi-stream inference with DeepStream and GStreamer. |
-| 10 | `20a_jetson_orin_xavier_dla_deployment` | Document Jetson Orin/Xavier deployment, cross compilation, and DLA constraints. |
-| 10 | `21_cpp_shared_library_python_binding` | Package C++ inference as a shared library and call it from Python. |
-| 11 | `22_llm_inference_intro` | Learn the entry-level LLM inference concepts relevant to deployment roles. |
-| 11 | `23_cpp_interview_katas` | Practice C++ hand-written deployment kernels and data structures. |
-| 12 | `24_benchmark_report` | Produce a clean benchmark report with latency, throughput, precision-alignment, and accuracy-regression evidence. |
+| Foundation | `00_environment_check` through `10_yolov8_trt_cpp` | End-to-end YOLOv8n TensorRT C++ inference |
+| Checkpoint 1 | `10a_end_to_end_validation_report` | Reproducible functional and architecture evidence |
+| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_calibration` | Profiled FP32/FP16/INT8 performance and accuracy |
+| Checkpoint 2 | `12a_precision_performance_report` | Application-ready precision and performance report |
+| Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
+| Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |
+
+### Elective Tracks
+
+| Track | Lessons |
+| --- | --- |
+| Server inference | `18a_triton_inference_server`, `21_cpp_shared_library_python_binding` |
+| Edge CV | `20_deepstream_gstreamer_multistream`, `20a_jetson_orin_xavier_dla_deployment` |
+| Advanced TensorRT | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
+| CPU and Intel | `18_openvino_yolov8` |
+| LLM awareness | `22_llm_inference_intro` |
+| Ongoing interview practice | `23_cpp_interview_katas` |
+| Final synthesis | `24_final_portfolio_case_study` |
+
+The roadmap is the source of truth for planned lessons. A lesson directory is added only when its
+implementation begins; planned lessons do not use README-only placeholder directories.
 
 
 ## General Build Pattern
