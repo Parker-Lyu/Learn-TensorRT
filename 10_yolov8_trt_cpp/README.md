@@ -59,7 +59,7 @@ cmake --build build
 
 ## Run
 
-Run with the default lesson 06 static FP32 engine and shared dog image:
+Run with the default lesson 06 static FP32 engine and shared image:
 
 ```bash
 ./build/yolov8_trt_cpp
@@ -70,7 +70,7 @@ Use a different engine or image:
 ```bash
 ./build/yolov8_trt_cpp \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/dog.webp \
+  --image ../assets/img2.jpeg \
   --output-dir outputs
 ```
 
@@ -84,7 +84,7 @@ Adjust thresholds:
 
 Generated files go to `outputs/`:
 
-- `dog_yolov8_trt_cpp.jpg`: annotated image.
+- `img2_yolov8_trt_cpp.jpg`: annotated image.
 - `detections.json`: detections and latency breakdown.
 
 The console report includes preprocessing, H2D copy, TensorRT enqueue, D2H copy, postprocessing, and

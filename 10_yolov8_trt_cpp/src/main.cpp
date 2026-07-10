@@ -17,7 +17,7 @@ namespace {
 
 struct CliOptions {
     std::string engine_path = "../06_trtexec_engine/outputs/yolov8n_static_fp32.engine";
-    std::string image_path = "../assets/dog.webp";
+    std::string image_path = "../assets/img2.jpeg";
     std::string output_dir = "outputs";
     float confidence = 0.25F;
     float iou = 0.45F;
@@ -158,7 +158,8 @@ int main(int argc, char* argv[]) {
         const cv::Mat annotated = lesson10::draw_detections(image, detections);
         std::filesystem::create_directories(options.output_dir);
         const std::filesystem::path image_path =
-            std::filesystem::path(options.output_dir) / "dog_yolov8_trt_cpp.jpg";
+            std::filesystem::path(options.output_dir) /
+            (std::filesystem::path(options.image_path).stem().string() + "_yolov8_trt_cpp.jpg");
         const std::filesystem::path json_path =
             std::filesystem::path(options.output_dir) / "detections.json";
         if (!cv::imwrite(image_path.string(), annotated)) {
