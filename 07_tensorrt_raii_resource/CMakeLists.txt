@@ -4,6 +4,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(tensorrt_raii_resource LANGUAGES CXX)
 
+include(CTest)
+
 find_package(CUDAToolkit REQUIRED)
 
 find_path(TENSORRT_INCLUDE_DIR
@@ -53,3 +55,10 @@ set_target_properties(tensorrt_raii_resource PROPERTIES
 )
 
 target_link_libraries(tensorrt_raii_resource PRIVATE tensorrt_raii_lib)
+
+if(BUILD_TESTING)
+    add_executable(tensorrt_raii_config_tests tests/config_tests.cpp)
+    target_compile_features(tensorrt_raii_config_tests PRIVATE cxx_std_17)
+    target_link_libraries(tensorrt_raii_config_tests PRIVATE tensorrt_raii_lib)
+    add_test(NAME tensorrt_raii_config_tests COMMAND tensorrt_raii_config_tests)
+endif()

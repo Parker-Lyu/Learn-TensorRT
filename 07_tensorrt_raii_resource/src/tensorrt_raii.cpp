@@ -11,13 +11,28 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+#include <unistd.h>
 
 namespace lesson07 {
 namespace {
+
+class InjectedFailure final : public std::runtime_error {
+public:
+    explicit InjectedFailure(FailureStage stage)
+        : std::runtime_error(std::string("Injected failure at stage: ") +
+                             failure_stage_name(stage)) {}
+};
+
+void inject_failure(FailureStage configured, FailureStage current) {
+    if (configured == current) {
+        throw InjectedFailure(current);
+    }
+}
 
 void check_cuda(cudaError_t status, const char* operation) {
     if (status != cudaSuccess) {
@@ -410,7 +425,62 @@ float elapsed_ms(const CudaEvent& start, const CudaEvent& stop) {
     return milliseconds;
 }
 
+std::size_t current_device_used_bytes() {
+    std::size_t free_bytes = 0;
+    std::size_t total_bytes = 0;
+    check_cuda(cudaMemGetInfo(&free_bytes, &total_bytes), "cudaMemGetInfo");
+    return total_bytes - free_bytes;
+}
+
+std::size_t current_host_rss_bytes() {
+    std::ifstream statm("/proc/self/statm");
+    std::size_t total_pages = 0;
+    std::size_t resident_pages = 0;
+    if (!(statm >> total_pages >> resident_pages)) {
+        throw std::runtime_error("Failed to read process RSS from /proc/self/statm.");
+    }
+    (void)total_pages;
+    const long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) {
+        throw std::runtime_error("Failed to query the host page size.");
+    }
+    return resident_pages * static_cast<std::size_t>(page_size);
+}
+
+std::size_t positive_growth(std::size_t before, std::size_t after) {
+    return after > before ? after - before : 0;
+}
+
 }  // namespace
+
+FailureStage parse_failure_stage(const std::string& name) {
+    if (name == "none") return FailureStage::kNone;
+    if (name == "engine-read") return FailureStage::kAfterEngineRead;
+    if (name == "runtime") return FailureStage::kAfterRuntimeCreation;
+    if (name == "engine") return FailureStage::kAfterEngineDeserialization;
+    if (name == "context") return FailureStage::kAfterContextCreation;
+    if (name == "first-buffer") return FailureStage::kAfterFirstBufferAllocation;
+    if (name == "stream") return FailureStage::kAfterStreamCreation;
+    if (name == "enqueue") return FailureStage::kBeforeEnqueue;
+    throw std::runtime_error(
+        "Unknown failure stage '" + name +
+        "'. Expected none, engine-read, runtime, engine, context, first-buffer, stream, "
+        "or enqueue.");
+}
+
+const char* failure_stage_name(FailureStage stage) noexcept {
+    switch (stage) {
+        case FailureStage::kNone: return "none";
+        case FailureStage::kAfterEngineRead: return "engine-read";
+        case FailureStage::kAfterRuntimeCreation: return "runtime";
+        case FailureStage::kAfterEngineDeserialization: return "engine";
+        case FailureStage::kAfterContextCreation: return "context";
+        case FailureStage::kAfterFirstBufferAllocation: return "first-buffer";
+        case FailureStage::kAfterStreamCreation: return "stream";
+        case FailureStage::kBeforeEnqueue: return "enqueue";
+    }
+    return "unknown";
+}
 
 InferenceReport run_smoke_inference(const RunConfig& config) {
     if (config.engine_path.empty()) {
@@ -422,22 +492,26 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
 
     TensorRtLogger logger;
     const std::vector<char> engine_bytes = read_binary_file(config.engine_path);
+    inject_failure(config.injected_failure, FailureStage::kAfterEngineRead);
 
     TensorRtPtr<nvinfer1::IRuntime> runtime{nvinfer1::createInferRuntime(logger)};
     if (!runtime) {
         throw std::runtime_error("Failed to create TensorRT runtime.");
     }
+    inject_failure(config.injected_failure, FailureStage::kAfterRuntimeCreation);
 
     TensorRtPtr<nvinfer1::ICudaEngine> engine{
         runtime->deserializeCudaEngine(engine_bytes.data(), engine_bytes.size())};
     if (!engine) {
         throw std::runtime_error("Failed to deserialize TensorRT engine: " + config.engine_path);
     }
+    inject_failure(config.injected_failure, FailureStage::kAfterEngineDeserialization);
 
     TensorRtPtr<nvinfer1::IExecutionContext> context{engine->createExecutionContext()};
     if (!context) {
         throw std::runtime_error("Failed to create TensorRT execution context.");
     }
+    inject_failure(config.injected_failure, FailureStage::kAfterContextCreation);
 
     apply_input_shapes(*context, config.input_shapes);
 
@@ -463,9 +537,14 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
         }
         report.tensors.push_back(buffer.report);
         buffers.push_back(std::move(buffer));
+        if (i == 0) {
+            inject_failure(config.injected_failure,
+                           FailureStage::kAfterFirstBufferAllocation);
+        }
     }
 
     CudaStream stream;
+    inject_failure(config.injected_failure, FailureStage::kAfterStreamCreation);
     for (const TensorBuffer& buffer : buffers) {
         if (buffer.device_buffer && buffer.report.mode == "input") {
             check_cuda(cudaMemsetAsync(buffer.device_buffer->get(), 0,
@@ -474,6 +553,7 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
         }
     }
 
+    inject_failure(config.injected_failure, FailureStage::kBeforeEnqueue);
     for (int i = 0; i < config.warmup_iterations; ++i) {
         if (!context->enqueueV3(stream.get())) {
             throw std::runtime_error("TensorRT warmup enqueueV3 failed.");
@@ -494,6 +574,61 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
 
     report.average_enqueue_ms =
         elapsed_ms(start, stop) / static_cast<float>(config.measured_iterations);
+    return report;
+}
+
+LifecycleReport run_repeated_lifecycle_test(const LifecycleConfig& config) {
+    if (config.repetitions <= 0) {
+        throw std::runtime_error("Lifecycle repetitions must be positive.");
+    }
+
+    // The CUDA context, TensorRT runtime, and host allocator initialize lazily across early cycles.
+    // Exclude three priming cycles so the measurement focuses on per-cycle ownership.
+    constexpr int kPrimingCycles = 3;
+    for (int cycle = 0; cycle < kPrimingCycles; ++cycle) {
+        try {
+            (void)run_smoke_inference(config.run);
+        } catch (const InjectedFailure&) {
+            if (config.run.injected_failure == FailureStage::kNone) {
+                throw;
+            }
+        }
+    }
+    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(lifecycle prime)");
+
+    LifecycleReport report;
+    report.repetitions = config.repetitions;
+    report.device_bytes_before = current_device_used_bytes();
+    report.host_rss_bytes_before = current_host_rss_bytes();
+
+    for (int iteration = 0; iteration < config.repetitions; ++iteration) {
+        try {
+            (void)run_smoke_inference(config.run);
+            ++report.completed_runs;
+        } catch (const InjectedFailure&) {
+            if (config.run.injected_failure == FailureStage::kNone) {
+                throw;
+            }
+            ++report.expected_failures;
+        }
+    }
+    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(lifecycle test)");
+    report.device_bytes_after = current_device_used_bytes();
+    report.host_rss_bytes_after = current_host_rss_bytes();
+
+    const std::size_t device_growth =
+        positive_growth(report.device_bytes_before, report.device_bytes_after);
+    const std::size_t host_growth =
+        positive_growth(report.host_rss_bytes_before, report.host_rss_bytes_after);
+    report.memory_stable = device_growth <= config.memory_tolerance_bytes &&
+                           host_growth <= config.memory_tolerance_bytes;
+    if (!report.memory_stable) {
+        std::ostringstream message;
+        message << "Repeated lifecycle memory growth exceeded tolerance: device="
+                << device_growth << " bytes, host_rss=" << host_growth
+                << " bytes, tolerance=" << config.memory_tolerance_bytes << " bytes.";
+        throw std::runtime_error(message.str());
+    }
     return report;
 }
 

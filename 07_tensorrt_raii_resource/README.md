@@ -14,6 +14,9 @@ Topics:
 - Exception-safe initialization when file loading, deserialization, allocation, or enqueue fails
 - Move-only resource classes
 - Dynamic input shape setup for engines that need runtime dimensions
+- Deterministic failure injection after engine read, runtime/engine/context creation, first buffer,
+  stream creation, or immediately before enqueue
+- Repeated create/destroy checks with host RSS and CUDA device-memory snapshots
 
 ## Why This Matters
 
@@ -41,6 +44,7 @@ fails halfway through.
 - `src/tensorrt_raii.cpp`: TensorRT logger, smart-pointer deleter, CUDA RAII wrappers, tensor buffer
   allocation, address binding, and enqueue timing.
 - `src/main.cpp`: command-line parsing and concise reporting.
+- `tests/config_tests.cpp`: focused validation of failure-stage configuration.
 
 The reusable logic is built as `tensorrt_raii_lib`, with a thin executable named
 `tensorrt_raii_resource` on top.
@@ -69,6 +73,7 @@ Run from this lesson directory:
 ```bash
 cmake -S . -B build
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
 ## Run
@@ -100,6 +105,26 @@ Adjust warmup and measurement count:
 ./build/tensorrt_raii_resource --warmup 3 --iterations 10
 ```
 
+Exercise repeated construction/destruction after three unmeasured priming cycles:
+
+```bash
+./build/tensorrt_raii_resource --repeat 100
+```
+
+Inject a failure after the first tensor buffer has been acquired, repeat it, and verify that already
+owned resources are released during stack unwinding:
+
+```bash
+./build/tensorrt_raii_resource \
+  --repeat 100 \
+  --inject-failure first-buffer \
+  --memory-tolerance-mib 16
+```
+
+Valid stages are `engine-read`, `runtime`, `engine`, `context`, `first-buffer`, `stream`, and
+`enqueue`. A failed memory-stability gate returns a nonzero status. The tolerance accounts for host
+allocator and driver caching; it is an explicit test parameter, not a claimed leak detector.
+
 ## Output
 
 The program prints:
@@ -110,6 +135,7 @@ The program prints:
 - bytes allocated for each tensor
 - total device memory owned by the lesson buffers
 - average enqueue time measured with CUDA events
+- for lifecycle mode, completed/failed cycle counts plus before/after host RSS and device-memory use
 
 Example shape report:
 
@@ -143,6 +169,12 @@ The lesson intentionally zero-fills input buffers and only checks that enqueue s
 preprocessing and output postprocessing arrive in later lessons; this lesson keeps the focus on
 resource lifetime boundaries.
 
+`run_repeated_lifecycle_test` performs three priming cycles before recording memory. CUDA context,
+TensorRT runtime, and host allocator caches may initialize lazily, so including early cycles would confuse one-time
+initialization with per-cycle growth. For stronger evidence, run the executable under
+`compute-sanitizer --tool memcheck`; host-side AddressSanitizer is also useful but does not diagnose
+CUDA allocations.
+
 ## Checkpoints
 
 - Run once with the static FP32 engine and once with the static FP16 engine. Compare device buffer
@@ -153,6 +185,8 @@ resource lifetime boundaries.
   Explain why dynamic dimensions must be resolved before buffer allocation.
 - In `src/tensorrt_raii.cpp`, find every destructor and explain which external API releases the
   resource it owns.
+- Run all failure stages with `--repeat 100`. Confirm that each iteration is counted as an expected
+  failure and that the memory gate passes.
 
 Acceptance criteria:
 
@@ -162,4 +196,7 @@ Acceptance criteria:
 - The program allocates one buffer per TensorRT IO tensor and binds addresses by tensor name.
 - Initialization remains exception-safe if file IO, deserialization, CUDA allocation, or enqueue
   fails.
+- Injected setup failures release resources acquired at earlier stages.
+- Repeated successful and injected-failure cycles do not exceed the declared host/device memory
+  growth tolerance.
 - You can explain why this matters for 24x7 camera inference services.

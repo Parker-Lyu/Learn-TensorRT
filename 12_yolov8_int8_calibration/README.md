@@ -1,144 +1,142 @@
-# 12 - YOLOv8 INT8 Calibration
+# 12 - YOLOv8 INT8 Calibration and Accuracy Gate
 
-You do not need to manually collect a dataset before starting this lesson. The runnable smoke path
-generates a tiny local calibration and validation set from `assets/dog.webp` so the code can be
-exercised end to end.
+Goal: build an entropy-calibrated INT8 TensorRT engine, then decide whether it is releasable using
+latency, tensor drift, and task-level accuracy on one fixed labeled validation split.
 
-That generated set is not representative enough for a real INT8 release. For production decisions,
-replace it with real images from the target camera/domain.
+The runnable smoke path creates pseudo-labels from `assets/yolov8n.pt`. It proves that calibration,
+multi-backend evaluation, reporting, and failure exit codes work; because the same model creates the
+labels, its metrics are not valid accuracy evidence. A real release decision requires a versioned
+public or deployment-domain dataset with human-reviewed labels.
 
-Goal: build INT8 TensorRT engines and understand quantization trade-offs with speed, tensor drift,
-and detection-quality evidence.
+## Artifacts
 
-Topics:
+- `prepare_calibration_data.py`: generates disjoint smoke splits, pseudo-labels, and a hashed
+  manifest.
+- `dataset_manifest.py`: creates and validates a manifest for real calibration images and YOLO-format
+  validation labels; byte-identical split overlap is rejected.
+- `build_int8_engine.py`: implements `IInt8EntropyCalibrator2`, builds INT8 with optional FP16
+  fallback, and rejects stale calibration caches using a model/data/shape/preprocessing cache key.
+- `compare_engines.py`: runs PyTorch plus TensorRT FP32, FP16, and INT8 over the complete manifest,
+  using the same letterbox, decode, confidence, NMS IoU, and maximum-detection settings.
+- `evaluation.py`: reusable YOLO-label parsing, IoU matching, 101-point AP, mAP50-95, mAP50,
+  precision, recall, and tensor-drift calculations.
+- `tests/test_evaluation.py`: focused metric and invalid-label tests.
 
-- Calibration image set
-- Separate validation image set
-- PTQ
-- Entropy calibration and KL-divergence intuition
-- `IInt8EntropyCalibrator2`
-- Calibration cache/table
-- INT8 engine build
-- FP32, FP16, and INT8 output comparison
-- FP16 versus INT8 latency
-- Tensor drift summary
-- Decoded box, class, and confidence comparison
-- Mixed precision fallback
-- QAT as the fallback when PTQ fails
-
-## Dataset Answer
-
-For this course lesson:
-
-- Use `prepare_calibration_data.py` to generate a smoke calibration set.
-- Use the smoke set only to verify the workflow and code.
-- Use a real representative image directory before trusting INT8 accuracy.
-
-For a real deployment, collect calibration images that match the deployment distribution:
-
-- same camera types, viewpoints, lighting, weather, compression, and resolution patterns
-- normal scenes plus hard cases
-- enough class/object diversity to exercise activation ranges
-- no overlap requirement with validation, but keep validation separate so calibration does not grade
-  itself
-
-## Runnable Artifacts
-
-- `prepare_calibration_data.py`: creates `data/calibration_smoke/` and `data/validation_smoke/`.
-- `build_int8_engine.py`: builds an INT8 TensorRT engine with `IInt8EntropyCalibrator2`.
-- `compare_engines.py`: compares FP32, FP16, and INT8 engines on validation images.
-
-Generated data and reports go to `data/` and `outputs/`; both are ignored by git.
+Generated datasets, engines, calibration tables, and reports stay in ignored `data/` and `outputs/`
+directories.
 
 ## Prerequisites
 
-Complete lessons 05, 06, and 09 first:
+Use the pinned TensorRT development container from lesson 00. First create the model artifacts:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32 static_fp16
-python3 09_yolov8_trt_python/infer_yolov8_trt.py
 ```
 
-## Run
+## Smoke Workflow
 
-Generate smoke calibration and validation images:
+Run from this lesson directory:
 
 ```bash
 python3 prepare_calibration_data.py
-```
-
-Build an INT8 engine:
-
-```bash
-python3 build_int8_engine.py
-```
-
-First-time INT8 builds can take several minutes because TensorRT must run calibration and tactic
-selection. The calibration cache is saved under `outputs/` so later rebuilds can skip calibration
-when the model, input shape, preprocessing, and calibration images are unchanged.
-
-Compare FP32, FP16, and INT8:
-
-```bash
+python3 build_int8_engine.py --enable-fp16
 python3 compare_engines.py
 ```
 
-Use a real calibration directory when available:
+The evaluator writes `outputs/precision_evaluation.json` as the machine-readable source of truth
+and `outputs/precision_evaluation.md` as a concise table. A regression gate failure still writes both
+reports and exits with status `2`.
+
+Run the CPU-only focused tests without a GPU engine:
+
+```bash
+PYTHONPATH=. python3 -m unittest discover -s tests -v
+```
+
+## Real Fixed Dataset
+
+Keep calibration and validation separate. Calibration images should represent target cameras,
+lighting, compression, resolutions, normal scenes, and hard cases. Validation must be a fixed,
+labeled split such as COCO val2017 or a versioned internal dataset; it must not reuse calibration
+images.
+
+Recommended starting sizes:
+
+- Calibration: approximately 500-2,000 representative images. Calibration images do not require
+  labels. Increase the set when the deployment domain contains many cameras, environments, object
+  scales, lighting conditions, or rare but important cases.
+- Validation: use a statistically meaningful fixed labeled split. For a general COCO YOLOv8
+  comparison, the complete COCO val2017 split contains 5,000 images. For a deployment-domain
+  dataset, include enough labeled examples for every important class and hard case; a few smoke
+  images are not sufficient to support a release decision.
+
+These counts are practical starting points, not universal thresholds. Distribution coverage matters
+more than collecting many near-duplicate frames. Sample across different videos, time periods,
+cameras, and operating conditions, and avoid placing adjacent or derived frames from the same source
+scene into both calibration and validation. Keep the validation split unchanged between FP32, FP16,
+and INT8 comparisons so metric deltas remain comparable.
+
+Create the saved manifest (nested image/label paths are supported):
+
+```bash
+python3 dataset_manifest.py \
+  --calibration-dir /datasets/project/calibration/images \
+  --validation-dir /datasets/coco/val2017 \
+  --labels-dir /datasets/coco/val2017-yolo-labels \
+  --dataset-id coco-val2017-fixed-v1 \
+  --output data/dataset_manifest.json
+```
+
+Build and evaluate that exact dataset:
 
 ```bash
 python3 build_int8_engine.py \
-  --calibration-dir /path/to/representative/images \
-  --output outputs/yolov8n_realdata_int8.engine \
-  --cache outputs/yolov8n_realdata_int8.cache
-```
+  --manifest data/dataset_manifest.json \
+  --output outputs/yolov8n_static_int8.engine \
+  --cache outputs/yolov8n_int8_calibration.cache \
+  --enable-fp16
 
-Use a separate validation directory:
-
-```bash
 python3 compare_engines.py \
-  --validation-dir /path/to/validation/images \
-  --int8-engine outputs/yolov8n_realdata_int8.engine
+  --manifest data/dataset_manifest.json \
+  --max-map50-95-drop 0.02 \
+  --max-map50-drop 0.02 \
+  --max-precision-drop 0.03 \
+  --max-recall-drop 0.03
 ```
 
-## Outputs
+Declare these thresholds before inspecting the final comparison. Defaults are teaching examples,
+not universal production limits. Evaluation defaults (`confidence=0.001`, `NMS IoU=0.7`, and
+`max_detections=300`) are recorded in JSON and applied identically to every backend.
 
-- `outputs/yolov8n_static_int8.engine`: generated INT8 engine.
-- `outputs/yolov8n_int8_calibration.cache`: calibration cache.
-- `outputs/int8_comparison_report.json`: machine-readable drift and detection comparison.
-- `outputs/int8_comparison_report.md`: human-readable summary.
+## Reading the Evidence
 
-## How To Interpret Results
+For every backend, the report contains absolute mAP50-95, mAP50, precision, recall, deltas from the
+PyTorch reference, mean/P50/P90 latency, and pass/fail. TensorRT results also contain FP32-relative
+raw tensor drift. Images with changed detection counts/classes or high P99 drift are listed for
+visual inspection.
 
-Tensor drift alone is not a release decision. Look at:
+Latency includes backend execution and required transfers, but excludes image loading,
+preprocessing, and decoding. It is useful for a controlled lesson comparison; lesson 11/12a should
+add longer warmups, more samples, hardware/power-state metadata, and profiler evidence.
 
-- whether top class changes on important images
-- whether detection count drops unexpectedly
-- whether confidence drops near threshold
-- whether box coordinates move enough to affect downstream logic
-- whether INT8 actually improves latency on the target GPU
+If INT8 violates the predeclared gate:
 
-If INT8 causes a severe recall drop:
+- verify calibration and inference preprocessing are byte-for-byte equivalent;
+- improve calibration coverage and inspect the listed high-drift images;
+- permit mixed INT8/FP16 tactics with `--enable-fp16`;
+- constrain sensitive layers to FP16/FP32 in an advanced build workflow;
+- use QAT if representative PTQ calibration still fails;
+- retain FP16 when INT8 speedup does not justify the accuracy loss.
 
-- verify calibration preprocessing exactly matches inference preprocessing
-- increase calibration image diversity
-- inspect high-drift examples visually
-- allow FP16 fallback while building INT8
-- try sensitive-layer fallback or QAT in a later advanced lesson
-- keep FP16 if INT8 speedup is small or accuracy cost is too high
+## Acceptance Criteria
 
-## Checkpoints
-
-- Open `data/manifest.json` and explain why the smoke set is not representative.
-- Delete `outputs/yolov8n_int8_calibration.cache` and rebuild to see calibration run again.
-- Compare FP16 and INT8 detection outputs on the smoke validation set.
-- Replace `--calibration-dir` with real images and compare the report.
-
-Acceptance criteria:
-
-- An INT8 engine is generated.
-- A representative calibration-set requirement is documented.
-- A validation image set is documented separately from the calibration set.
-- A short report compares FP32, FP16, and INT8 tensor drift and detection quality.
-- The report lists changed-detection examples that deserve visual inspection.
-- You can explain what to do when INT8 causes a severe recall drop.
+- The INT8 engine and cache are reproducibly generated from a hashed calibration split.
+- Calibration and validation manifests are saved, versioned, labeled where required, and have no
+  image-hash overlap.
+- PyTorch, TensorRT FP32, FP16, and INT8 run on the same complete fixed validation split with
+  identical postprocessing settings.
+- JSON records mAP50-95, mAP50, precision, recall, backend deltas, latency, drift, and inspection
+  examples.
+- Predeclared thresholds determine the process exit status.
+- Accuracy loss can be explained with a concrete FP16/mixed-precision/QAT fallback decision.

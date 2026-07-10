@@ -7,6 +7,20 @@
 
 namespace lesson07 {
 
+enum class FailureStage {
+    kNone,
+    kAfterEngineRead,
+    kAfterRuntimeCreation,
+    kAfterEngineDeserialization,
+    kAfterContextCreation,
+    kAfterFirstBufferAllocation,
+    kAfterStreamCreation,
+    kBeforeEnqueue,
+};
+
+FailureStage parse_failure_stage(const std::string& name);
+const char* failure_stage_name(FailureStage stage) noexcept;
+
 struct InputShape {
     std::string tensor_name;
     std::vector<int32_t> dimensions;
@@ -17,6 +31,7 @@ struct RunConfig {
     std::vector<InputShape> input_shapes;
     int warmup_iterations = 1;
     int measured_iterations = 3;
+    FailureStage injected_failure = FailureStage::kNone;
 };
 
 struct TensorReport {
@@ -36,5 +51,24 @@ struct InferenceReport {
 };
 
 InferenceReport run_smoke_inference(const RunConfig& config);
+
+struct LifecycleConfig {
+    RunConfig run;
+    int repetitions = 10;
+    std::size_t memory_tolerance_bytes = 16U * 1024U * 1024U;
+};
+
+struct LifecycleReport {
+    int repetitions = 0;
+    int completed_runs = 0;
+    int expected_failures = 0;
+    std::size_t device_bytes_before = 0;
+    std::size_t device_bytes_after = 0;
+    std::size_t host_rss_bytes_before = 0;
+    std::size_t host_rss_bytes_after = 0;
+    bool memory_stable = false;
+};
+
+LifecycleReport run_repeated_lifecycle_test(const LifecycleConfig& config);
 
 }  // namespace lesson07

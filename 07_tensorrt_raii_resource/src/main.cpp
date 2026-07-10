@@ -15,6 +15,7 @@ void print_usage(const char* executable_name) {
         << "Usage:\n"
         << "  " << executable_name << " [--engine PATH] [--input-shape NAME:D0xD1x...]\n"
         << "       [--warmup N] [--iterations N]\n\n"
+        << "       [--repeat N] [--inject-failure STAGE] [--memory-tolerance-mib N]\n\n"
         << "Default engine:\n"
         << "  ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine\n\n"
         << "Examples:\n"
@@ -84,6 +85,8 @@ lesson07::InputShape parse_input_shape(std::string_view text) {
 int main(int argc, char* argv[]) {
     try {
         lesson07::RunConfig config;
+        int repetitions = 1;
+        int memory_tolerance_mib = 16;
 
         for (int i = 1; i < argc; ++i) {
             const std::string_view arg(argv[i]);
@@ -109,9 +112,36 @@ int main(int argc, char* argv[]) {
             } else if (arg == "--iterations") {
                 config.measured_iterations =
                     parse_positive_int(require_value("--iterations"), "iterations");
+            } else if (arg == "--repeat") {
+                repetitions = parse_positive_int(require_value("--repeat"), "repeat");
+            } else if (arg == "--inject-failure") {
+                config.injected_failure = lesson07::parse_failure_stage(
+                    std::string(require_value("--inject-failure")));
+            } else if (arg == "--memory-tolerance-mib") {
+                memory_tolerance_mib = parse_positive_int(
+                    require_value("--memory-tolerance-mib"), "memory-tolerance-mib");
             } else {
                 throw std::runtime_error("Unknown argument: " + std::string(arg));
             }
+        }
+
+        if (repetitions > 1 || config.injected_failure != lesson07::FailureStage::kNone) {
+            lesson07::LifecycleConfig lifecycle_config;
+            lifecycle_config.run = config;
+            lifecycle_config.repetitions = repetitions;
+            lifecycle_config.memory_tolerance_bytes =
+                static_cast<std::size_t>(memory_tolerance_mib) * 1024U * 1024U;
+            const lesson07::LifecycleReport report =
+                lesson07::run_repeated_lifecycle_test(lifecycle_config);
+            std::cout << "Lifecycle repetitions: " << report.repetitions << '\n'
+                      << "Completed runs: " << report.completed_runs << '\n'
+                      << "Expected injected failures: " << report.expected_failures << '\n'
+                      << "Device bytes before/after: " << report.device_bytes_before << "/"
+                      << report.device_bytes_after << '\n'
+                      << "Host RSS bytes before/after: " << report.host_rss_bytes_before << "/"
+                      << report.host_rss_bytes_after << '\n'
+                      << "Memory stable: " << (report.memory_stable ? "yes" : "no") << '\n';
+            return report.memory_stable ? 0 : 1;
         }
 
         const lesson07::InferenceReport report = lesson07::run_smoke_inference(config);
