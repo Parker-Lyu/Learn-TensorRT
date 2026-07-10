@@ -35,14 +35,7 @@ public:
 };
 
 template <typename T>
-struct TensorRtDeleter {
-    void operator()(T* ptr) const noexcept {
-        delete ptr;
-    }
-};
-
-template <typename T>
-using TensorRtPtr = std::unique_ptr<T, TensorRtDeleter<T>>;
+using TensorRtPtr = std::unique_ptr<T>;
 
 class CudaStream {
 public:
