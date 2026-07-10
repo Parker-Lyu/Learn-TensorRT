@@ -298,6 +298,9 @@ Topics:
 - Non-copyable resource classes
 - Move semantics for resource handles
 - Exception-safe initialization
+- Explicit TensorRT and CUDA error propagation
+- Failure injection during staged initialization
+- Repeated resource construction and destruction
 
 Example targets:
 
@@ -312,6 +315,10 @@ Acceptance criteria:
 - TensorRT runtime, engine, and context are wrapped by `std::unique_ptr` or small RAII classes.
 - CUDA buffers and streams are released automatically.
 - The program remains leak-safe if model loading, buffer allocation, or inference setup fails halfway.
+- Missing, corrupt, or incompatible engine input produces an explicit error without leaking resources.
+- Injected allocation or setup failures release every resource acquired earlier in initialization.
+- A repeated create/destroy test exercises runtime, context, buffer, and stream ownership without
+  increasing host or device memory use.
 - You can explain how RAII protects GPU memory in long-running services.
 
 ### `08_tensorrt_cpp_basic`
@@ -448,15 +455,20 @@ Purpose:
 
 Topics:
 
-- Calibration dataset
-- Validation image set separate from calibration data
+- Calibration dataset with a saved manifest
+- Fixed labeled validation split, such as COCO val2017 or another versioned public dataset
+- Strict separation between calibration and validation data
 - Entropy calibration
 - KL divergence intuition
 - `IInt8EntropyCalibrator2`
 - Calibration table
 - INT8 engine build
+- Reusable dataset-level evaluator with machine-readable JSON or CSV output
+- Identical preprocessing, decoding, confidence, NMS, IoU, and maximum-detection settings across backends
 - FP32, FP16, and INT8 tensor drift summary across multiple images
 - Decoded box, class, and confidence comparison
+- mAP50-95, mAP50, precision, recall, and absolute metric deltas
+- Regression thresholds declared before inspecting the final comparison
 - Mixed precision fallback
 - Sensitive layer fallback to FP16 or FP32
 - QAT as a fallback when PTQ fails
@@ -467,7 +479,13 @@ Acceptance criteria:
 
 - You can build an INT8 engine.
 - You can compare FP32, FP16, and INT8 latency.
-- You can compare FP32, FP16, and INT8 detection quality on a small representative validation set.
+- The calibration and validation manifests are saved, versioned, and have no overlapping images.
+- One evaluator runs PyTorch or Ultralytics, TensorRT FP32, FP16, and INT8 on the same complete fixed
+  validation split with identical postprocessing settings.
+- The evaluator writes mAP50-95, mAP50, precision, recall, and backend-to-reference deltas to a
+  machine-readable result file.
+- Predeclared accuracy thresholds determine pass or fail and cause the validation command to return
+  a nonzero status when a release criterion is violated.
 - You can list changed detections or high-drift examples that deserve visual inspection.
 - You can explain any visible accuracy drop and propose a fallback strategy.
 
@@ -485,8 +503,9 @@ Deliverables:
 - FP32, FP16, and INT8 latency and throughput tables
 - Nsight Systems timeline evidence and bottleneck explanation
 - Single-input raw tensor alignment linked to multi-image drift and detection-quality results
+- Model, dataset, evaluator, preprocessing, and postprocessing version information
 - Calibration and validation dataset manifests with no overlap
-- Accuracy metrics such as mAP, precision, and recall when the validation dataset supports them
+- mAP50-95, mAP50, precision, recall, absolute values, backend deltas, and predeclared regression thresholds
 - One-page English summary and a three-to-five-minute English benchmark explanation
 
 Acceptance criteria:
@@ -494,6 +513,8 @@ Acceptance criteria:
 - Every reported number has a command, saved result, or generated artifact behind it.
 - P50/P90/P99 latency is calculated from individual samples after a documented warmup.
 - Accuracy conclusions separate numerical drift from decoded detection-quality changes.
+- The report states pass or fail against thresholds that were fixed before the final evaluation run.
+- Accuracy tables are generated from evaluator output rather than transcribed manually.
 - The report identifies at least one evidence-backed optimization and one rejected or inconclusive
   optimization attempt.
 - This checkpoint is strong enough to support targeted applications while later pipeline work
@@ -521,13 +542,22 @@ Topics:
 - Backpressure
 - Frame dropping strategy
 - Graceful shutdown
+- Explicit queue `close()` semantics
+- Cancellation and exception propagation across worker threads
+- Repeated start/stop and bounded stress testing
+- ThreadSanitizer for the CPU-only queue and synchronization tests
 
 Acceptance criteria:
 
 - One thread reads images or video frames and pushes them into a bounded thread-safe queue.
 - Another thread pops frames and simulates or runs inference.
 - The queue has a clear policy when input FPS is higher than inference FPS.
+- Closing the queue wakes blocked producers and consumers, rejects new pushes, and lets queued work
+  follow the documented drain-or-discard policy.
+- Producer and consumer failures are propagated to the owner instead of being lost inside a thread.
+- Repeated start/stop and overload tests keep queue depth and memory use bounded.
 - The program exits cleanly without deadlock.
+- CPU-only queue stress tests complete without ThreadSanitizer findings.
 - You can explain latency versus throughput trade-offs in queue sizing.
 
 ### `14_dynamic_batching`
@@ -568,22 +598,27 @@ Topics:
 
 - Video input
 - Frame queue
+- Producer-consumer queue integration
 - Async inference
 - Double buffering
 - CPU/GPU overlap
-- FPS measurement
+- Dynamic batching from queued frames
+- Frame timestamp tracking
+- Dropped-frame statistics
+- End-of-stream, invalid-input, and worker-failure handling
+- Coordinated cancellation and shutdown
+- Explicit overload and frame-dropping policy
+- FPS, latency-percentile, queue-depth, and error metrics
 
 Acceptance criteria:
 
 - The program can process a video or camera stream.
 - You can report average FPS, P50/P90/P99 latency, and GPU utilization.
-
-Additional topics:
-
-- Producer-consumer queue integration
-- Dynamic batching from queued frames
-- Frame timestamp tracking
-- Dropped-frame statistics
+- Queue depth and memory remain bounded when input FPS exceeds processing capacity.
+- Normal end-of-stream drains or discards queued frames according to the documented policy and exits cleanly.
+- Invalid input and an injected worker failure stop the pipeline without deadlock and return an
+  explicit nonzero error.
+- Dropped-frame, processed-frame, and failure counters remain internally consistent.
 
 ### `16_multistream_video_pipeline`
 
@@ -619,6 +654,9 @@ Topics:
 - Per-stream latency and FPS metrics
 - Dropped-frame and stale-frame statistics
 - Graceful shutdown across multiple threads
+- Per-stream source failure policy
+- Inference-worker failure propagation and coordinated cancellation
+- Result-identity validation under out-of-order completion
 
 Acceptance criteria:
 
@@ -626,6 +664,11 @@ Acceptance criteria:
 - Each stream has independent FPS, queue depth, and dropped-frame counters.
 - Frames are batched for TensorRT inference when possible.
 - Detection results are routed back to the correct stream.
+- A result-integrity test proves that every output retains the correct `stream_id` and `frame_id`
+  under batching and out-of-order completion.
+- An injected source or inference-worker failure follows the documented isolate-or-stop policy and
+  leaves no blocked threads.
+- Queue depth and memory use remain bounded under sustained overload.
 - The report includes total throughput and per-stream P50/P90/P99 latency.
 - You can explain the trade-off between fairness, throughput, and real-time freshness.
 
@@ -672,7 +715,13 @@ Deliverables:
 - Total and per-stream throughput plus P50/P90/P99 end-to-end latency
 - CPU OpenCV and CUDA/NPP preprocessing correctness and performance comparison
 - GPU utilization, memory use, queue depth, and dropped/stale-frame metrics
-- A bounded-duration soak test and evidence of graceful shutdown under normal and failure paths
+- Host RSS and device-memory measurements at the start, peak, and end of the run
+- A soak test of at least 30 minutes under a documented workload
+- At least 100 repeated pipeline start/stop cycles
+- A fault-injection matrix covering invalid input, source failure, worker failure, and shutdown during load
+- AddressSanitizer and ThreadSanitizer results for applicable CPU-only modules
+- Targeted `compute-sanitizer` results for CUDA memory and kernel smoke tests
+- Evidence of graceful shutdown under normal and failure paths
 - One-page English summary and a three-to-five-minute English pipeline explanation
 
 Acceptance criteria:
@@ -682,6 +731,10 @@ Acceptance criteria:
   bounded.
 - Results show the trade-off between batch efficiency, per-stream fairness, and real-time freshness.
 - The pipeline exits without deadlock when input ends, a producer fails, or shutdown is requested.
+- Host RSS and device memory do not show unexplained monotonic growth across the soak and repeated
+  start/stop tests.
+- Applicable sanitizer runs finish without unresolved memory, race, or CUDA access errors.
+- Injected failures return explicit errors and match the documented isolate-or-stop policy.
 - Benchmark results are generated from saved measurements and extend rather than duplicate the
   earlier precision report.
 
@@ -932,17 +985,32 @@ Topics:
 - Prefill and decode
 - KV cache
 - Batch size versus sequence length
+- Batch size versus concurrent-request semantics in the selected backend
 - Throughput versus first-token latency
 - FP16, INT8, INT4, and weight-only quantization
 - ONNX Runtime, OpenVINO GenAI, TensorRT-LLM, vLLM, and llama.cpp at a high level
 - CPU/GPU memory limits
-- TTFT, time per output token, tokens per second, and KV-cache memory estimates
+- Pinned model revision, tokenizer, quantization format, runtime, and benchmark configuration
+- Warmup, repeated measurements, and fixed output length
+- TTFT, time per output token, prefill throughput, decode throughput, and total tokens per second
+- Peak GPU memory plus model-weight and KV-cache memory estimates
+- Controlled input-length and batch-or-concurrency experiment matrix
 
 Acceptance criteria:
 
-- You can run a small local LLM and record TTFT, decode throughput, and memory use.
+- You can run one small local model rather than only reading an inference example.
+- The benchmark records the exact model revision, tokenizer, quantization format, backend, hardware,
+  warmup, repetition count, input length, and requested output length.
+- With output length held constant, results compare at least two input lengths and at least two batch
+  sizes or concurrent-request levels supported by the selected backend.
+- The result table reports TTFT, time per output token, prefill throughput, decode throughput, total
+  tokens per second, and peak GPU memory from repeated post-warmup measurements.
+- The report separates model-weight memory from an estimated KV-cache contribution and records any
+  configuration that cannot run within available memory.
 - You can explain why LLM inference bottlenecks differ from YOLO inference.
 - You can explain KV cache and why decode is often memory-bandwidth bound.
+- You can explain how input length and batch or concurrency changed latency, throughput, and memory
+  use in the measured results.
 - You know when to mention TensorRT-LLM, OpenVINO GenAI, vLLM, or llama.cpp in interviews.
 
 ## Ongoing Interview Practice
@@ -1056,6 +1124,8 @@ After `07_tensorrt_raii_resource`, you should be able to answer:
 - How do you use `std::unique_ptr` with a custom deleter?
 - How do you make CUDA buffers exception-safe?
 - What happens if engine loading fails halfway through initialization?
+- How do you inject an initialization failure without depending on a real out-of-memory event?
+- What evidence distinguishes correct RAII ownership from a long-run leak claim?
 
 After `10_yolov8_trt_cpp`, you should be able to answer:
 
@@ -1101,9 +1171,13 @@ After `11_nsight_performance_diagnosis` and `17_cuda_preprocess_npp`, you should
 After `12a_precision_performance_report` and `17a_pipeline_performance_report`, you should be able to answer:
 
 - How were warmup, synchronization, sample count, and percentile latency defined?
+- How do you prevent calibration/validation leakage and enforce a predeclared accuracy gate?
+- Why can raw tensor drift pass while task-level mAP still regresses, or the reverse?
 - What is the difference between inference latency and capture-to-result latency?
 - Which bottleneck was proven by evidence, and which optimization did not help?
 - How does overload affect queue depth, dropped frames, fairness, and freshness?
+- Which failures were injected, which sanitizers were applicable, and what does a 30-minute soak test
+  still not prove?
 
 After `18a_triton_inference_server` and `21_cpp_shared_library_python_binding`, you should be able to answer:
 
@@ -1124,8 +1198,10 @@ After `22_llm_inference_intro`, you should be able to answer:
 
 - What are prefill and decode?
 - What is KV cache?
+- What are TTFT and time per output token, and why must output length be controlled in a comparison?
 - Why is LLM decoding often memory-bandwidth bound?
 - How is LLM batching different from YOLO image batching?
+- How did input length and batch or concurrency affect measured throughput, latency, and memory use?
 - What problems do TensorRT-LLM, OpenVINO GenAI, vLLM, and llama.cpp try to solve?
 
 After `24_final_portfolio_case_study`, you should be able to answer:
