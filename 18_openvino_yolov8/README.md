@@ -68,7 +68,7 @@ OpenVINO's `benchmark_app` is installed with the package and provides a runtime-
 
 ```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
-python3 -m openvino.tools.benchmark.main \
+18_openvino_yolov8/.deps/bin/benchmark_app \
   -m 05_torch_to_onnx/outputs/yolov8n.onnx \
   -d CPU \
   -api async \
