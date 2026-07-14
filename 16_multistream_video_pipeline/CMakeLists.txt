@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.18)
+project(multistream_video_pipeline LANGUAGES CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(CTest)
+find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core videoio)
+
+add_library(multistream_pipeline src/multistream_pipeline.cpp)
+target_compile_features(multistream_pipeline PUBLIC cxx_std_17)
+target_include_directories(multistream_pipeline PUBLIC include)
+target_link_libraries(multistream_pipeline PUBLIC Threads::Threads opencv_core opencv_videoio)
+
+add_executable(multistream_video_pipeline src/main.cpp)
+target_compile_features(multistream_video_pipeline PRIVATE cxx_std_17)
+target_link_libraries(multistream_video_pipeline PRIVATE multistream_pipeline)
+
+if(BUILD_TESTING)
+    add_executable(multistream_pipeline_tests tests/test_multistream_pipeline.cpp)
+    target_compile_features(multistream_pipeline_tests PRIVATE cxx_std_17)
+    target_link_libraries(multistream_pipeline_tests PRIVATE multistream_pipeline)
+    add_test(NAME multistream_pipeline_tests COMMAND multistream_pipeline_tests)
+endif()
