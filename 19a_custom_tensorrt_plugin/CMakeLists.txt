@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.18)
+project(custom_tensorrt_plugin LANGUAGES CXX CUDA)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86)
+endif()
+find_package(CUDAToolkit REQUIRED)
+find_path(TENSORRT_INCLUDE_DIR NAMES NvInferRuntime.h
+    PATHS /usr/include/x86_64-linux-gnu /usr/include REQUIRED)
+find_library(TENSORRT_LIBRARY NAMES nvinfer
+    PATHS /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu REQUIRED)
+
+add_library(scale_shift_plugin SHARED src/scale_shift_plugin.cu)
+target_compile_features(scale_shift_plugin PUBLIC cxx_std_17)
+target_include_directories(scale_shift_plugin PUBLIC include PRIVATE ${TENSORRT_INCLUDE_DIR})
+target_link_libraries(scale_shift_plugin PRIVATE CUDA::cudart ${TENSORRT_LIBRARY})
+set_target_properties(scale_shift_plugin PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
+
+add_executable(validate_plugin src/validate_plugin.cpp)
+target_compile_features(validate_plugin PRIVATE cxx_std_17)
+target_include_directories(validate_plugin PRIVATE include ${TENSORRT_INCLUDE_DIR})
+target_link_libraries(validate_plugin PRIVATE scale_shift_plugin CUDA::cudart ${TENSORRT_LIBRARY})
