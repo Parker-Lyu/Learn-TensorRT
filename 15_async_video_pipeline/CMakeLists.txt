@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.18)
+project(async_video_pipeline LANGUAGES CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(CTest)
+find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core videoio imgproc)
+
+add_library(async_pipeline src/async_pipeline.cpp)
+target_compile_features(async_pipeline PUBLIC cxx_std_17)
+target_include_directories(async_pipeline PUBLIC include)
+target_link_libraries(async_pipeline PUBLIC Threads::Threads opencv_core opencv_videoio opencv_imgproc)
+
+add_executable(async_video_pipeline src/main.cpp)
+target_compile_features(async_video_pipeline PRIVATE cxx_std_17)
+target_link_libraries(async_video_pipeline PRIVATE async_pipeline)
+
+if(BUILD_TESTING)
+    add_executable(async_pipeline_tests tests/test_async_pipeline.cpp)
+    target_compile_features(async_pipeline_tests PRIVATE cxx_std_17)
+    target_link_libraries(async_pipeline_tests PRIVATE async_pipeline)
+    add_test(NAME async_pipeline_tests COMMAND async_pipeline_tests)
+endif()
