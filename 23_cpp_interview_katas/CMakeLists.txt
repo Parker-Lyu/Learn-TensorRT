@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.18)
+project(cpp_interview_katas LANGUAGES CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+include(CTest)
+find_package(CUDAToolkit REQUIRED)
+find_package(Threads REQUIRED)
+
+add_library(cv_katas src/katas.cpp)
+target_compile_features(cv_katas PUBLIC cxx_std_17)
+target_include_directories(cv_katas PUBLIC include)
+target_link_libraries(cv_katas PUBLIC Threads::Threads)
+
+add_executable(katas_demo src/main.cpp)
+target_compile_features(katas_demo PRIVATE cxx_std_17)
+target_link_libraries(katas_demo PRIVATE cv_katas CUDA::cudart)
+
+if(BUILD_TESTING)
+    add_executable(katas_tests tests/test_katas.cpp)
+    target_compile_features(katas_tests PRIVATE cxx_std_17)
+    target_link_libraries(katas_tests PRIVATE cv_katas CUDA::cudart)
+    add_test(NAME katas_tests COMMAND katas_tests)
+endif()
