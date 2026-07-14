@@ -46,7 +46,8 @@ struct InferenceOutput {
     std::vector<int64_t> output_shape;
     std::vector<float> values;
     float h2d_ms = 0.0F;
-    float enqueue_ms = 0.0F;
+    float enqueue_host_ms = 0.0F;
+    float gpu_compute_ms = 0.0F;
     float d2h_ms = 0.0F;
 };
 

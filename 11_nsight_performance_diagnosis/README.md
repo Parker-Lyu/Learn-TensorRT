@@ -1,59 +1,57 @@
 # 11 - Nsight Performance Diagnosis
 
-This lesson profiles the lesson 10 C++ YOLOv8 TensorRT artifact and turns measurements into a short
-diagnosis report.
+This lesson profiles the lesson 10 C++ YOLOv8 TensorRT artifact without confusing first-inference
+startup behavior with steady-state latency.
 
-Goal: use timeline evidence and latency percentiles to explain whether inference is limited by CPU
-preprocessing, host-device copies, TensorRT enqueue time, postprocessing, or gaps between GPU work.
+Goal: use repeated in-process measurements, a model-only `trtexec` reference, NVTX ranges, and an
+Nsight Systems timeline to explain where request latency is spent.
 
 Topics:
 
-- `trtexec` baseline as a model-only reference
-- repeated C++ application latency sampling
+- warmup versus measured iterations
 - P50/P90/P99 latency reporting
-- `nsys` command-line capture
-- Nsight Systems timeline reading
-- CPU preprocessing bottlenecks
-- H2D and D2H copy placement
-- GPU starvation and synchronization gaps
-- CUDA stream ordering verification
+- host `enqueueV3` time versus GPU compute time
+- per-request CPU, transfer, GPU, and unaccounted latency shares
+- `trtexec` model-only comparison
+- Nsight Systems command-line capture and text statistics
+- NVTX-guided CPU/GPU timeline reading
+- synchronization gaps and GPU starvation
 
 ## Why This Matters
 
-An inference program can be correct and still waste the GPU:
+A new TensorRT execution context can have an expensive first inference. Launching a new process for
+every sample repeatedly measures that cold path and can produce a false bottleneck diagnosis.
+
+This lesson instead runs the pipeline repeatedly inside one C++ process:
 
 ```text
-preprocess on CPU
-  -> H2D copy
-  -> TensorRT enqueue
-  -> D2H copy
-  -> postprocess on CPU
+engine/context/stream initialization
+  -> warmup iterations (reported separately)
+  -> measured iterations (steady-state percentiles)
+  -> visualization and report writing
 ```
 
-Lesson 10 reports these stages for one image. This lesson runs the program repeatedly, summarizes
-latency percentiles, and captures a Nsight Systems timeline so you can inspect what the CPU and GPU
-were actually doing.
+The automatic diagnosis is deliberately a heuristic. The Nsight timeline remains the final source
+of truth for CPU gaps, CUDA API blocking, memory copies, and kernel placement.
 
 ## Runnable Artifact
 
-- `profile_yolov8_cpp.py`: builds lesson 10, runs repeated baseline measurements, optionally captures
-  Nsight Systems, and writes JSON/Markdown diagnosis outputs.
+- `profile_yolov8_cpp.py`: builds lesson 10, runs an in-process steady-state benchmark, loads the
+  matching lesson 06 `trtexec` timing JSON when available, captures Nsight Systems, and writes JSON
+  and Markdown reports.
+- `tests/test_profile_yolov8_cpp.py`: focused tests for percentile, schema-validation, composition,
+  and diagnosis behavior.
 
 Generated files go to `outputs/`, which is ignored by git.
 
 ## Prerequisites
 
-Complete lessons 06 and 10 first:
+Complete lessons 06 and 10 in the pinned TensorRT development container:
 
 ```bash
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 cmake -S 10_yolov8_trt_cpp -B 10_yolov8_trt_cpp/build
 cmake --build 10_yolov8_trt_cpp/build
-```
-
-Confirm Nsight Systems is available in the TensorRT development container:
-
-```bash
 nsys --version
 ```
 
@@ -65,21 +63,37 @@ Run from this lesson directory:
 python3 profile_yolov8_cpp.py
 ```
 
-Run a faster smoke diagnosis without Nsight capture:
+Defaults:
+
+- 5 warmup iterations and 50 measured baseline iterations
+- 2 warmup iterations and 5 measured iterations in the Nsight capture
+- P99 warning when fewer than 100 measured baseline samples are used
+
+Run a fast smoke diagnosis without Nsight:
 
 ```bash
-python3 profile_yolov8_cpp.py --iterations 3 --skip-nsys
+python3 profile_yolov8_cpp.py \
+  --warmup-iterations 2 \
+  --iterations 5 \
+  --skip-nsys
 ```
 
-Profile a different engine:
+Collect a more stable tail-latency sample:
+
+```bash
+python3 profile_yolov8_cpp.py --warmup-iterations 10 --iterations 200
+```
+
+Profile another engine or shorten the trace:
 
 ```bash
 python3 profile_yolov8_cpp.py \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --iterations 10
+  --nsys-warmup-iterations 1 \
+  --nsys-iterations 3
 ```
 
-Skip rebuilding lesson 10 when it is already built:
+Skip rebuilding lesson 10 when it is already current:
 
 ```bash
 python3 profile_yolov8_cpp.py --skip-build
@@ -87,55 +101,67 @@ python3 profile_yolov8_cpp.py --skip-build
 
 ## Outputs
 
-The script writes:
+- `outputs/baseline_run/detections.json`: lesson 10 warmup and measured samples.
+- `outputs/diagnosis_summary.json`: machine-readable application, `trtexec`, and Nsight metadata.
+- `outputs/diagnosis_report.md`: steady-state tables and diagnosis notes.
+- `outputs/nsys/yolov8_trt_cpp.nsys-rep`: Nsight Systems timeline.
+- `outputs/nsys/yolov8_trt_cpp.sqlite`: exported trace database.
+- `outputs/nsys/nsys_stats.txt`: NVTX, CUDA API, and GPU summary reports.
 
-- `outputs/baseline_runs/run_*/detections.json`: per-run lesson 10 reports.
-- `outputs/diagnosis_summary.json`: machine-readable latency summary and Nsight command metadata.
-- `outputs/diagnosis_report.md`: human-readable diagnosis.
-- `outputs/nsys/yolov8_trt_cpp.nsys-rep`: Nsight Systems timeline, when capture succeeds.
-- `outputs/nsys/yolov8_trt_cpp.sqlite`: exported SQLite report, when generated by `nsys`.
+The latency table includes:
 
-The Markdown report includes a table like:
+- `preprocess` and `postprocess`: CPU wall-clock stages.
+- `enqueue_host`: CPU time spent calling `enqueueV3`.
+- `gpu_compute`: CUDA-event time spanning TensorRT GPU work.
+- `h2d` and `d2h`: CUDA-event copy times.
+- `total`: preprocessing through postprocessing.
 
-```text
-| Stage | min | mean | P50 | P90 | P99 | max |
-| preprocess | ... |
-| h2d | ... |
-| enqueue | ... |
-| d2h | ... |
-| postprocess | ... |
-| total | ... |
-```
+`enqueue_host` and `gpu_compute` overlap conceptually and are not added together in the request
+composition. Engine deserialization, image decoding, visualization, file writing, and process
+startup are outside the steady-state total.
 
 ## Reading The Timeline
 
-Open the `.nsys-rep` file:
+Open the report:
 
 ```bash
 nsys-ui outputs/nsys/yolov8_trt_cpp.nsys-rep
 ```
 
-Inspect:
+Use the NVTX ranges to navigate:
 
-- CUDA API calls: look for blocking calls or unexpected synchronizations.
-- CUDA HW rows: verify H2D, TensorRT kernels, and D2H appear in the expected order.
-- CPU thread lanes: check whether preprocessing or postprocessing creates large gaps before GPU
-  work starts.
-- GPU idle space: if the GPU has long blank regions between requests, the bottleneck is likely
-  outside TensorRT compute.
+- `warmup_iteration_0`: compare first-inference GPU work with later iterations.
+- `measured_iteration_*`: inspect representative steady-state requests.
+- `preprocess` and `postprocess`: identify CPU-heavy regions.
+- `h2d_submit`, `tensorrt_enqueue_host`, and `d2h_submit_and_wait`: relate CUDA API submission and
+  synchronization to the CUDA HW row.
+
+Then verify whether H2D, TensorRT kernels, and D2H execute in order, whether the CPU creates gaps,
+and whether synchronization leaves the GPU idle between requests.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The tests cover nearest-rank percentiles, invalid report values, per-request composition, and the
+minimum lead required before the report declares one category dominant.
 
 ## Checkpoints
 
-- Compare lesson 06 `trtexec` latency with this lesson's full-application `enqueue` and `total`
-  latency.
-- Run FP32 and FP16 engines and compare which stage changes.
-- Lower `--iterations` to `3`, then raise it to `20`, and observe percentile stability.
-- In Nsight Systems, find the H2D copy, TensorRT kernels, and D2H copy for one inference.
-- Explain one optimization idea and cite before-and-after measurements after trying it.
+- Compare the first warmup `gpu_compute` value with steady-state P50.
+- Compare application `gpu_compute` with the matching lesson 06 `trtexec` reference.
+- Run FP32 and FP16 engines and identify which stages actually change.
+- Explain why 10 samples cannot support a stable P99 claim.
+- Find one measured iteration in Nsight and account for its CPU work, copies, kernels, and gaps.
+- Try one optimization and cite before-and-after reports and timelines.
 
 Acceptance criteria:
 
-- A C++ TensorRT program is profiled with repeated latency samples.
-- Nsight Systems capture can be generated from the command line when `nsys` is available.
-- The report identifies whether GPU enqueue, CPU work, or memory copies dominate the measured path.
-- One optimization can be explained with before-and-after evidence from the generated reports.
+- Cold first-inference behavior is separated from steady-state samples.
+- P50/P90/P99 are generated from repeated in-process measurements.
+- Host enqueue time is not mislabeled as GPU compute time.
+- Nsight captures contain named NVTX iteration and pipeline ranges.
+- The report compares the application with a model-only reference when timing JSON is available.
+- Any bottleneck claim is presented as a heuristic and checked against timeline evidence.

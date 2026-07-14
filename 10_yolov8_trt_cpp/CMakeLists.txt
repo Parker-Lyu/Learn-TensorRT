@@ -42,7 +42,7 @@ target_include_directories(yolov8_trt_runtime
     PRIVATE ${TENSORRT_INCLUDE_DIR}
 )
 target_link_libraries(yolov8_trt_runtime
-    PUBLIC CUDA::cudart
+    PUBLIC CUDA::cudart CUDA::nvToolsExt
     PRIVATE ${TENSORRT_LIBRARY}
 )
 

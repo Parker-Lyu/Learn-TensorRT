@@ -9,13 +9,14 @@ Topics:
 
 - OpenCV letterbox preprocessing
 - TensorRT runtime deserialization
-- CUDA device buffers, stream, and event timing
+- Reusable CUDA device buffers, stream, and event timing
 - YOLOv8 output decode
 - Class-aware NMS
 - Coordinate scaling back to the original image
 - Visualization
 - CLI arguments
-- Latency breakdown
+- Cold-start and steady-state latency sampling
+- NVTX ranges for Nsight Systems
 - Library targets for reusable preprocessing, inference, postprocessing, and visualization
 - Focused tests for preprocessing and postprocessing edge cases
 
@@ -80,15 +81,32 @@ Adjust thresholds:
 ./build/yolov8_trt_cpp --confidence 0.20 --iou 0.50 --max-detections 50
 ```
 
+Collect steady-state samples in one process:
+
+```bash
+./build/yolov8_trt_cpp --warmup-iterations 5 --iterations 50
+```
+
+The engine, execution context, CUDA stream, events, and device buffers are created once and reused.
+Warmup samples are saved separately and excluded from the measured sample set.
+
 ## Outputs
 
 Generated files go to `outputs/`:
 
 - `img2_yolov8_trt_cpp.jpg`: annotated image.
-- `detections.json`: detections and latency breakdown.
+- `detections.json`: detections, warmup samples, measured samples, and the final latency breakdown.
 
-The console report includes preprocessing, H2D copy, TensorRT enqueue, D2H copy, postprocessing, and
-total latency.
+The latency fields distinguish:
+
+- `enqueue_host`: CPU time spent calling `enqueueV3`.
+- `gpu_compute`: CUDA-event time for TensorRT work on the stream.
+- `h2d` and `d2h`: CUDA-event transfer times.
+- `total`: preprocessing through postprocessing; engine loading, image decoding, visualization, and
+  file writing are excluded.
+
+`enqueue_host` and `gpu_compute` describe different timelines and should not be added together.
+NVTX ranges mark warmup/measured iterations and the major pipeline stages for lesson 11.
 
 ## Tests
 
@@ -109,7 +127,8 @@ The tests cover:
 
 - Compare `outputs/detections.json` with lesson 09's Python JSON.
 - Lower `--confidence` and observe the effect on candidate detections.
-- Run the FP32 and FP16 engines from lesson 06 and compare enqueue time.
+- Run the FP32 and FP16 engines from lesson 06 and compare GPU compute time.
+- Compare the first warmup sample with measured steady-state `gpu_compute` samples.
 - Trace the ownership path in `src/tensorrt_runner.cpp`: runtime, engine, context, stream, events,
   and buffers.
 
@@ -117,7 +136,8 @@ Acceptance criteria:
 
 - The program accepts image and engine paths.
 - It saves an output image with detection boxes.
-- It reports preprocessing, inference, postprocessing, and total latency.
+- It reports host enqueue, GPU compute, transfers, preprocessing, postprocessing, and total latency.
+- It can separate first-inference behavior from repeated steady-state samples.
 - Reusable preprocessing, inference, postprocessing, and visualization code is not trapped inside
   `main`.
 - Focused tests cover representative invalid input and boundary cases.

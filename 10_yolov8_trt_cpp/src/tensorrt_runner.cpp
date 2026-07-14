@@ -1,9 +1,12 @@
 #include "tensorrt_runner.hpp"
 
+#include "nvtx_range.hpp"
+
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
@@ -244,6 +247,13 @@ struct TensorRtRunner::Impl {
     TensorInfo output;
     std::unique_ptr<DeviceBuffer> input_device;
     std::unique_ptr<DeviceBuffer> output_device;
+    CudaStream stream;
+    CudaEvent h2d_start;
+    CudaEvent h2d_stop;
+    CudaEvent infer_start;
+    CudaEvent infer_stop;
+    CudaEvent d2h_start;
+    CudaEvent d2h_stop;
 };
 
 TensorRtRunner::TensorRtRunner(const std::string& engine_path)
@@ -268,40 +278,54 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         throw std::runtime_error("Input tensor size does not match TensorRT engine input.");
     }
 
-    CudaStream stream;
-    CudaEvent h2d_start;
-    CudaEvent h2d_stop;
-    CudaEvent infer_start;
-    CudaEvent infer_stop;
-    CudaEvent d2h_start;
-    CudaEvent d2h_stop;
-
-    check_cuda(cudaEventRecord(h2d_start.get(), stream.get()), "cudaEventRecord(h2d_start)");
-    check_cuda(cudaMemcpyAsync(impl_->input_device->get(), input_tensor.data(), impl_->input.byte_count,
-                               cudaMemcpyHostToDevice, stream.get()),
-               "cudaMemcpyAsync(input)");
-    check_cuda(cudaEventRecord(h2d_stop.get(), stream.get()), "cudaEventRecord(h2d_stop)");
-
-    check_cuda(cudaEventRecord(infer_start.get(), stream.get()), "cudaEventRecord(infer_start)");
-    if (!impl_->context->enqueueV3(stream.get())) {
-        throw std::runtime_error("TensorRT enqueueV3 failed.");
+    {
+        NvtxRange range("h2d_submit");
+        check_cuda(cudaEventRecord(impl_->h2d_start.get(), impl_->stream.get()),
+                   "cudaEventRecord(h2d_start)");
+        check_cuda(cudaMemcpyAsync(impl_->input_device->get(), input_tensor.data(),
+                                   impl_->input.byte_count, cudaMemcpyHostToDevice,
+                                   impl_->stream.get()),
+                   "cudaMemcpyAsync(input)");
+        check_cuda(cudaEventRecord(impl_->h2d_stop.get(), impl_->stream.get()),
+                   "cudaEventRecord(h2d_stop)");
     }
-    check_cuda(cudaEventRecord(infer_stop.get(), stream.get()), "cudaEventRecord(infer_stop)");
+
+    check_cuda(cudaEventRecord(impl_->infer_start.get(), impl_->stream.get()),
+               "cudaEventRecord(infer_start)");
+    const auto enqueue_start = std::chrono::steady_clock::now();
+    {
+        NvtxRange range("tensorrt_enqueue_host");
+        if (!impl_->context->enqueueV3(impl_->stream.get())) {
+            throw std::runtime_error("TensorRT enqueueV3 failed.");
+        }
+    }
+    const auto enqueue_stop = std::chrono::steady_clock::now();
+    check_cuda(cudaEventRecord(impl_->infer_stop.get(), impl_->stream.get()),
+               "cudaEventRecord(infer_stop)");
 
     InferenceOutput output;
     output.output_name = impl_->output.name;
     output.output_shape = impl_->output.shape;
     output.values.resize(impl_->output.byte_count / sizeof(float));
-    check_cuda(cudaEventRecord(d2h_start.get(), stream.get()), "cudaEventRecord(d2h_start)");
-    check_cuda(cudaMemcpyAsync(output.values.data(), impl_->output_device->get(), impl_->output.byte_count,
-                               cudaMemcpyDeviceToHost, stream.get()),
-               "cudaMemcpyAsync(output)");
-    check_cuda(cudaEventRecord(d2h_stop.get(), stream.get()), "cudaEventRecord(d2h_stop)");
-    check_cuda(cudaEventSynchronize(d2h_stop.get()), "cudaEventSynchronize(d2h_stop)");
+    {
+        NvtxRange range("d2h_submit_and_wait");
+        check_cuda(cudaEventRecord(impl_->d2h_start.get(), impl_->stream.get()),
+                   "cudaEventRecord(d2h_start)");
+        check_cuda(cudaMemcpyAsync(output.values.data(), impl_->output_device->get(),
+                                   impl_->output.byte_count, cudaMemcpyDeviceToHost,
+                                   impl_->stream.get()),
+                   "cudaMemcpyAsync(output)");
+        check_cuda(cudaEventRecord(impl_->d2h_stop.get(), impl_->stream.get()),
+                   "cudaEventRecord(d2h_stop)");
+        check_cuda(cudaEventSynchronize(impl_->d2h_stop.get()),
+                   "cudaEventSynchronize(d2h_stop)");
+    }
 
-    output.h2d_ms = elapsed_ms(h2d_start, h2d_stop);
-    output.enqueue_ms = elapsed_ms(infer_start, infer_stop);
-    output.d2h_ms = elapsed_ms(d2h_start, d2h_stop);
+    output.h2d_ms = elapsed_ms(impl_->h2d_start, impl_->h2d_stop);
+    output.enqueue_host_ms =
+        std::chrono::duration<float, std::milli>(enqueue_stop - enqueue_start).count();
+    output.gpu_compute_ms = elapsed_ms(impl_->infer_start, impl_->infer_stop);
+    output.d2h_ms = elapsed_ms(impl_->d2h_start, impl_->d2h_stop);
     return output;
 }
 
