@@ -64,8 +64,8 @@ def main() -> int:
     if list(model_input.shape) != list(input_tensor.shape):
         raise ValueError(f"input shape mismatch: model={model_input.shape}, data={input_tensor.shape}")
 
-    compiled = core.compile_model(model, "CPU", {"PERFORMANCE_HINT": "LATENCY"})
-    request = compiled.create_infer_request()
+    latency_compiled = core.compile_model(model, "CPU", {"PERFORMANCE_HINT": "LATENCY"})
+    request = latency_compiled.create_infer_request()
     for _ in range(args.warmup):
         request.infer({0: input_tensor})
     sync_latencies = []
@@ -73,14 +73,15 @@ def main() -> int:
     output = None
     for _ in range(args.iterations):
         started = time.perf_counter()
-        output = request.infer({0: input_tensor})[compiled.output(0)]
+        output = request.infer({0: input_tensor})[latency_compiled.output(0)]
         sync_latencies.append((time.perf_counter() - started) * 1000.0)
     sync_elapsed = time.perf_counter() - sync_started
     assert output is not None
 
     async_latencies: list[float] = []
     async_checksums: list[float] = []
-    queue = ov.AsyncInferQueue(compiled, args.async_jobs)
+    throughput_compiled = core.compile_model(model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"})
+    queue = ov.AsyncInferQueue(throughput_compiled, args.async_jobs)
 
     def complete(infer_request, userdata):
         async_latencies.append((time.perf_counter() - userdata) * 1000.0)
@@ -101,8 +102,14 @@ def main() -> int:
         "software": {"openvino": ov.__version__, "python": platform.python_version(),
                      "numpy": np.__version__},
         "compiled_properties": {
-            "execution_devices": list(compiled.get_property("EXECUTION_DEVICES")),
-            "num_streams": str(compiled.get_property("NUM_STREAMS")),
+            "latency": {
+                "execution_devices": list(latency_compiled.get_property("EXECUTION_DEVICES")),
+                "num_streams": str(latency_compiled.get_property("NUM_STREAMS")),
+            },
+            "throughput": {
+                "execution_devices": list(throughput_compiled.get_property("EXECUTION_DEVICES")),
+                "num_streams": str(throughput_compiled.get_property("NUM_STREAMS")),
+            },
         },
         "sync": summary(sync_latencies, sync_elapsed),
         "async": {**summary(async_latencies, async_elapsed), "jobs": args.async_jobs,

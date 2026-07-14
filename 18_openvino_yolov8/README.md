@@ -8,29 +8,67 @@ directory. The course pins `openvino==2025.4.1`; do not replace it with an unrec
 
 ## Environment
 
+The reference environment for lessons 00–17 remains the pinned TensorRT development container.
+Do not run `pip install openvino` globally there: pip may replace NumPy, packaging, or other packages
+used by TensorRT, ONNX Runtime, and Ultralytics lessons.
+
+Lesson 18 uses an isolated layout:
+
+```text
+18_openvino_yolov8/
+  requirements.txt  # exact versions committed to Git
+  .deps/             # locally installed packages, ignored by Git
+  outputs/           # generated measurements, ignored by Git
+```
+
+Install or rebuild the isolated dependency directory:
+
 ```bash
 ./18_openvino_yolov8/setup_local_deps.sh
 ```
 
 This uses pip's `--target` mode because the pinned TensorRT container may not include `ensurepip`.
-Dependencies stay under the ignored `.deps/` directory and do not replace global packages.
+The setup script removes the old `.deps/` first and installs the exact committed versions. It does
+not replace global packages.
+
+Verify both the loaded version and path before benchmarking:
+
+```bash
+PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps python3 -c \
+  'import openvino; print(openvino.__version__); print(openvino.__file__)'
+```
+
+The version must start with `2025.4.1`, and the path must be under
+`18_openvino_yolov8/.deps/`. If a future base image includes `python3-venv`, a conventional `.venv`
+is also acceptable, but record its locked versions and do not mix `.venv` and `.deps` commands in
+one benchmark report.
+
+Clean the lesson environment with:
+
+```bash
+rm -rf 18_openvino_yolov8/.deps 18_openvino_yolov8/outputs
+```
 
 ## Run and Compare
 
 ```bash
-PYTHONPATH=18_openvino_yolov8/.deps python3 18_openvino_yolov8/run_openvino.py
-PYTHONPATH=18_openvino_yolov8/.deps python3 18_openvino_yolov8/generate_comparison.py
+PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
+  python3 18_openvino_yolov8/run_openvino.py
+PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
+  python3 18_openvino_yolov8/generate_comparison.py
 ```
 
 `run_openvino.py` performs ten warmups and at least 100 measured requests, reports P50/P90/P99,
-tests `AsyncInferQueue` with four jobs, and checks the raw output against lesson 05's ONNX Runtime
-reference. `generate_comparison.py` reads the machine-readable TensorRT evidence from checkpoint 12a
-instead of copying numbers by hand.
+compiles a `LATENCY` model for synchronous requests, compiles a separate `THROUGHPUT` model for
+`AsyncInferQueue`, and checks raw output against lesson 05's ONNX Runtime reference.
+`generate_comparison.py` reads the machine-readable TensorRT evidence from checkpoint 12a instead
+of copying numbers by hand.
 
 OpenVINO's `benchmark_app` is installed with the package and provides a runtime-owned reference:
 
 ```bash
-PYTHONPATH=18_openvino_yolov8/.deps python3 -m openvino.tools.benchmark.main \
+PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
+python3 -m openvino.tools.benchmark.main \
   -m 05_torch_to_onnx/outputs/yolov8n.onnx \
   -d CPU \
   -api async \
