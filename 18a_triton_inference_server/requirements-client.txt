@@ -1,0 +1,2 @@
+tritonclient[http]==2.39.0
+numpy==2.2.6

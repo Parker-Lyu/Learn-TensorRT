@@ -1,0 +1,4 @@
+.deps/
+outputs/
+model_repository/yolov8/1/model.plan
+__pycache__/
