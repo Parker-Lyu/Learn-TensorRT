@@ -165,3 +165,79 @@ Acceptance criteria:
 - Nsight captures contain named NVTX iteration and pipeline ranges.
 - The report compares the application with a model-only reference when timing JSON is available.
 - Any bottleneck claim is presented as a heuristic and checked against timeline evidence.
+
+## Appendix: Commands Executed By The Default Run
+
+The following commands are the important subprocesses used by the default run. Run them from
+`11_nsight_performance_diagnosis/` so the relative paths resolve as shown. The script locates
+`nsys` through `PATH`; in the pinned development container it resolved to
+`/usr/local/cuda/bin/nsys`.
+
+Start the complete workflow:
+
+```bash
+python3 profile_yolov8_cpp.py
+```
+
+Configure and build the lesson 10 application:
+
+```bash
+cmake -S . -B build
+cmake --build build -j2
+```
+
+These two commands are executed with `../10_yolov8_trt_cpp` as their working directory.
+
+Collect the steady-state baseline with 5 warmup iterations and 50 measured iterations:
+
+```bash
+../10_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image ../assets/dog.webp \
+  --output-dir outputs/baseline_run \
+  --confidence 0.25 \
+  --iou 0.45 \
+  --max-detections 100 \
+  --warmup-iterations 5 \
+  --iterations 50
+```
+
+Capture a shorter Nsight Systems trace with 2 warmup iterations and 5 measured iterations:
+
+```bash
+nsys profile \
+  --trace=cuda,nvtx,osrt \
+  --cuda-memory-usage=true \
+  --force-overwrite=true \
+  --output outputs/nsys/yolov8_trt_cpp \
+  ../10_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image ../assets/dog.webp \
+  --output-dir outputs/nsys/target_run \
+  --confidence 0.25 \
+  --iou 0.45 \
+  --max-detections 100 \
+  --warmup-iterations 2 \
+  --iterations 5
+```
+
+Export the trace to SQLite and generate the text summaries used for diagnosis:
+
+```bash
+nsys export \
+  --type sqlite \
+  --force-overwrite=true \
+  --output outputs/nsys/yolov8_trt_cpp.sqlite \
+  outputs/nsys/yolov8_trt_cpp.nsys-rep
+
+nsys stats \
+  --force-export=true \
+  --report nvtx_pushpop_sum \
+  --report cuda_api_sum \
+  --report cuda_gpu_sum \
+  outputs/nsys/yolov8_trt_cpp.nsys-rep
+```
+
+The Python driver captures the baseline and profiler metadata in
+`outputs/diagnosis_summary.json`, and redirects the `nsys stats` output to
+`outputs/nsys/nsys_stats.txt` itself.
