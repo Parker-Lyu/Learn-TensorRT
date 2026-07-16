@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,8 +34,8 @@ def validate_evidence(
     manifest: dict,
     manifest_sha256: str,
 ) -> None:
-    if performance.get("schema_version") != 2:
-        raise ValueError("performance evidence must use schema version 2; recollect lesson 12a")
+    if performance.get("schema_version") != 3:
+        raise ValueError("performance evidence must use schema version 3; recollect lesson 12a")
     if evaluation.get("schema_version") != 1:
         raise ValueError("unsupported lesson 12 evaluation schema")
     if set(performance.get("backends", {})) != set(ENGINE_KEYS):
@@ -68,6 +69,14 @@ def validate_evidence(
         backend = performance["backends"][performance_key]
         if backend.get("sample_count", 0) < 100:
             raise ValueError(f"{performance_key} performance has fewer than 100 samples")
+        throughput = backend.get("throughput_qps")
+        if (
+            not isinstance(throughput, (int, float))
+            or isinstance(throughput, bool)
+            or not math.isfinite(throughput)
+            or throughput <= 0.0
+        ):
+            raise ValueError(f"{performance_key} performance has invalid trtexec throughput")
         performance_hash = backend.get("engine_sha256")
         evaluation_hash = evaluation["artifacts"][evaluation_key].get("sha256")
         if not performance_hash or performance_hash != evaluation_hash:
@@ -150,7 +159,7 @@ def render(
         performance_rows.append(
             f"| {key.upper()} | {backend['sample_count']} | {f(latency['mean'])} | "
             f"{f(latency['p50'])} | {f(latency['p90'])} | {f(latency['p99'])} | "
-            f"{backend['throughput_images_per_second']:.1f} |"
+            f"{backend['throughput_qps']:.1f} |"
         )
 
     release = evaluation["release_gate"]
@@ -190,12 +199,13 @@ Generated from identity-linked JSON artifacts. Overall checkpoint status: **{ove
 
 ## Performance
 
-| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s |
+| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Throughput (qps) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 {chr(10).join(performance_rows)}
 
-Rows use synchronized `trtexec --exportTimes` measurements. Performance and accuracy evidence are
-accepted only when their engine SHA-256 values match.
+Latency rows use synchronized `trtexec --exportTimes` measurements. Throughput is the wall-time qps
+reported by `trtexec`, which accounts for its transfer/compute overlap. Performance and accuracy
+evidence are accepted only when their engine SHA-256 values match.
 
 ## Detection Quality and Release Gate
 

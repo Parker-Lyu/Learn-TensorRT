@@ -25,7 +25,7 @@ def fixtures():
         ],
     }
     performance = {
-        "schema_version": 2,
+        "schema_version": 3,
         "methodology": {
             "warmup_ms": 500,
             "iterations": 120,
@@ -39,7 +39,7 @@ def fixtures():
             "sample_count": 120,
             "engine_sha256": str(index) * 64,
             "latency_ms": {"mean": 5.0 - index, "p50": 1.0, "p90": 2.0, "p99": 3.0},
-            "throughput_images_per_second": 250.0,
+            "throughput_qps": 250.0,
         }
     metrics = {"map50_95": 0.4, "map50": 0.6, "precision": 0.7, "recall": 0.8}
     evaluation = {
@@ -112,6 +112,12 @@ class GenerateReportTests(unittest.TestCase):
         evidence = list(fixtures())
         evidence[0]["backends"]["fp16"]["sample_count"] = 99
         with self.assertRaisesRegex(ValueError, "fewer than 100"):
+            MODULE.render(*evidence)
+
+    def test_invalid_throughput_is_rejected(self):
+        evidence = list(fixtures())
+        evidence[0]["backends"]["fp16"]["throughput_qps"] = 0.0
+        with self.assertRaisesRegex(ValueError, "invalid trtexec throughput"):
             MODULE.render(*evidence)
 
     def test_profiler_engine_mismatch_is_rejected(self):

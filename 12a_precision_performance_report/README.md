@@ -1,9 +1,14 @@
 # 12a - Precision and Performance Report
 
 This reporting checkpoint combines lessons 06, 11, and 12 without manually copying benchmark
-numbers. It collects at least 100 synchronized timing samples for FP32, FP16, and INT8, then renders
-performance, raw drift, detection quality, release thresholds, and profiler diagnosis into
+numbers. It collects at least 100 synchronized timing samples for FP32, FP16, and INT8, records the
+wall-time throughput reported by `trtexec`, then renders performance, raw drift, detection quality,
+release thresholds, and profiler diagnosis into
 `reports/12a_precision_performance.md`.
+
+Latency percentiles come from `trtexec --exportTimes`. Throughput comes from the `trtexec` summary
+rather than `1000 / mean latency`, because transfers and compute from different inferences may
+overlap.
 
 Run inside the pinned TensorRT container from the repository root:
 

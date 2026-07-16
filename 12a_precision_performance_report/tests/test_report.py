@@ -17,10 +17,22 @@ class PerformanceSummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "100"):
             MODULE.summarize([{"latencyMs": 1, "computeMs": 1}] * 99)
 
-    def test_summary_computes_throughput(self):
+    def test_summary_computes_latency_without_inventing_throughput(self):
         summary = MODULE.summarize([{"latencyMs": 4, "computeMs": 3}] * 100)
-        self.assertEqual(summary["throughput_images_per_second"], 250.0)
         self.assertEqual(summary["latency_ms"]["p99"], 4.0)
+        self.assertNotIn("throughput_qps", summary)
+
+    def test_throughput_uses_trtexec_wall_time_result(self):
+        output = "[I] Throughput: 800.602 qps\n[I] Latency: mean = 2.37974 ms"
+        self.assertEqual(MODULE.parse_trtexec_throughput(output), 800.602)
+
+    def test_missing_throughput_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "throughput"):
+            MODULE.parse_trtexec_throughput("[I] Latency: mean = 2.0 ms")
+
+    def test_non_positive_throughput_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "invalid throughput"):
+            MODULE.parse_trtexec_throughput("[I] Throughput: 0 qps")
 
     def test_trtexec_version_parser_uses_banner(self):
         original = MODULE.command_output

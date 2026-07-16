@@ -19,6 +19,7 @@ DEFAULT_ENGINES = {
     "fp16": ROOT / "06_trtexec_engine/outputs/yolov8n_static_fp16.engine",
     "int8": ROOT / "12_yolov8_int8_calibration/outputs/yolov8n_static_int8.engine",
 }
+THROUGHPUT_PATTERN = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps")
 
 
 def percentile(values: list[float], fraction: float) -> float:
@@ -31,11 +32,10 @@ def summarize(samples: list[dict]) -> dict:
         raise ValueError("at least 100 measured samples are required for P99")
     latency = [float(sample["latencyMs"]) for sample in samples]
     compute = [float(sample["computeMs"]) for sample in samples]
-    mean_latency = statistics.fmean(latency)
     return {
         "sample_count": len(samples),
         "latency_ms": {
-            "mean": mean_latency,
+            "mean": statistics.fmean(latency),
             "p50": percentile(latency, 0.50),
             "p90": percentile(latency, 0.90),
             "p99": percentile(latency, 0.99),
@@ -46,8 +46,22 @@ def summarize(samples: list[dict]) -> dict:
             "p90": percentile(compute, 0.90),
             "p99": percentile(compute, 0.99),
         },
-        "throughput_images_per_second": 1000.0 / mean_latency,
     }
+
+
+def parse_trtexec_throughput(output: str) -> float:
+    """Read wall-time throughput reported by trtexec.
+
+    Per-inference latency cannot be inverted to obtain throughput because trtexec may overlap
+    transfers and compute from different inferences.
+    """
+    matches = THROUGHPUT_PATTERN.findall(output)
+    if not matches:
+        raise RuntimeError("could not parse throughput from trtexec output")
+    throughput = float(matches[-1])
+    if not math.isfinite(throughput) or throughput <= 0.0:
+        raise RuntimeError(f"trtexec reported invalid throughput: {throughput}")
+    return throughput
 
 
 def command_output(command: list[str]) -> str:
@@ -79,7 +93,7 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     evidence = {
-        "schema_version": 2,
+        "schema_version": 3,
         "methodology": {
             "tool": args.trtexec,
             "warmup_ms": args.warmup_ms,
@@ -102,7 +116,8 @@ def main() -> int:
                    "--duration=0", f"--iterations={args.iterations}",
                    f"--exportTimes={times_path}"]
         result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
-        log_path.write_text(result.stdout + result.stderr, encoding="utf-8")
+        trtexec_output = result.stdout + result.stderr
+        log_path.write_text(trtexec_output, encoding="utf-8")
         if result.returncode:
             raise RuntimeError(f"{name} trtexec failed; inspect {log_path}")
         samples = json.loads(times_path.read_text(encoding="utf-8"))
@@ -110,6 +125,7 @@ def main() -> int:
             "engine": str(engine.relative_to(ROOT)),
             "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
             "command": command,
+            "throughput_qps": parse_trtexec_throughput(trtexec_output),
             **summarize(samples),
         }
     args.output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")

@@ -20,14 +20,15 @@ Generated from identity-linked JSON artifacts. Overall checkpoint status: **FAIL
 
 ## Performance
 
-| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s |
+| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Throughput (qps) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| FP32 | 120 | 4.399 | 4.398 | 4.426 | 4.434 | 227.3 |
-| FP16 | 120 | 2.711 | 2.712 | 2.725 | 2.734 | 368.9 |
-| INT8 | 120 | 2.380 | 2.378 | 2.389 | 2.430 | 420.2 |
+| FP32 | 120 | 4.409 | 4.408 | 4.432 | 4.442 | 307.2 |
+| FP16 | 120 | 2.713 | 2.714 | 2.728 | 2.738 | 652.1 |
+| INT8 | 120 | 2.382 | 2.383 | 2.393 | 2.399 | 812.1 |
 
-Rows use synchronized `trtexec --exportTimes` measurements. Performance and accuracy evidence are
-accepted only when their engine SHA-256 values match.
+Latency rows use synchronized `trtexec --exportTimes` measurements. Throughput is the wall-time qps
+reported by `trtexec`, which accounts for its transfer/compute overlap. Performance and accuracy
+evidence are accepted only when their engine SHA-256 values match.
 
 ## Detection Quality and Release Gate
 
