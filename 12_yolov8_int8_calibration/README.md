@@ -142,14 +142,76 @@ wrapper overhead, but excludes image loading, preprocessing, and decoding. It is
 than the authoritative performance comparison; 12a uses matched `trtexec` sampling for FP32, FP16,
 and INT8.
 
-If INT8 violates the predeclared gate:
+## Accuracy Recovery Workflow
 
-- verify calibration and inference preprocessing are byte-for-byte equivalent;
-- improve calibration coverage and inspect the listed high-drift images;
-- permit mixed INT8/FP16 tactics with `--enable-fp16`;
-- constrain sensitive layers to FP16/FP32 in an advanced build workflow;
-- use QAT if representative PTQ calibration still fails;
-- retain FP16 when INT8 speedup does not justify the accuracy loss.
+The checked-in report currently accepts FP16 and rejects INT8 under the predeclared accuracy gate.
+Treat that result as an engineering decision, not as a reason to loosen thresholds after seeing the
+numbers. Keep FP16 as the release candidate until a new identity-linked INT8 experiment passes the
+same complete validation split.
+
+Work through recovery experiments in this order so each result has one explainable cause.
+
+### 1. Prove Preprocessing Parity
+
+Calibration and evaluation must produce byte-identical tensors from the same image. Add a focused
+test that compares both paths after letterbox resize, padding with 114, BGR-to-RGB conversion,
+division by 255, HWC-to-CHW conversion, FP32 casting, and contiguous layout. Require exact equality
+when the implementations are intended to be identical; do not compensate for a preprocessing bug
+by collecting more calibration images.
+
+### 2. Version A Better Calibration Split
+
+The canonical 1,000-image split covers all 80 classes, but class coverage alone does not guarantee
+representative activation ranges. A follow-up split should cover small/medium/large objects,
+different object counts and aspect ratios, bright/dark/low-contrast images, clutter, occlusion, and
+sparse scenes. Evaluate a fixed 2,000-5,000-image candidate when the extra distribution coverage is
+justified.
+
+Create a new dataset ID and manifest rather than overwriting the current canonical manifest. Run
+FP32, FP16, and every INT8 candidate against the unchanged val2017 split and predeclared thresholds.
+
+### 3. Compare Calibration Algorithms
+
+The current implementation uses `IInt8EntropyCalibrator2`. A controlled follow-up may add a MinMax
+calibrator and compare it with entropy calibration using the same ONNX model, calibration split,
+preprocessing, builder settings, and validation gate. This lesson does not currently implement the
+MinMax variant; add it as an explicit engine configuration with a separate cache and output name.
+
+### 4. Measure Layer Sensitivity And Constrain Precision
+
+`--enable-fp16` permits FP16 tactics but does not force sensitive layers to remain FP16. Build
+separate candidates that progressively constrain likely sensitive regions:
+
+1. DFL and Softmax operations;
+2. final box-regression and class-score convolutions;
+3. the complete detection head;
+4. the neck and detection head, leaving only the backbone in INT8.
+
+Use TensorRT precision constraints and record the exact constrained layer names. Change one region
+per candidate, preserve engine/cache metadata, and rerun the full gate. The useful result is the
+smallest FP16/FP32 fallback set that restores accuracy while retaining a measured speed benefit.
+
+### 5. Inspect Drift Examples
+
+Use `changed_or_high_drift_examples` from `precision_evaluation.json` to look for concentration in
+small targets, crowded scenes, low-confidence detections, particular classes, or box-regression
+shifts. Raw tensor drift helps locate sensitivity but is not itself a release threshold. Confirm
+every proposed fallback with decoded detection metrics.
+
+### 6. Escalate From PTQ To QAT
+
+Use quantization-aware training only after representative PTQ calibration and mixed-precision
+fallback experiments still fail. QAT requires a reproducible training environment, training data,
+quantization-aware fine-tuning, an ONNX model with explicit Q/DQ nodes, a new TensorRT build path,
+and the same complete validation gate. It is a separate model artifact, not another calibration
+cache for the existing ONNX file.
+
+### Decision Rule
+
+Do not adopt INT8 only because it is faster. Compare its accepted throughput gain against FP16, not
+only against FP32. If the final INT8 or mixed-precision candidate still exceeds any declared metric
+drop, or its speedup does not justify the added complexity, retain FP16 and record the failed
+candidate as evidence.
 
 ## Acceptance Criteria
 
