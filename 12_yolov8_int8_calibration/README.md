@@ -159,6 +159,10 @@ division by 255, HWC-to-CHW conversion, FP32 casting, and contiguous layout. Req
 when the implementations are intended to be identical; do not compensate for a preprocessing bug
 by collecting more calibration images.
 
+Ordered recovery experiments and reproducible commands are maintained in
+[`precision_recovery/README.md`](precision_recovery/README.md). Step 01 checks synthetic edge cases
+and every image in the hashed calibration split.
+
 ### 2. Version A Better Calibration Split
 
 The canonical 1,000-image split covers all 80 classes, but class coverage alone does not guarantee
