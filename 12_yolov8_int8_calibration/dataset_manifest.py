@@ -9,6 +9,9 @@ import json
 from pathlib import Path
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+DEFAULT_COCO_MANIFEST = (
+    Path(__file__).resolve().parents[1] / "assets/coco/data/dataset_manifest.json"
+)
 
 
 def sha256(path: Path) -> str:

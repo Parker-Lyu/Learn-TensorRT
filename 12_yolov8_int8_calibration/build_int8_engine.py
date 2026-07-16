@@ -13,7 +13,7 @@ import numpy as np
 import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
-from dataset_manifest import load_manifest, resolve_path
+from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
 
 
 def check_cuda(result: tuple, operation: str):
@@ -210,7 +210,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--onnx", type=Path, default=Path("../05_torch_to_onnx/outputs/yolov8n.onnx")
     )
-    parser.add_argument("--manifest", type=Path, default=Path("data/dataset_manifest.json"))
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_COCO_MANIFEST)
     parser.add_argument(
         "--calibration-dir", type=Path,
         help="Override the manifest for an exploratory build."
@@ -237,7 +237,10 @@ def main() -> int:
     if not args.onnx.is_file():
         raise FileNotFoundError(f"ONNX model not found: {args.onnx}")
     if args.calibration_dir is None and not args.manifest.is_file():
-        raise FileNotFoundError(f"dataset manifest not found: {args.manifest}")
+        raise FileNotFoundError(
+            f"COCO dataset manifest not found: {args.manifest}. Run "
+            "`python3 assets/coco/prepare_coco.py` from the repository root."
+        )
     build_engine(args)
     return 0
 

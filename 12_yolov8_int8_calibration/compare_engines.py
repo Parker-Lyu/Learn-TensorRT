@@ -19,10 +19,11 @@ import cv2
 import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
-from dataset_manifest import load_manifest, resolve_path
+from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
 from evaluation import detection_metrics, load_ground_truth, tensor_drift
 
-LESSON09 = Path(__file__).resolve().parents[1] / "09_yolov8_trt_python"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LESSON09 = REPO_ROOT / "09_yolov8_trt_python"
 sys.path.insert(0, str(LESSON09))
 import infer_yolov8_trt as yolo_ref  # noqa: E402
 
@@ -309,7 +310,7 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=Path("data/dataset_manifest.json"))
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_COCO_MANIFEST)
     parser.add_argument("--weights", type=Path, default=Path("../assets/yolov8n.pt"))
     parser.add_argument(
         "--fp32-engine", type=Path,
@@ -341,6 +342,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not args.manifest.is_file():
+        raise FileNotFoundError(
+            f"COCO dataset manifest not found: {args.manifest}. Run "
+            "`python3 assets/coco/prepare_coco.py` from the repository root."
+        )
     report = evaluate(args)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     json_path = args.output_dir / "precision_evaluation.json"

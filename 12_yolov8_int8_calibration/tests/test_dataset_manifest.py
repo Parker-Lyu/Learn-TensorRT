@@ -2,10 +2,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dataset_manifest import build_manifest, load_manifest
+from dataset_manifest import DEFAULT_COCO_MANIFEST, build_manifest, load_manifest
 
 
 class DatasetManifestTests(unittest.TestCase):
+    def test_default_manifest_is_shared_coco_data(self) -> None:
+        expected = Path(__file__).resolve().parents[2] / "assets/coco/data/dataset_manifest.json"
+        self.assertEqual(DEFAULT_COCO_MANIFEST, expected)
+
     def test_overlap_by_content_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

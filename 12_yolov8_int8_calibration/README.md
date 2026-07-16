@@ -3,15 +3,14 @@
 Goal: build an entropy-calibrated INT8 TensorRT engine, then decide whether it is releasable using
 latency, tensor drift, and task-level accuracy on one fixed labeled validation split.
 
-The runnable smoke path creates pseudo-labels from `assets/yolov8n.pt`. It proves that calibration,
-multi-backend evaluation, reporting, and failure exit codes work; because the same model creates the
-labels, its metrics are not valid accuracy evidence. A real release decision requires a versioned
-public or deployment-domain dataset with human-reviewed labels.
+The course path uses a reproducibly selected COCO train2017 calibration subset and the complete,
+human-labeled COCO val2017 split. The accuracy gate is based only on annotations independent of the
+evaluated model.
 
 ## Artifacts
 
-- `prepare_calibration_data.py`: generates disjoint smoke splits, pseudo-labels, and a hashed
-  manifest.
+- `assets/coco/prepare_coco.py`: reads the committed canonical manifest, downloads its exact COCO
+  images, converts val2017 boxes to YOLO format, and verifies every declared hash.
 - `dataset_manifest.py`: creates and validates a manifest for real calibration images and YOLO-format
   validation labels; byte-identical split overlap is rejected.
 - `build_int8_engine.py`: implements `IInt8EntropyCalibrator2`, builds INT8 with optional FP16
@@ -22,8 +21,8 @@ public or deployment-domain dataset with human-reviewed labels.
   precision, recall, and tensor-drift calculations.
 - `tests/test_evaluation.py`: focused metric and invalid-label tests.
 
-Generated datasets, engines, calibration tables, and reports stay in ignored `data/` and `outputs/`
-directories.
+Downloaded datasets stay in ignored `assets/coco/data/`; engines, calibration tables, and raw
+evaluation results stay in this lesson's ignored `outputs/` directory.
 
 ## Prerequisites
 
@@ -34,18 +33,31 @@ python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32 static_fp16
 ```
 
-## Smoke Workflow
+## Prepare The Fixed COCO Dataset
 
-Run from this lesson directory:
+Run once from the repository root. Existing complete downloads are reused:
 
 ```bash
-python3 prepare_calibration_data.py
+python3 assets/coco/prepare_coco.py
+```
+
+The default dataset contains 1,000 deterministic train2017 calibration images with all 80 COCO
+categories represented and all 5,000 val2017 images with converted human annotations. Its hashed
+manifest is `assets/coco/data/dataset_manifest.json`; see `assets/coco/README.md` for layout,
+integrity checks, disk use, and command options.
+
+## Build And Evaluate
+
+Run from this lesson directory after preparing the model artifacts and COCO data:
+
+```bash
 python3 build_int8_engine.py --enable-fp16
 python3 compare_engines.py
 ```
 
-The evaluator writes `outputs/precision_evaluation.json` as the machine-readable source of truth
-and `outputs/precision_evaluation.md` as a concise table. A regression gate failure still writes both
+Both commands default to the shared COCO manifest. The evaluator writes
+`outputs/precision_evaluation.json` as the machine-readable source of truth and
+`outputs/precision_evaluation.md` as a concise table. A regression gate failure still writes both
 reports and exits with status `2`.
 
 Run the CPU-only focused tests without a GPU engine:
@@ -54,7 +66,7 @@ Run the CPU-only focused tests without a GPU engine:
 PYTHONPATH=. python3 -m unittest discover -s tests -v
 ```
 
-## Real Fixed Dataset
+## Dataset Design
 
 Keep calibration and validation separate. Calibration images should represent target cameras,
 lighting, compression, resolutions, normal scenes, and hard cases. Validation must be a fixed,
@@ -68,7 +80,7 @@ Recommended starting sizes:
   scales, lighting conditions, or rare but important cases.
 - Validation: use a statistically meaningful fixed labeled split. For a general COCO YOLOv8
   comparison, the complete COCO val2017 split contains 5,000 images. For a deployment-domain
-  dataset, include enough labeled examples for every important class and hard case; a few smoke
+  dataset, include enough labeled examples for every important class and hard case; a few sample
   images are not sufficient to support a release decision.
 
 These counts are practical starting points, not universal thresholds. Distribution coverage matters
@@ -77,7 +89,8 @@ cameras, and operating conditions, and avoid placing adjacent or derived frames 
 scene into both calibration and validation. Keep the validation split unchanged between FP32, FP16,
 and INT8 comparisons so metric deltas remain comparable.
 
-Create the saved manifest (nested image/label paths are supported):
+For a custom deployment-domain dataset, create its saved manifest separately (nested image/label
+paths are supported):
 
 ```bash
 python3 dataset_manifest.py \
@@ -88,17 +101,17 @@ python3 dataset_manifest.py \
   --output data/dataset_manifest.json
 ```
 
-Build and evaluate that exact dataset:
+Override the default paths or predeclared gates when an experiment requires it:
 
 ```bash
 python3 build_int8_engine.py \
-  --manifest data/dataset_manifest.json \
+  --manifest ../assets/coco/data/dataset_manifest.json \
   --output outputs/yolov8n_static_int8.engine \
   --cache outputs/yolov8n_int8_calibration.cache \
   --enable-fp16
 
 python3 compare_engines.py \
-  --manifest data/dataset_manifest.json \
+  --manifest ../assets/coco/data/dataset_manifest.json \
   --max-map50-95-drop 0.02 \
   --max-map50-drop 0.02 \
   --max-precision-drop 0.03 \

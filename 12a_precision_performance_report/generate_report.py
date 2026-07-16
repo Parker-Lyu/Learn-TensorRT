@@ -51,18 +51,33 @@ def render(performance: dict, evaluation: dict, diagnosis: dict, manifest: dict)
 
     release = evaluation["release_gate"]
     dataset = evaluation["dataset"]
-    smoke_warning = dataset["validation_images"] < 100
-    overall = "FAIL" if not release["passed"] or smoke_warning else "PASS"
+    dataset_id = dataset["dataset_id"].lower()
+    insufficient_evidence = dataset["validation_images"] < 100 or "pseudo" in dataset_id
+    overall = "FAIL" if not release["passed"] or insufficient_evidence else "PASS"
     dominant = diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
     thresholds = evaluation["regression_thresholds"]
+    if insufficient_evidence:
+        evidence_note = f"""> Evidence limitation: the current validation set contains
+> only {dataset['validation_images']} images or uses pseudo-labels. It is not application-ready
+> accuracy evidence. Replace it with a fixed, representative, human-labeled validation split
+> before portfolio or release use."""
+        dataset_summary = (
+            "The current validation evidence is insufficient; a portfolio claim requires a "
+            "fixed, representative, human-labeled dataset."
+        )
+    else:
+        evidence_note = f"""> Validation evidence: `{dataset['dataset_id']}` contains
+> {dataset['validation_images']} fixed, labeled images. Keep this split and evaluator settings
+> unchanged when comparing future engines."""
+        dataset_summary = (
+            f"Detection quality is measured on the fixed labeled dataset "
+            f"`{dataset['dataset_id']}` with {dataset['validation_images']} images."
+        )
     return f"""# 12a - Precision and Performance Report
 
 Generated from saved JSON artifacts. Overall checkpoint status: **{overall}**.
 
-> Evidence limitation: the current validation set contains {dataset['validation_images']} generated
-> smoke images with pseudo-labels. It validates the evaluator and release gate, but it is not an
-> application-ready accuracy claim. Replace it with a fixed labeled validation split before using
-> this report in a portfolio or release decision.
+{evidence_note}
 
 ## Environment and Methodology
 
@@ -93,10 +108,9 @@ Predeclared maximum drops: mAP50-95={thresholds['max_map50_95_drop']},
 mAP50={thresholds['max_map50_drop']}, precision={thresholds['max_precision_drop']},
 recall={thresholds['max_recall_drop']}. Failed backends: {', '.join(release['failed_backends']) or 'none'}.
 
-FP16 raw tensor drift is small enough that decoded smoke detections remain stable. INT8 has much
-larger raw drift and changed detection counts; its detection-quality regression fails the declared
-gate. The correct action is sensitive-layer fallback, a more representative calibration set, or
-QAT—not accepting INT8 only because it is faster.
+The predeclared gate above, rather than latency alone, controls the precision decision. If INT8
+fails, inspect high-drift examples and calibration coverage, then use sensitive-layer fallback,
+improve representative calibration data, try QAT, or retain FP16.
 
 ## Timeline Diagnosis and Optimization Decisions
 
@@ -109,7 +123,7 @@ overload and cannot reduce model compute time.
 
 ```bash
 python3 12a_precision_performance_report/collect_performance.py
-python3 12a_precision_performance_report/generate_report.py
+python3 12a_precision_performance_report/generate_report.py --manifest {dataset['manifest']}
 ```
 
 The generator validates split hashes and refuses missing precision backends. Accuracy tables are
@@ -119,17 +133,16 @@ rendered from `precision_evaluation.json`, not transcribed manually.
 
 This checkpoint compares FP32, FP16, and INT8 YOLOv8n engines under the same TensorRT timing
 methodology. FP16 improves performance while passing the current detection-quality thresholds.
-INT8 is faster but fails the predeclared accuracy gate and is not release-ready. Nsight evidence
-shows CPU preprocessing and postprocessing dominate the original end-to-end request, motivating
-the later CUDA preprocessing lesson. The present two-image pseudo-labeled validation split is only
-a pipeline smoke test; a portfolio claim requires a fixed, representative labeled dataset.
+The reported accuracy gate determines whether INT8 is release-ready. Nsight evidence shows CPU
+preprocessing and postprocessing dominate the original end-to-end request, motivating the later
+CUDA preprocessing lesson. {dataset_summary}
 
 ## Three-to-Five-Minute Walkthrough
 
 Explain the controlled engine comparison, warmup and percentile method, then separate raw tensor
 drift from decoded detection metrics. Point out that FP16 passes while INT8 fails the gate. Finish
 with the profiler-supported CPU bottleneck, the GPU preprocessing experiment, and the validation
-dataset limitation. Never present the smoke-set metrics as production accuracy.
+dataset provenance. Never present insufficient validation evidence as production accuracy.
 """
 
 
@@ -137,14 +150,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--performance", type=Path,
                         default=ROOT / "12a_precision_performance_report/outputs/performance.json")
+    parser.add_argument("--evaluation", type=Path,
+                        default=ROOT / "12_yolov8_int8_calibration/outputs/precision_evaluation.json")
+    parser.add_argument("--diagnosis", type=Path,
+                        default=ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json")
+    parser.add_argument("--manifest", type=Path,
+                        default=ROOT / "assets/coco/data/dataset_manifest.json")
     parser.add_argument("--output", type=Path,
                         default=ROOT / "reports/12a_precision_performance.md")
     args = parser.parse_args()
     text = render(
         load(args.performance),
-        load(ROOT / "12_yolov8_int8_calibration/outputs/precision_evaluation.json"),
-        load(ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json"),
-        load(ROOT / "12_yolov8_int8_calibration/data/dataset_manifest.json"),
+        load(args.evaluation),
+        load(args.diagnosis),
+        load(args.manifest),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")

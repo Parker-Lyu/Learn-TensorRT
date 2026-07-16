@@ -14,10 +14,10 @@ python3 12a_precision_performance_report/generate_report.py
 ```
 
 The report intentionally fails the overall checkpoint when the INT8 accuracy gate fails or the
-validation dataset is only the generated smoke fixture. A generated report is not automatically a
-passing report.
+validation evidence is not a sufficiently sized fixed labeled dataset. A generated report is not
+automatically a passing report.
 
-Before portfolio use, replace lesson 12's two-image pseudo-labeled fixture with a fixed,
-representative labeled validation split, rerun every backend with identical evaluator settings,
-and regenerate the report. Keep raw timing JSON and profiler captures in ignored output directories;
-commit the concise report and intentional manifests.
+The generator defaults to `assets/coco/data/dataset_manifest.json`. Rerun every backend with
+identical evaluator settings before regenerating the report. Keep raw timing JSON and profiler
+captures in ignored output directories; commit only the concise report and intentional
+reproducibility metadata.
