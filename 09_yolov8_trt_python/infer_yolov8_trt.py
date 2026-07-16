@@ -291,7 +291,7 @@ def execute(context: trt.IExecutionContext,
         if not ok:
             raise RuntimeError("TensorRT execute_async failed")
 
-        outputs: dict[str, np.ndarray] = {}
+        output_bindings: list[TensorBinding] = []
         for binding in bindings:
             if binding.mode != "output":
                 continue
@@ -305,9 +305,12 @@ def execute(context: trt.IExecutionContext,
                 ),
                 "cudaMemcpyAsync(device-to-host)",
             )
-            outputs[binding.name] = binding.host.reshape(binding.shape).copy()
+            output_bindings.append(binding)
         stream.synchronize()
-        return outputs
+        return {
+            binding.name: binding.host.reshape(binding.shape).copy()
+            for binding in output_bindings
+        }
 
 
 def xywh_to_xyxy(boxes_xywh: np.ndarray) -> np.ndarray:
@@ -379,13 +382,26 @@ def decode_yolov8(output: np.ndarray,
     scores = scores[mask]
     class_ids = class_ids[mask]
 
-    keep: list[int] = []
+    boxes_xywh_for_nms = boxes_xyxy.copy()
+    boxes_xywh_for_nms[:, 2:] -= boxes_xywh_for_nms[:, :2]
+    selected: list[int] = []
     for class_id in np.unique(class_ids):
         class_indices = np.where(class_ids == class_id)[0]
-        class_keep = nms(boxes_xyxy[class_indices], scores[class_indices], iou_threshold)
-        keep.extend(int(class_indices[index]) for index in class_keep)
-
-    keep = sorted(keep, key=lambda index: float(scores[index]), reverse=True)[:max_detections]
+        class_selected = cv2.dnn.NMSBoxes(
+            boxes_xywh_for_nms[class_indices].tolist(),
+            scores[class_indices].tolist(),
+            float(confidence_threshold),
+            float(iou_threshold),
+        )
+        selected.extend(
+            int(class_indices[int(index)])
+            for index in np.asarray(class_selected).reshape(-1)
+        )
+    keep = sorted(
+        selected,
+        key=lambda index: float(scores[index]),
+        reverse=True,
+    )[:max_detections]
     detections: list[Detection] = []
     for index in keep:
         class_id = int(class_ids[index])

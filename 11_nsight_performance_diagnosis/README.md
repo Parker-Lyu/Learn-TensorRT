@@ -43,6 +43,8 @@ of truth for CPU gaps, CUDA API blocking, memory copies, and kernel placement.
   and diagnosis behavior.
 
 Generated files go to `outputs/`, which is ignored by git.
+`diagnosis_summary.json` records the profiled engine and image SHA-256 values so later checkpoints
+can reject diagnosis evidence collected from a different engine.
 
 ## Prerequisites
 

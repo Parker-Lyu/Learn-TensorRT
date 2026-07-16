@@ -110,4 +110,5 @@ Acceptance criteria:
 - The script runs inference on `assets/img2.jpeg` with a TensorRT engine.
 - It saves an annotated detection image and JSON report.
 - YOLOv8 decode, NMS, and coordinate scaling are implemented in local Python code.
+- Device-to-host copies are synchronized before host output buffers are read.
 - Optional Ultralytics reference output can be recorded for debugging.

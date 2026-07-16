@@ -94,29 +94,62 @@ def load_manifest(path: Path, verify_hashes: bool = True) -> dict:
     document = json.loads(path.read_text(encoding="utf-8"))
     if document.get("schema_version") != 1:
         raise ValueError(f"unsupported manifest schema in {path}")
+    if not isinstance(document.get("dataset_id"), str) or not document["dataset_id"].strip():
+        raise ValueError(f"manifest has no dataset_id: {path}")
+    if document.get("annotation_format") != "yolo_xywh_normalized":
+        raise ValueError(f"unsupported annotation format in {path}")
     records = document.get("records")
     if not isinstance(records, list) or not records:
         raise ValueError(f"manifest has no records: {path}")
 
     calibration_hashes: set[str] = set()
     validation_hashes: set[str] = set()
+    image_paths_seen: set[str] = set()
+    label_paths_seen: set[str] = set()
+    split_counts = {"calibration": 0, "validation": 0}
     for record in records:
         split = record.get("split")
         if split not in {"calibration", "validation"}:
             raise ValueError(f"invalid split in manifest: {split}")
-        image = resolve_path(path, record["image"])
+        split_counts[split] += 1
+        image_value = record.get("image")
+        if not isinstance(image_value, str) or not image_value:
+            raise ValueError("manifest record has no image path")
+        if image_value in image_paths_seen:
+            raise ValueError(f"duplicate image path in manifest: {image_value}")
+        image_paths_seen.add(image_value)
+        image = resolve_path(path, image_value)
         if not image.is_file():
             raise FileNotFoundError(f"manifest image does not exist: {image}")
         actual_hash = sha256(image)
-        if verify_hashes and actual_hash != record.get("image_sha256"):
+        declared_hash = record.get("image_sha256")
+        if not isinstance(declared_hash, str) or len(declared_hash) != 64:
+            raise ValueError(f"invalid image SHA-256 declaration: {image}")
+        if verify_hashes and actual_hash != declared_hash:
             raise ValueError(f"image hash changed since manifest creation: {image}")
-        (calibration_hashes if split == "calibration" else validation_hashes).add(actual_hash)
+        split_hashes = calibration_hashes if split == "calibration" else validation_hashes
+        if actual_hash in split_hashes:
+            raise ValueError(f"duplicate image content within {split} split: {image}")
+        split_hashes.add(actual_hash)
         if split == "validation":
-            label = resolve_path(path, record.get("label", ""))
+            label_value = record.get("label")
+            if not isinstance(label_value, str) or not label_value:
+                raise ValueError(f"validation record has no label path: {image}")
+            if label_value in label_paths_seen:
+                raise ValueError(f"duplicate label path in manifest: {label_value}")
+            label_paths_seen.add(label_value)
+            label = resolve_path(path, label_value)
             if not label.is_file():
                 raise FileNotFoundError(f"manifest label does not exist: {label}")
-            if verify_hashes and sha256(label) != record.get("label_sha256"):
+            declared_label_hash = record.get("label_sha256")
+            if not isinstance(declared_label_hash, str) or len(declared_label_hash) != 64:
+                raise ValueError(f"invalid label SHA-256 declaration: {label}")
+            if verify_hashes and sha256(label) != declared_label_hash:
                 raise ValueError(f"label hash changed since manifest creation: {label}")
+
+    for split, count in split_counts.items():
+        if document.get(f"{split}_count") != count:
+            raise ValueError(f"manifest {split}_count does not match its records")
 
     overlap = calibration_hashes & validation_hashes
     if overlap:

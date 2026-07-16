@@ -1,6 +1,6 @@
 # Final TensorRT Deployment Portfolio Case Study
 
-Repository evidence revision: `a517b02`. This project develops a YOLOv8n deployment from ONNX
+Repository evidence revision: `92194e5`. This project develops a YOLOv8n deployment from ONNX
 export through TensorRT C++ inference, precision validation, bounded asynchronous pipelines, CUDA
 preprocessing, server/edge integration exercises, and reusable language bindings.
 
@@ -16,14 +16,13 @@ The linked reports retain commands and raw-artifact paths; this case study does 
 
 | Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s | Accuracy gate |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| FP32 | 120 | 4.421 | 4.416 | 4.455 | 4.486 | 226.2 | PASS |
-| FP16 | 120 | 2.726 | 2.725 | 2.742 | 2.761 | 366.9 | PASS |
-| INT8 | 120 | 2.451 | 2.446 | 2.465 | 2.571 | 407.9 | FAIL |
+| FP32 | 120 | 4.399 | 4.398 | 4.426 | 4.434 | 227.3 | PASS |
+| FP16 | 120 | 2.711 | 2.712 | 2.725 | 2.734 | 368.9 | PASS |
+| INT8 | 120 | 2.380 | 2.378 | 2.389 | 2.430 | 420.2 | FAIL |
 
-FP16 is the current deployment choice. INT8 is faster but fails the predeclared smoke-set detection
-gate; it remains blocked pending representative calibration/validation data, sensitive-layer
-fallback, or QAT. A one-input Polygraphy alignment is valuable for locating numerical conversion
-bugs, but it cannot establish dataset accuracy, tail latency, or long-run reliability.
+FP16 is the current deployment choice; INT8 remains blocked by the declared fixed-dataset accuracy gate. The decision uses the canonical 5,000-image human-labeled validation split and
+identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating numerical
+conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run reliability.
 
 ## Pipeline Result
 
@@ -77,9 +76,9 @@ DeepStream, and Jetson runtime acceptance remains explicitly hardware/container 
 ## Bottleneck and Future Work
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
-CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is a real labeled
-validation set, accepted INT8 calibration or QAT, the formal soak/TSAN gates, and runtime validation
-on Triton, DeepStream, and Jetson hardware.
+CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
+improve INT8 calibration, mixed precision, or QAT, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
+DeepStream, and Jetson hardware.
 
 ## Resume Bullets
 
@@ -93,9 +92,9 @@ on Triton, DeepStream, and Jetson hardware.
 ## Five-Minute English Presentation
 
 Start with the deployment goal and controlled YOLOv8 model. Explain ONNX/TensorRT correctness and
-why raw alignment precedes detection metrics. Present FP16 as the accepted precision and INT8 as a
-failed accuracy gate. Walk through the bounded single/multi-stream design and capture-to-result tail
-latency. Show the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
+why raw alignment precedes detection metrics. Present the measured precision decision from the 12a
+gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
+the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
 remaining soak/TSAN/hardware gates, and why those limitations are reported rather than hidden.
 
 ## Longer Interview Walkthrough

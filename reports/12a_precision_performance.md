@@ -1,11 +1,9 @@
 # 12a - Precision and Performance Report
 
-Generated from saved JSON artifacts. Overall checkpoint status: **FAIL**.
+Generated from identity-linked JSON artifacts. Overall checkpoint status: **FAIL**.
 
-> Evidence limitation: the current validation set contains 2 generated
-> smoke images with pseudo-labels. It validates the evaluator and release gate, but it is not an
-> application-ready accuracy claim. Replace it with a fixed labeled validation split before using
-> this report in a portfolio or release decision.
+> Validation evidence: `coco2017-train1000-stratified-v1-seed42-calibration-val5000-human-labels-v1` contains 5000 fixed,
+> human-labeled images. Dataset manifest SHA-256: `c7ea8b078c138b68bee1afbf191fcc7b6041b45b38c7906c1d0ac232571dfb3d`.
 
 ## Environment and Methodology
 
@@ -14,66 +12,76 @@ Generated from saved JSON artifacts. Overall checkpoint status: **FAIL**.
 - Warmup: 500 ms
 - Measured iterations per engine: 120
 - Synchronization: trtexec per-inference latency with H2D, compute, and D2H complete
-- Input/model family: YOLOv8n, float32 NCHW `1x3x640x640`
-- Calibration/validation overlap: none (5 calibration, 2 validation)
+- Accuracy metric: `course-coco-like-101point-v2-no-crowd-no-area-ranges`
+- Detection thresholds: confidence=0.001, NMS IoU=0.7
+- Maximum detections per image: 300
+- Accuracy latency scope: runtime wrapper with H2D, inference, D2H; excludes image loading, preprocessing, and decode
+- Calibration/validation overlap: none (1000 calibration, 5000 validation)
 
 ## Performance
 
 | Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| FP32 | 120 | 4.421 | 4.416 | 4.455 | 4.486 | 226.2 |
-| FP16 | 120 | 2.726 | 2.725 | 2.742 | 2.761 | 366.9 |
-| INT8 | 120 | 2.451 | 2.446 | 2.465 | 2.571 | 407.9 |
+| FP32 | 120 | 4.399 | 4.398 | 4.426 | 4.434 | 227.3 |
+| FP16 | 120 | 2.711 | 2.712 | 2.725 | 2.734 | 368.9 |
+| INT8 | 120 | 2.380 | 2.378 | 2.389 | 2.430 | 420.2 |
 
-Every row comes from individual `trtexec --exportTimes` samples after warmup. Engine files remain
-environment-specific generated artifacts.
+Rows use synchronized `trtexec --exportTimes` measurements. Performance and accuracy evidence are
+accepted only when their engine SHA-256 values match.
 
 ## Detection Quality and Release Gate
 
 | Precision | mAP50-95 | mAP50 | Precision | Recall | mAP50-95 delta | Gate |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| FP32 | 0.4463 | 0.5663 | 0.8750 | 0.7000 | +0.0000 | PASS |
-| FP16 | 0.4497 | 0.5663 | 0.8750 | 0.7000 | +0.0034 | PASS |
-| INT8 | 0.2296 | 0.3904 | 0.3333 | 0.7000 | -0.2168 | FAIL |
+| FP32 | 0.3631 | 0.5102 | 0.0427 | 0.8097 | +0.0000 | PASS |
+| FP16 | 0.3631 | 0.5102 | 0.0426 | 0.8095 | +0.0000 | PASS |
+| INT8 | 0.3179 | 0.4560 | 0.0429 | 0.7858 | -0.0452 | FAIL |
 
 Predeclared maximum drops: mAP50-95=0.02,
 mAP50=0.02, precision=0.03,
-recall=0.03. Failed backends: tensorrt_int8.
+recall=0.03. Failed backends:
+tensorrt_int8.
 
-FP16 raw tensor drift is small enough that decoded smoke detections remain stable. INT8 has much
-larger raw drift and changed detection counts; its detection-quality regression fails the declared
-gate. The correct action is sensitive-layer fallback, a more representative calibration set, or
-QAT—not accepting INT8 only because it is faster.
+FP16 is faster than FP32 and passes the predeclared accuracy gate. INT8 is faster than FP32 and fails the predeclared accuracy gate. Retain FP16 while investigating INT8 calibration, mixed precision, or QAT.
 
-## Timeline Diagnosis and Optimization Decisions
+## Raw Tensor Drift Versus TensorRT FP32
 
-Nsight-derived baseline: CPU preprocessing and postprocessing dominate the typical measured request. The supported optimization is therefore moving measured
-preprocessing work to the GPU (lesson 17) and checking the new timeline. Increasing queue capacity
-is rejected as a compute optimization: it can absorb bursts but increases latency under sustained
-overload and cannot reduce model compute time.
+| Precision | Max absolute | Mean absolute | P99 absolute |
+| --- | ---: | ---: | ---: |
+| FP32 | 0.000000 | 0.000000 | 0.000000 |
+| FP16 | 41.963776 | 0.009871 | 0.292145 |
+| INT8 | 559.510864 | 0.384635 | 10.622131 |
+
+Drift is diagnostic rather than a release metric. Detection-quality thresholds above control the
+decision; high-drift examples in `precision_evaluation.json` identify images for inspection.
+
+## Timeline Diagnosis
+
+Nsight-derived baseline: CPU preprocessing and postprocessing dominate the typical measured request. Lesson 17 tests GPU preprocessing as a measured follow-up; the
+report does not infer that an optimization worked until new timeline evidence is collected.
 
 ## Reproduction
 
 ```bash
+python3 assets/coco/prepare_coco.py
+(cd 11_nsight_performance_diagnosis && python3 profile_yolov8_cpp.py)
+(cd 12_yolov8_int8_calibration && python3 build_int8_engine.py --enable-fp16)
+(cd 12_yolov8_int8_calibration && python3 compare_engines.py)
 python3 12a_precision_performance_report/collect_performance.py
 python3 12a_precision_performance_report/generate_report.py
 ```
 
-The generator validates split hashes and refuses missing precision backends. Accuracy tables are
-rendered from `precision_evaluation.json`, not transcribed manually.
+The generator rejects mismatched dataset, engine, TensorRT-version, sample-count, drift, and release
+gate evidence instead of combining unrelated runs.
 
 ## English Summary
 
-This checkpoint compares FP32, FP16, and INT8 YOLOv8n engines under the same TensorRT timing
-methodology. FP16 improves performance while passing the current detection-quality thresholds.
-INT8 is faster but fails the predeclared accuracy gate and is not release-ready. Nsight evidence
-shows CPU preprocessing and postprocessing dominate the original end-to-end request, motivating
-the later CUDA preprocessing lesson. The present two-image pseudo-labeled validation split is only
-a pipeline smoke test; a portfolio claim requires a fixed, representative labeled dataset.
+This checkpoint compares FP32, FP16, and INT8 YOLOv8n TensorRT engines using matched engine and
+dataset identities. FP16 is faster than FP32 and passes the predeclared accuracy gate. INT8 is faster than FP32 and fails the predeclared accuracy gate. Retain FP16 while investigating INT8 calibration, mixed precision, or QAT. The accuracy values use the
+documented course COCO-like evaluator, not the official `pycocotools` implementation.
 
 ## Three-to-Five-Minute Walkthrough
 
-Explain the controlled engine comparison, warmup and percentile method, then separate raw tensor
-drift from decoded detection metrics. Point out that FP16 passes while INT8 fails the gate. Finish
-with the profiler-supported CPU bottleneck, the GPU preprocessing experiment, and the validation
-dataset limitation. Never present the smoke-set metrics as production accuracy.
+Explain the dataset and engine identity checks, timing methodology, decoded quality metrics, and raw
+tensor drift. State the measured FP16 and INT8 outcomes from the tables, then connect the profiler
+diagnosis to the lesson 17 experiment without claiming an unmeasured optimization.

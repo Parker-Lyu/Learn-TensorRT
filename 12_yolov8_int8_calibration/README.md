@@ -17,8 +17,8 @@ evaluated model.
   fallback, and rejects stale calibration caches using a model/data/shape/preprocessing cache key.
 - `compare_engines.py`: runs PyTorch plus TensorRT FP32, FP16, and INT8 over the complete manifest,
   using the same letterbox, decode, confidence, NMS IoU, and maximum-detection settings.
-- `evaluation.py`: reusable YOLO-label parsing, IoU matching, 101-point AP, mAP50-95, mAP50,
-  precision, recall, and tensor-drift calculations.
+- `evaluation.py`: compact NumPy prediction storage plus reusable YOLO-label parsing, IoU matching,
+  101-point AP, mAP50-95, mAP50, precision, recall, and tensor-drift calculations.
 - `tests/test_evaluation.py`: focused metric and invalid-label tests.
 
 Downloaded datasets stay in ignored `assets/coco/data/`; engines, calibration tables, and raw
@@ -59,6 +59,10 @@ Both commands default to the shared COCO manifest. The evaluator writes
 `outputs/precision_evaluation.json` as the machine-readable source of truth and
 `outputs/precision_evaluation.md` as a concise table. A regression gate failure still writes both
 reports and exits with status `2`.
+
+The complete evaluation runs 5,000 images through four backends and prints progress every 100
+images. Predictions use fixed-capacity structured NumPy buffers instead of millions of Python
+objects; metric matching groups and sorts each class once before evaluating the IoU thresholds.
 
 Run the CPU-only focused tests without a GPU engine:
 
@@ -122,6 +126,10 @@ Declare these thresholds before inspecting the final comparison. Defaults are te
 not universal production limits. Evaluation defaults (`confidence=0.001`, `NMS IoU=0.7`, and
 `max_detections=300`) are recorded in JSON and applied identically to every backend.
 
+The reported AP is a documented course COCO-like 101-point metric. It excludes `iscrowd` regions
+and official COCO area-range/ignore semantics, so it must not be presented as an official
+`pycocotools` COCO score. Its purpose is a fixed, identical regression gate across precisions.
+
 ## Reading the Evidence
 
 For every backend, the report contains absolute mAP50-95, mAP50, precision, recall, deltas from the
@@ -129,9 +137,10 @@ PyTorch reference, mean/P50/P90 latency, and pass/fail. TensorRT results also co
 raw tensor drift. Images with changed detection counts/classes or high P99 drift are listed for
 visual inspection.
 
-Latency includes backend execution and required transfers, but excludes image loading,
-preprocessing, and decoding. It is useful for a controlled lesson comparison; lesson 11/12a should
-add longer warmups, more samples, hardware/power-state metadata, and profiler evidence.
+Latency includes each runtime wrapper's H2D transfer, inference, D2H transfer, synchronization, and
+wrapper overhead, but excludes image loading, preprocessing, and decoding. It is diagnostic rather
+than the authoritative performance comparison; 12a uses matched `trtexec` sampling for FP32, FP16,
+and INT8.
 
 If INT8 violates the predeclared gate:
 

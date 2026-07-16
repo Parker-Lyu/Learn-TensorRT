@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Render checkpoint 12a only from machine-readable lesson artifacts."""
+"""Render checkpoint 12a from identity-linked machine-readable lesson artifacts."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+ENGINE_KEYS = {"fp32": "tensorrt_fp32", "fp16": "tensorrt_fp16", "int8": "tensorrt_int8"}
 
 
 def load(path: Path) -> dict:
@@ -16,29 +18,131 @@ def load(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def f(value: float) -> str:
     return f"{value:.3f}"
 
 
-def render(performance: dict, evaluation: dict, diagnosis: dict, manifest: dict) -> str:
-    records = manifest["records"]
-    calibration_hashes = {r["image_sha256"] for r in records if r["split"] == "calibration"}
-    validation_hashes = {r["image_sha256"] for r in records if r["split"] == "validation"}
+def validate_evidence(
+    performance: dict,
+    evaluation: dict,
+    diagnosis: dict,
+    manifest: dict,
+    manifest_sha256: str,
+) -> None:
+    if performance.get("schema_version") != 2:
+        raise ValueError("performance evidence must use schema version 2; recollect lesson 12a")
+    if evaluation.get("schema_version") != 1:
+        raise ValueError("unsupported lesson 12 evaluation schema")
+    if set(performance.get("backends", {})) != set(ENGINE_KEYS):
+        raise ValueError("performance evidence must contain fp32, fp16, and int8")
+    if set(ENGINE_KEYS.values()) - set(evaluation.get("backends", {})):
+        raise ValueError("evaluation evidence is missing required TensorRT backends")
+
+    records = manifest.get("records", [])
+    calibration = [record for record in records if record.get("split") == "calibration"]
+    validation = [record for record in records if record.get("split") == "validation"]
+    if len(calibration) != manifest.get("calibration_count"):
+        raise ValueError("manifest calibration_count does not match its records")
+    if len(validation) != manifest.get("validation_count"):
+        raise ValueError("manifest validation_count does not match its records")
+    calibration_hashes = {record["image_sha256"] for record in calibration}
+    validation_hashes = {record["image_sha256"] for record in validation}
+    if len(calibration_hashes) != len(calibration) or len(validation_hashes) != len(validation):
+        raise ValueError("manifest contains duplicate image content within a split")
     if calibration_hashes & validation_hashes:
         raise ValueError("calibration and validation manifests overlap")
-    if set(performance["backends"]) != {"fp32", "fp16", "int8"}:
-        raise ValueError("performance evidence must contain fp32, fp16, and int8")
+
+    dataset = evaluation.get("dataset", {})
+    if dataset.get("dataset_id") != manifest.get("dataset_id"):
+        raise ValueError("evaluation dataset_id does not match the selected manifest")
+    if dataset.get("validation_images") != len(validation):
+        raise ValueError("evaluation image count does not match the selected manifest")
+    if dataset.get("manifest_sha256") != manifest_sha256:
+        raise ValueError("evaluation manifest SHA-256 does not match the selected manifest")
+
+    for performance_key, evaluation_key in ENGINE_KEYS.items():
+        backend = performance["backends"][performance_key]
+        if backend.get("sample_count", 0) < 100:
+            raise ValueError(f"{performance_key} performance has fewer than 100 samples")
+        performance_hash = backend.get("engine_sha256")
+        evaluation_hash = evaluation["artifacts"][evaluation_key].get("sha256")
+        if not performance_hash or performance_hash != evaluation_hash:
+            raise ValueError(
+                f"{performance_key} engine differs between performance and accuracy evidence"
+            )
+        drift = evaluation["backends"][evaluation_key].get("tensor_drift_vs_fp32")
+        if not isinstance(drift, dict) or set(drift) != {"max_abs", "mean_abs", "p99_abs"}:
+            raise ValueError(f"{evaluation_key} is missing raw tensor drift evidence")
+
+    if performance["environment"].get("trtexec") != evaluation["software"].get("tensorrt"):
+        raise ValueError("TensorRT version differs between performance and accuracy evidence")
+    required_settings = {
+        "confidence", "nms_iou", "max_detections", "metric_implementation", "latency_scope"
+    }
+    if required_settings - set(evaluation.get("settings", {})):
+        raise ValueError("evaluation evidence is missing required methodology settings")
+    if diagnosis.get("schema_version") != 2:
+        raise ValueError("diagnosis evidence must use schema version 2; rerun lesson 11")
+    diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
+    if diagnosis.get("artifacts", {}).get("engine", {}).get("sha256") != performance[
+        "backends"
+    ]["fp32"]["engine_sha256"]:
+        raise ValueError("lesson 11 diagnosis and lesson 12a performance use different FP32 engines")
+
+    failed = {
+        name for name, backend in evaluation["backends"].items()
+        if not backend.get("passed", False)
+    }
+    release = evaluation.get("release_gate", {})
+    if set(release.get("failed_backends", [])) != failed:
+        raise ValueError("release gate does not agree with backend pass/fail results")
+    if bool(release.get("passed")) != (not failed):
+        raise ValueError("release gate passed flag is inconsistent")
+
+
+def backend_decision(performance: dict, evaluation: dict, key: str) -> str:
+    label = key.upper()
+    mean = performance["backends"][key]["latency_ms"]["mean"]
+    baseline = performance["backends"]["fp32"]["latency_ms"]["mean"]
+    speed = "faster than" if mean < baseline else "not faster than"
+    gate = "passes" if evaluation["backends"][ENGINE_KEYS[key]]["passed"] else "fails"
+    return f"{label} is {speed} FP32 and {gate} the predeclared accuracy gate."
+
+
+def render(
+    performance: dict,
+    evaluation: dict,
+    diagnosis: dict,
+    manifest: dict,
+    manifest_sha256: str,
+) -> str:
+    validate_evidence(performance, evaluation, diagnosis, manifest, manifest_sha256)
+    records = manifest["records"]
+    calibration_count = sum(record["split"] == "calibration" for record in records)
+    validation_count = sum(record["split"] == "validation" for record in records)
 
     accuracy_rows = []
+    drift_rows = []
     for key in ("tensorrt_fp32", "tensorrt_fp16", "tensorrt_int8"):
         backend = evaluation["backends"][key]
         metrics = backend["metrics"]
         delta = backend["delta_vs_pytorch"]
+        label = key.removeprefix("tensorrt_").upper()
         accuracy_rows.append(
-            f"| {key.removeprefix('tensorrt_').upper()} | {metrics['map50_95']:.4f} | "
-            f"{metrics['map50']:.4f} | {metrics['precision']:.4f} | {metrics['recall']:.4f} | "
+            f"| {label} | {metrics['map50_95']:.4f} | {metrics['map50']:.4f} | "
+            f"{metrics['precision']:.4f} | {metrics['recall']:.4f} | "
             f"{delta['map50_95']:+.4f} | {'PASS' if backend['passed'] else 'FAIL'} |"
         )
+        drift = backend["tensor_drift_vs_fp32"]
+        drift_rows.append(
+            f"| {label} | {drift['max_abs']:.6f} | {drift['mean_abs']:.6f} | "
+            f"{drift['p99_abs']:.6f} |"
+        )
+
     performance_rows = []
     for key in ("fp32", "fp16", "int8"):
         backend = performance["backends"][key]
@@ -51,33 +155,25 @@ def render(performance: dict, evaluation: dict, diagnosis: dict, manifest: dict)
 
     release = evaluation["release_gate"]
     dataset = evaluation["dataset"]
-    dataset_id = dataset["dataset_id"].lower()
-    insufficient_evidence = dataset["validation_images"] < 100 or "pseudo" in dataset_id
+    insufficient_evidence = dataset["validation_images"] < 100
     overall = "FAIL" if not release["passed"] or insufficient_evidence else "PASS"
-    dominant = diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
     thresholds = evaluation["regression_thresholds"]
-    if insufficient_evidence:
-        evidence_note = f"""> Evidence limitation: the current validation set contains
-> only {dataset['validation_images']} images or uses pseudo-labels. It is not application-ready
-> accuracy evidence. Replace it with a fixed, representative, human-labeled validation split
-> before portfolio or release use."""
-        dataset_summary = (
-            "The current validation evidence is insufficient; a portfolio claim requires a "
-            "fixed, representative, human-labeled dataset."
-        )
+    dominant = diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
+    fp16_decision = backend_decision(performance, evaluation, "fp16")
+    int8_decision = backend_decision(performance, evaluation, "int8")
+    if evaluation["backends"]["tensorrt_int8"]["passed"]:
+        recommendation = "INT8 is eligible for deployment consideration under this gate."
+    elif evaluation["backends"]["tensorrt_fp16"]["passed"]:
+        recommendation = "Retain FP16 while investigating INT8 calibration, mixed precision, or QAT."
     else:
-        evidence_note = f"""> Validation evidence: `{dataset['dataset_id']}` contains
-> {dataset['validation_images']} fixed, labeled images. Keep this split and evaluator settings
-> unchanged when comparing future engines."""
-        dataset_summary = (
-            f"Detection quality is measured on the fixed labeled dataset "
-            f"`{dataset['dataset_id']}` with {dataset['validation_images']} images."
-        )
+        recommendation = "Neither FP16 nor INT8 is accepted; retain FP32 and investigate drift."
+
     return f"""# 12a - Precision and Performance Report
 
-Generated from saved JSON artifacts. Overall checkpoint status: **{overall}**.
+Generated from identity-linked JSON artifacts. Overall checkpoint status: **{overall}**.
 
-{evidence_note}
+> Validation evidence: `{dataset['dataset_id']}` contains {dataset['validation_images']} fixed,
+> human-labeled images. Dataset manifest SHA-256: `{manifest_sha256}`.
 
 ## Environment and Methodology
 
@@ -86,8 +182,11 @@ Generated from saved JSON artifacts. Overall checkpoint status: **{overall}**.
 - Warmup: {performance['methodology']['warmup_ms']} ms
 - Measured iterations per engine: {performance['methodology']['iterations']}
 - Synchronization: {performance['methodology']['synchronization']}
-- Input/model family: YOLOv8n, float32 NCHW `1x3x640x640`
-- Calibration/validation overlap: none ({len(calibration_hashes)} calibration, {len(validation_hashes)} validation)
+- Accuracy metric: `{evaluation['settings']['metric_implementation']}`
+- Detection thresholds: confidence={evaluation['settings']['confidence']}, NMS IoU={evaluation['settings']['nms_iou']}
+- Maximum detections per image: {evaluation['settings']['max_detections']}
+- Accuracy latency scope: {evaluation['settings']['latency_scope']}
+- Calibration/validation overlap: none ({calibration_count} calibration, {validation_count} validation)
 
 ## Performance
 
@@ -95,8 +194,8 @@ Generated from saved JSON artifacts. Overall checkpoint status: **{overall}**.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 {chr(10).join(performance_rows)}
 
-Every row comes from individual `trtexec --exportTimes` samples after warmup. Engine files remain
-environment-specific generated artifacts.
+Rows use synchronized `trtexec --exportTimes` measurements. Performance and accuracy evidence are
+accepted only when their engine SHA-256 values match.
 
 ## Detection Quality and Release Gate
 
@@ -106,43 +205,50 @@ environment-specific generated artifacts.
 
 Predeclared maximum drops: mAP50-95={thresholds['max_map50_95_drop']},
 mAP50={thresholds['max_map50_drop']}, precision={thresholds['max_precision_drop']},
-recall={thresholds['max_recall_drop']}. Failed backends: {', '.join(release['failed_backends']) or 'none'}.
+recall={thresholds['max_recall_drop']}. Failed backends:
+{', '.join(release['failed_backends']) or 'none'}.
 
-The predeclared gate above, rather than latency alone, controls the precision decision. If INT8
-fails, inspect high-drift examples and calibration coverage, then use sensitive-layer fallback,
-improve representative calibration data, try QAT, or retain FP16.
+{fp16_decision} {int8_decision} {recommendation}
 
-## Timeline Diagnosis and Optimization Decisions
+## Raw Tensor Drift Versus TensorRT FP32
 
-Nsight-derived baseline: {dominant} The supported optimization is therefore moving measured
-preprocessing work to the GPU (lesson 17) and checking the new timeline. Increasing queue capacity
-is rejected as a compute optimization: it can absorb bursts but increases latency under sustained
-overload and cannot reduce model compute time.
+| Precision | Max absolute | Mean absolute | P99 absolute |
+| --- | ---: | ---: | ---: |
+{chr(10).join(drift_rows)}
+
+Drift is diagnostic rather than a release metric. Detection-quality thresholds above control the
+decision; high-drift examples in `precision_evaluation.json` identify images for inspection.
+
+## Timeline Diagnosis
+
+Nsight-derived baseline: {dominant} Lesson 17 tests GPU preprocessing as a measured follow-up; the
+report does not infer that an optimization worked until new timeline evidence is collected.
 
 ## Reproduction
 
 ```bash
+python3 assets/coco/prepare_coco.py
+(cd 11_nsight_performance_diagnosis && python3 profile_yolov8_cpp.py)
+(cd 12_yolov8_int8_calibration && python3 build_int8_engine.py --enable-fp16)
+(cd 12_yolov8_int8_calibration && python3 compare_engines.py)
 python3 12a_precision_performance_report/collect_performance.py
-python3 12a_precision_performance_report/generate_report.py --manifest {dataset['manifest']}
+python3 12a_precision_performance_report/generate_report.py
 ```
 
-The generator validates split hashes and refuses missing precision backends. Accuracy tables are
-rendered from `precision_evaluation.json`, not transcribed manually.
+The generator rejects mismatched dataset, engine, TensorRT-version, sample-count, drift, and release
+gate evidence instead of combining unrelated runs.
 
 ## English Summary
 
-This checkpoint compares FP32, FP16, and INT8 YOLOv8n engines under the same TensorRT timing
-methodology. FP16 improves performance while passing the current detection-quality thresholds.
-The reported accuracy gate determines whether INT8 is release-ready. Nsight evidence shows CPU
-preprocessing and postprocessing dominate the original end-to-end request, motivating the later
-CUDA preprocessing lesson. {dataset_summary}
+This checkpoint compares FP32, FP16, and INT8 YOLOv8n TensorRT engines using matched engine and
+dataset identities. {fp16_decision} {int8_decision} {recommendation} The accuracy values use the
+documented course COCO-like evaluator, not the official `pycocotools` implementation.
 
 ## Three-to-Five-Minute Walkthrough
 
-Explain the controlled engine comparison, warmup and percentile method, then separate raw tensor
-drift from decoded detection metrics. Point out that FP16 passes while INT8 fails the gate. Finish
-with the profiler-supported CPU bottleneck, the GPU preprocessing experiment, and the validation
-dataset provenance. Never present insufficient validation evidence as production accuracy.
+Explain the dataset and engine identity checks, timing methodology, decoded quality metrics, and raw
+tensor drift. State the measured FP16 and INT8 outcomes from the tables, then connect the profiler
+diagnosis to the lesson 17 experiment without claiming an unmeasured optimization.
 """
 
 
@@ -164,6 +270,7 @@ def main() -> int:
         load(args.evaluation),
         load(args.diagnosis),
         load(args.manifest),
+        sha256(args.manifest),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")

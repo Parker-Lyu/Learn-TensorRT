@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -78,6 +79,7 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     evidence = {
+        "schema_version": 2,
         "methodology": {
             "tool": args.trtexec,
             "warmup_ms": args.warmup_ms,
@@ -106,6 +108,7 @@ def main() -> int:
         samples = json.loads(times_path.read_text(encoding="utf-8"))
         evidence["backends"][name] = {
             "engine": str(engine.relative_to(ROOT)),
+            "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
             "command": command,
             **summarize(samples),
         }

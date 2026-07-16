@@ -20,7 +20,13 @@ import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
 from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
-from evaluation import detection_metrics, load_ground_truth, tensor_drift
+from evaluation import (
+    allocate_prediction_buffer,
+    append_predictions,
+    detection_metrics_packed,
+    load_ground_truth,
+    tensor_drift,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LESSON09 = REPO_ROOT / "09_yolov8_trt_python"
@@ -81,18 +87,18 @@ class PyTorchRunner:
     def run(self, image_path: Path, confidence: float, iou: float, max_detections: int) -> dict:
         image = yolo_ref.read_image(image_path)
         input_tensor, letterbox_info = yolo_ref.preprocess(image, self.input_shape)
-        tensor = self.torch.from_numpy(input_tensor).to(self.device)
         if self.device.type == "cuda":
             self.torch.cuda.synchronize(self.device)
         started = time.perf_counter()
+        tensor = self.torch.from_numpy(input_tensor).to(self.device)
         with self.torch.inference_mode():
             output = self.model(tensor)
-        if self.device.type == "cuda":
-            self.torch.cuda.synchronize(self.device)
-        elapsed_ms = (time.perf_counter() - started) * 1000.0
         if isinstance(output, (tuple, list)):
             output = output[0]
         output_array = output.detach().float().cpu().numpy()
+        if self.device.type == "cuda":
+            self.torch.cuda.synchronize(self.device)
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
         detections = yolo_ref.decode_yolov8(
             output_array, letterbox_info, confidence, iou, max_detections
         )
@@ -127,6 +133,13 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--max-detections must be positive and --warmup cannot be negative")
     if args.gpu < 0 or args.inspect_p99 < 0.0 or args.max_inspection_examples <= 0:
         raise ValueError("GPU index/inspection threshold/count are outside their valid range")
+    expected_device = f"cuda:{args.gpu}"
+    normalized_device = "cuda:0" if args.device.lower() == "cuda" else args.device.lower()
+    if normalized_device != expected_device:
+        raise ValueError(
+            f"--device must be {expected_device} when --gpu is {args.gpu}; "
+            "all backends must run on the same GPU"
+        )
     for name in ("max_map50_95_drop", "max_map50_drop", "max_precision_drop", "max_recall_drop"):
         if getattr(args, name) < 0.0:
             raise ValueError(f"--{name.replace('_', '-')} cannot be negative")
@@ -173,16 +186,22 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             for runner in runners.values():
                 runner.run(first_image, args.confidence, args.iou, args.max_detections)
 
-        ground_truth: dict[str, list[dict]] = {}
-        predictions = {name: {} for name in runners}
+        ground_truth: dict[int, list[dict]] = {}
+        prediction_buffers = {
+            name: allocate_prediction_buffer(len(records), args.max_detections)
+            for name in runners
+        }
+        prediction_offsets = {name: 0 for name in runners}
         latencies = {name: [] for name in runners}
-        drift_values = {name: [] for name in trt_runners}
+        drift_maxima = {
+            name: {key: 0.0 for key in ("max_abs", "mean_abs", "p99_abs")}
+            for name in trt_runners
+        }
         changed_examples: list[dict] = []
-        for record in records:
+        for image_index, record in enumerate(records):
             image_path = resolve_path(args.manifest, record["image"])
             label_path = resolve_path(args.manifest, record["label"])
-            image_id = record["image_sha256"]
-            ground_truth[image_id] = load_ground_truth(image_path, label_path)
+            ground_truth[image_index] = load_ground_truth(image_path, label_path)
             per_backend = {
                 name: runner.run(image_path, args.confidence, args.iou, args.max_detections)
                 for name, runner in runners.items()
@@ -192,11 +211,17 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             example = {"image": record["image"], "comparisons": {}}
             example_changed = False
             for name, result in per_backend.items():
-                predictions[name][image_id] = result["detections"]
+                prediction_offsets[name] = append_predictions(
+                    prediction_buffers[name],
+                    prediction_offsets[name],
+                    image_index,
+                    result["detections"],
+                )
                 latencies[name].append(result["latency_ms"])
                 if name in trt_runners:
                     drift = tensor_drift(fp32_output, result["output"])
-                    drift_values[name].append(drift)
+                    for key, value in drift.items():
+                        drift_maxima[name][key] = max(drift_maxima[name][key], value)
                     changed = changed_detection(fp32_detections, result["detections"])
                     example["comparisons"][name] = {
                         "tensor_drift_vs_fp32": drift,
@@ -206,13 +231,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                     example_changed = (
                         example_changed or changed or drift["p99_abs"] >= args.inspect_p99
                     )
-            if example_changed:
+            if example_changed and len(changed_examples) < args.max_inspection_examples:
                 changed_examples.append(example)
+            if (image_index + 1) % 100 == 0 or image_index + 1 == len(records):
+                print(f"Evaluated images: {image_index + 1}/{len(records)}", flush=True)
     finally:
         for runner in trt_runners.values():
             runner.close()
 
-    metrics = {name: detection_metrics(items, ground_truth) for name, items in predictions.items()}
+    metrics = {}
+    for name in prediction_buffers:
+        print(f"Computing detection metrics: {name}", flush=True)
+        metrics[name] = detection_metrics_packed(
+            prediction_buffers[name][:prediction_offsets[name]], ground_truth
+        )
     reference = metrics["pytorch"]
     thresholds = {
         "map50_95": args.max_map50_95_drop,
@@ -237,16 +269,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             },
             "passed": passed,
         }
-        if name in drift_values:
-            backends[name]["tensor_drift_vs_fp32"] = {
-                key: float(np.max([item[key] for item in drift_values[name]]))
-                for key in ("max_abs", "mean_abs", "p99_abs")
-            }
+        if name in drift_maxima:
+            backends[name]["tensor_drift_vs_fp32"] = drift_maxima[name]
 
     return {
         "schema_version": 1,
         "dataset": {
             "manifest": str(args.manifest),
+            "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
             "dataset_id": manifest["dataset_id"],
             "validation_images": len(records),
         },
@@ -256,6 +286,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "max_detections": args.max_detections,
             "input_shape": list(input_shape),
             "warmup": args.warmup,
+            "metric_implementation": "course-coco-like-101point-v2-no-crowd-no-area-ranges",
+            "latency_scope": (
+                "runtime wrapper with H2D, inference, D2H; excludes image loading, "
+                "preprocessing, and decode"
+            ),
         },
         "artifacts": {
             name: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}

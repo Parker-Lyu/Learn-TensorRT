@@ -16,5 +16,10 @@ class CaseStudyTests(unittest.TestCase):
         self.assertIn("FROM nvidia/cuda", text)
         self.assertIn("COPY --from=builder", text)
 
+    def test_precision_report_no_longer_uses_smoke_evidence(self):
+        text = (ROOT / "reports/12a_precision_performance.md").read_text()
+        self.assertIn("5000 fixed", text)
+        self.assertNotIn("smoke", text.lower())
+
 
 if __name__ == "__main__": unittest.main()

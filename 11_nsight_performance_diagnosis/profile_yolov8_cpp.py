@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -509,6 +510,17 @@ def main() -> int:
         nsys_report = run_nsys(args, executable, args.output_dir)
 
     result = {
+        "schema_version": 2,
+        "artifacts": {
+            "engine": {
+                "path": str(args.engine),
+                "sha256": hashlib.sha256(args.engine.read_bytes()).hexdigest(),
+            },
+            "image": {
+                "path": str(args.image),
+                "sha256": hashlib.sha256(args.image.read_bytes()).hexdigest(),
+            },
+        },
         "baseline_summary": baseline["summary"],
         "application_command": baseline["command"],
         "application_report": application_report,

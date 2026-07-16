@@ -14,8 +14,14 @@ def read(path):
     return path.read_text(encoding="utf-8")
 
 
-def row(report: str, precision: str) -> list[str]:
-    match = re.search(rf"\| {precision} \| ([^\n]+)", report)
+def section(report: str, heading: str, next_heading: str) -> str:
+    match = re.search(rf"## {re.escape(heading)}\n(.*?)\n## {re.escape(next_heading)}", report, re.S)
+    if not match: raise ValueError(f"missing {heading} section")
+    return match.group(1)
+
+
+def row(report_section: str, precision: str) -> list[str]:
+    match = re.search(rf"\| {precision} \| ([^\n]+)", report_section)
     if not match: raise ValueError(f"missing {precision} performance row")
     return [value.strip() for value in match.group(1).split("|") if value.strip()]
 
@@ -25,7 +31,24 @@ def main() -> int:
     report12 = read(ROOT / "reports/12a_precision_performance.md")
     report17 = read(ROOT / "reports/17a_pipeline_performance.md")
     checks = json.loads(read(ROOT / "24_final_portfolio_case_study/outputs/local_checks.json"))
-    fp32, fp16, int8 = (row(report12, name) for name in ("FP32", "FP16", "INT8"))
+    performance = section(report12, "Performance", "Detection Quality and Release Gate")
+    quality = section(
+        report12, "Detection Quality and Release Gate", "Raw Tensor Drift Versus TensorRT FP32"
+    )
+    fp32, fp16, int8 = (row(performance, name) for name in ("FP32", "FP16", "INT8"))
+    gates = {name: row(quality, name)[-1] for name in ("FP32", "FP16", "INT8")}
+    if gates["INT8"] == "PASS":
+        precision_decision = "INT8 is the current deployment candidate under the declared gate."
+        precision_next = "confirm INT8 behavior on the target deployment hardware"
+    elif gates["FP16"] == "PASS":
+        precision_decision = (
+            "FP16 is the current deployment choice; INT8 remains blocked by the declared "
+            "fixed-dataset accuracy gate."
+        )
+        precision_next = "improve INT8 calibration, mixed precision, or QAT"
+    else:
+        precision_decision = "FP32 remains the deployment baseline because reduced precision fails."
+        precision_next = "investigate FP16/INT8 numerical drift"
     single = re.search(r"\| (\d+) \| (\d+) \| (\d+) \| (\d+) \| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \|", report17)
     if not single: raise ValueError("missing single-stream evidence")
     commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
@@ -51,14 +74,13 @@ The linked reports retain commands and raw-artifact paths; this case study does 
 
 | Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s | Accuracy gate |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| FP32 | {' | '.join(fp32)} | PASS |
-| FP16 | {' | '.join(fp16)} | PASS |
-| INT8 | {' | '.join(int8)} | FAIL |
+| FP32 | {' | '.join(fp32)} | {gates['FP32']} |
+| FP16 | {' | '.join(fp16)} | {gates['FP16']} |
+| INT8 | {' | '.join(int8)} | {gates['INT8']} |
 
-FP16 is the current deployment choice. INT8 is faster but fails the predeclared smoke-set detection
-gate; it remains blocked pending representative calibration/validation data, sensitive-layer
-fallback, or QAT. A one-input Polygraphy alignment is valuable for locating numerical conversion
-bugs, but it cannot establish dataset accuracy, tail latency, or long-run reliability.
+{precision_decision} The decision uses the canonical 5,000-image human-labeled validation split and
+identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating numerical
+conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run reliability.
 
 ## Pipeline Result
 
@@ -106,9 +128,9 @@ DeepStream, and Jetson runtime acceptance remains explicitly hardware/container 
 ## Bottleneck and Future Work
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
-CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is a real labeled
-validation set, accepted INT8 calibration or QAT, the formal soak/TSAN gates, and runtime validation
-on Triton, DeepStream, and Jetson hardware.
+CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
+{precision_next}, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
+DeepStream, and Jetson hardware.
 
 ## Resume Bullets
 
@@ -122,9 +144,9 @@ on Triton, DeepStream, and Jetson hardware.
 ## Five-Minute English Presentation
 
 Start with the deployment goal and controlled YOLOv8 model. Explain ONNX/TensorRT correctness and
-why raw alignment precedes detection metrics. Present FP16 as the accepted precision and INT8 as a
-failed accuracy gate. Walk through the bounded single/multi-stream design and capture-to-result tail
-latency. Show the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
+why raw alignment precedes detection metrics. Present the measured precision decision from the 12a
+gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
+the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
 remaining soak/TSAN/hardware gates, and why those limitations are reported rather than hidden.
 
 ## Longer Interview Walkthrough
