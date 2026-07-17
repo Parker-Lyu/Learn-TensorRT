@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Build a YOLOv8 INT8 TensorRT engine with entropy calibration."""
+"""Build a YOLOv8 INT8 TensorRT engine with a selected PTQ calibrator."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -14,6 +15,31 @@ import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
 from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
+
+PRECISION_PROFILES = {
+    "none": (),
+    "box_outputs_fp16": (
+        "/model.22/cv2.0/cv2.0.2/Conv",
+        "/model.22/cv2.1/cv2.1.2/Conv",
+        "/model.22/cv2.2/cv2.2.2/Conv",
+    ),
+    "box_and_class_outputs_fp16": (
+        "/model.22/cv2.0/cv2.0.2/Conv",
+        "/model.22/cv2.1/cv2.1.2/Conv",
+        "/model.22/cv2.2/cv2.2.2/Conv",
+        "/model.22/cv3.0/cv3.0.2/Conv",
+        "/model.22/cv3.1/cv3.1.2/Conv",
+        "/model.22/cv3.2/cv3.2.2/Conv",
+    ),
+    "detection_head_fp16": (),
+}
+
+DETECTION_HEAD_PREFIXES = ("/model.22/cv2.", "/model.22/cv3.")
+DETECTION_HEAD_EXPECTED_TYPES = {
+    trt.LayerType.CONVOLUTION: 18,
+    trt.LayerType.ACTIVATION: 12,
+    trt.LayerType.ELEMENTWISE: 12,
+}
 
 
 def check_cuda(result: tuple, operation: str):
@@ -64,20 +90,21 @@ def preprocess(path: Path, input_shape: tuple[int, int, int, int]) -> np.ndarray
     return np.ascontiguousarray(tensor)
 
 
-class EntropyCalibrator(trt.IInt8EntropyCalibrator2):
+class CalibrationResources:
     def __init__(self,
                  paths: list[Path],
                  input_name: str,
                  input_shape: tuple[int, int, int, int],
                  cache_path: Path,
-                 cache_key: str):
-        super().__init__()
+                 cache_key: str,
+                 algorithm: str):
         self.paths = paths
         self.input_name = input_name
         self.input_shape = input_shape
         self.cache_path = cache_path
         self.metadata_path = cache_path.with_suffix(cache_path.suffix + ".json")
         self.cache_key = cache_key
+        self.algorithm = algorithm
         self.index = 0
         self.host_batch = np.empty(input_shape, dtype=np.float32)
         self.device_batch = check_cuda(
@@ -118,7 +145,11 @@ class EntropyCalibrator(trt.IInt8EntropyCalibrator2):
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_path.write_bytes(cache)
         self.metadata_path.write_text(
-            json.dumps({"schema_version": 1, "cache_key": self.cache_key}, indent=2),
+            json.dumps({
+                "schema_version": 1,
+                "calibration_algorithm": self.algorithm,
+                "cache_key": self.cache_key,
+            }, indent=2),
             encoding="utf-8",
         )
 
@@ -126,6 +157,62 @@ class EntropyCalibrator(trt.IInt8EntropyCalibrator2):
         if self.device_batch is not None:
             check_cuda(cudart.cudaFree(self.device_batch), "cudaFree(calibration)")
             self.device_batch = None
+
+
+class EntropyCalibrator(trt.IInt8EntropyCalibrator2):
+    def __init__(self,
+                 paths: list[Path],
+                 input_name: str,
+                 input_shape: tuple[int, int, int, int],
+                 cache_path: Path,
+                 cache_key: str):
+        super().__init__()
+        self.resources = CalibrationResources(
+            paths, input_name, input_shape, cache_path, cache_key, "entropy"
+        )
+
+    def get_batch_size(self) -> int:
+        return self.resources.get_batch_size()
+
+    def get_batch(self, names: list[str]) -> list[int] | None:
+        return self.resources.get_batch(names)
+
+    def read_calibration_cache(self) -> bytes | None:
+        return self.resources.read_calibration_cache()
+
+    def write_calibration_cache(self, cache: bytes) -> None:
+        self.resources.write_calibration_cache(cache)
+
+    def close(self) -> None:
+        self.resources.close()
+
+
+class MinMaxCalibrator(trt.IInt8MinMaxCalibrator):
+    def __init__(self,
+                 paths: list[Path],
+                 input_name: str,
+                 input_shape: tuple[int, int, int, int],
+                 cache_path: Path,
+                 cache_key: str):
+        super().__init__()
+        self.resources = CalibrationResources(
+            paths, input_name, input_shape, cache_path, cache_key, "minmax"
+        )
+
+    def get_batch_size(self) -> int:
+        return self.resources.get_batch_size()
+
+    def get_batch(self, names: list[str]) -> list[int] | None:
+        return self.resources.get_batch(names)
+
+    def read_calibration_cache(self) -> bytes | None:
+        return self.resources.read_calibration_cache()
+
+    def write_calibration_cache(self, cache: bytes) -> None:
+        self.resources.write_calibration_cache(cache)
+
+    def close(self) -> None:
+        self.resources.close()
 
 
 def parse_shape(text: str) -> tuple[int, int, int, int]:
@@ -153,10 +240,172 @@ def cache_key(args: argparse.Namespace, calibration_hashes: list[str]) -> str:
     payload = {
         "onnx_sha256": hashlib.sha256(args.onnx.read_bytes()).hexdigest(),
         "calibration_image_sha256": calibration_hashes,
+        "calibration_algorithm": args.calibrator,
         "input_shape": args.input_shape,
         "preprocess": "letterbox114-bgr2rgb-fp32-div255-nchw-v1",
+        "tensorrt_version": trt.__version__,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def create_calibrator(
+    algorithm: str,
+    paths: list[Path],
+    input_name: str,
+    input_shape: tuple[int, int, int, int],
+    cache_path: Path,
+    identity: str,
+) -> EntropyCalibrator | MinMaxCalibrator:
+    calibrator_types = {
+        "entropy": EntropyCalibrator,
+        "minmax": MinMaxCalibrator,
+    }
+    try:
+        calibrator_type = calibrator_types[algorithm]
+    except KeyError as error:
+        raise ValueError(f"unsupported calibration algorithm: {algorithm}") from error
+    return calibrator_type(paths, input_name, input_shape, cache_path, identity)
+
+
+def precision_profile_layers(network, profile: str) -> list:
+    try:
+        required_names = PRECISION_PROFILES[profile]
+    except KeyError as error:
+        raise ValueError(f"unsupported precision profile: {profile}") from error
+
+    if profile == "detection_head_fp16":
+        selected = [
+            network.get_layer(index)
+            for index in range(network.num_layers)
+            if network.get_layer(index).name.startswith(DETECTION_HEAD_PREFIXES)
+        ]
+        type_counts = Counter(layer.type for layer in selected)
+        if type_counts != Counter(DETECTION_HEAD_EXPECTED_TYPES):
+            readable = {str(layer_type): count for layer_type, count in type_counts.items()}
+            raise ValueError(
+                "detection_head_fp16 matched an unexpected layer structure: "
+                f"expected {DETECTION_HEAD_EXPECTED_TYPES}, found {readable}"
+            )
+        return selected
+
+    if not required_names:
+        return []
+
+    layers_by_name = {}
+    for index in range(network.num_layers):
+        layer = network.get_layer(index)
+        if layer.name in layers_by_name:
+            raise ValueError(f"network contains duplicate layer name: {layer.name}")
+        layers_by_name[layer.name] = layer
+
+    missing = [name for name in required_names if name not in layers_by_name]
+    if missing:
+        raise ValueError(
+            f"precision profile {profile} did not match required layer(s): {missing}"
+        )
+
+    selected = []
+    for name in required_names:
+        layer = layers_by_name[name]
+        if layer.type != trt.LayerType.CONVOLUTION:
+            raise ValueError(f"precision-constrained layer is not a convolution: {name}")
+        selected.append(layer)
+    return selected
+
+
+def apply_precision_profile(network, config, profile: str) -> list[str]:
+    selected = precision_profile_layers(network, profile)
+    if not selected:
+        return []
+
+    constrained = []
+    for layer in selected:
+        layer.precision = trt.float16
+        for output_index in range(layer.num_outputs):
+            layer.set_output_type(output_index, trt.float16)
+        constrained.append(layer.name)
+
+    config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
+    config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
+    return constrained
+
+
+def configure_timing_cache(config, path: Path | None):
+    if path is None:
+        return None
+    serialized = path.read_bytes() if path.is_file() else b""
+    timing_cache = config.create_timing_cache(serialized)
+    if timing_cache is None:
+        raise RuntimeError(f"failed to create TensorRT timing cache from {path}")
+    if not config.set_timing_cache(timing_cache, False):
+        raise RuntimeError(f"TensorRT rejected timing cache: {path}")
+    return timing_cache
+
+
+def save_timing_cache(config, path: Path | None) -> None:
+    if path is None:
+        return
+    timing_cache = config.get_timing_cache()
+    if timing_cache is None:
+        raise RuntimeError("TensorRT builder did not expose a timing cache after the build")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bytes(timing_cache.serialize()))
+
+
+def write_engine_evidence(
+    args: argparse.Namespace,
+    serialized_engine: bytes,
+    logger: trt.Logger,
+    calibration_count: int,
+    identity: str,
+    constrained_layers: list[str],
+) -> None:
+    runtime = trt.Runtime(logger)
+    engine = runtime.deserialize_cuda_engine(serialized_engine)
+    if engine is None:
+        raise RuntimeError("failed to deserialize the newly built engine for inspection")
+    inspector = engine.create_engine_inspector()
+    layer_information = inspector.get_engine_information(trt.LayerInformationFormat.JSON)
+    inspector_path = args.output.with_suffix(args.output.suffix + ".layers.json")
+    inspector_path.write_text(layer_information + "\n", encoding="utf-8")
+
+    metadata = {
+        "schema_version": 1,
+        "onnx": str(args.onnx.resolve()),
+        "onnx_sha256": hashlib.sha256(args.onnx.read_bytes()).hexdigest(),
+        "manifest": None if args.calibration_dir else str(args.manifest.resolve()),
+        "manifest_sha256": (
+            None if args.calibration_dir else hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+        ),
+        "calibration_images": calibration_count,
+        "calibration_algorithm": args.calibrator,
+        "calibration_cache": str(args.cache.resolve()),
+        "calibration_cache_sha256": hashlib.sha256(args.cache.read_bytes()).hexdigest(),
+        "calibration_cache_key": identity,
+        "precision_profile": args.precision_profile,
+        "precision_constraint_flag": (
+            "OBEY_PRECISION_CONSTRAINTS" if constrained_layers else None
+        ),
+        "constrained_layers": [
+            {"name": name, "compute_precision": "FP16", "output_type": "FP16"}
+            for name in constrained_layers
+        ],
+        "input_shape": list(args.input_shape),
+        "workspace_mib": args.workspace_mib,
+        "fp16_fallback_enabled": args.enable_fp16,
+        "tensorrt_version": trt.__version__,
+        "timing_cache": None if args.timing_cache is None else str(args.timing_cache.resolve()),
+        "timing_cache_sha256": (
+            None
+            if args.timing_cache is None
+            else hashlib.sha256(args.timing_cache.read_bytes()).hexdigest()
+        ),
+        "engine": str(args.output.resolve()),
+        "engine_sha256": hashlib.sha256(serialized_engine).hexdigest(),
+        "engine_inspector": str(inspector_path.resolve()),
+    }
+    metadata_path = args.output.with_suffix(args.output.suffix + ".json")
+    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
 
 def build_engine(args: argparse.Namespace) -> None:
@@ -176,6 +425,8 @@ def build_engine(args: argparse.Namespace) -> None:
     config.set_flag(trt.BuilderFlag.INT8)
     if args.enable_fp16:
         config.set_flag(trt.BuilderFlag.FP16)
+    constrained_layers = apply_precision_profile(network, config, args.precision_profile)
+    configure_timing_cache(config, args.timing_cache)
 
     input_tensor = network.get_input(0)
     input_name = input_tensor.name
@@ -186,9 +437,14 @@ def build_engine(args: argparse.Namespace) -> None:
         config.add_optimization_profile(profile)
 
     calibration_paths, calibration_hashes = calibration_inputs(args)
-    calibrator = EntropyCalibrator(
-        calibration_paths, input_name, input_shape, args.cache,
-        cache_key(args, calibration_hashes),
+    identity = cache_key(args, calibration_hashes)
+    calibrator = create_calibrator(
+        args.calibrator,
+        calibration_paths,
+        input_name,
+        input_shape,
+        args.cache,
+        identity,
     )
     config.int8_calibrator = calibrator
     try:
@@ -196,11 +452,26 @@ def build_engine(args: argparse.Namespace) -> None:
         if serialized is None:
             raise RuntimeError("TensorRT failed to build the INT8 engine")
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_bytes(bytes(serialized))
+        serialized_bytes = bytes(serialized)
+        args.output.write_bytes(serialized_bytes)
+        save_timing_cache(config, args.timing_cache)
+        write_engine_evidence(
+            args,
+            serialized_bytes,
+            logger,
+            len(calibration_paths),
+            identity,
+            constrained_layers,
+        )
     finally:
         calibrator.close()
 
     print(f"Calibration images: {len(calibration_paths)}")
+    print(f"Calibration algorithm: {args.calibrator}")
+    print(f"Precision profile: {args.precision_profile}")
+    print(f"Constrained layers: {len(constrained_layers)}")
+    if args.timing_cache is not None:
+        print(f"Timing cache: {args.timing_cache}")
     print(f"Calibration cache: {args.cache}")
     print(f"INT8 engine: {args.output}")
 
@@ -218,6 +489,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=Path("outputs/yolov8n_static_int8.engine"))
     parser.add_argument(
         "--cache", type=Path, default=Path("outputs/yolov8n_int8_calibration.cache")
+    )
+    parser.add_argument(
+        "--calibrator",
+        choices=("entropy", "minmax"),
+        default="entropy",
+        help="PTQ calibration algorithm; use separate cache files for each algorithm.",
+    )
+    parser.add_argument(
+        "--precision-profile",
+        choices=tuple(PRECISION_PROFILES),
+        default="none",
+        help="Named layer-precision constraints applied after parsing the ONNX network.",
+    )
+    parser.add_argument(
+        "--timing-cache",
+        type=Path,
+        help="Persistent TensorRT tactic timing cache reused across compatible engine builds.",
     )
     parser.add_argument("--input-shape", type=parse_shape, default=(1, 3, 640, 640))
     parser.add_argument("--workspace-mib", type=int, default=2048)

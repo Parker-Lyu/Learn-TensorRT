@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import importlib.metadata
 import json
@@ -145,6 +146,90 @@ def validate_args(args: argparse.Namespace) -> None:
             raise ValueError(f"--{name.replace('_', '-')} cannot be negative")
 
 
+def current_software() -> dict[str, str]:
+    return {
+        "tensorrt": trt.__version__,
+        "numpy": np.__version__,
+        "opencv": cv2.__version__,
+        "torch": importlib.metadata.version("torch"),
+        "ultralytics": importlib.metadata.version("ultralytics"),
+    }
+
+
+def regression_thresholds(args: argparse.Namespace) -> dict[str, float]:
+    return {
+        "map50_95": args.max_map50_95_drop,
+        "map50": args.max_map50_drop,
+        "precision": args.max_precision_drop,
+        "recall": args.max_recall_drop,
+    }
+
+
+def expected_settings(args: argparse.Namespace, input_shape: tuple[int, ...]) -> dict[str, Any]:
+    return {
+        "confidence": args.confidence,
+        "nms_iou": args.iou,
+        "max_detections": args.max_detections,
+        "input_shape": list(input_shape),
+        "warmup": args.warmup,
+        "metric_implementation": "course-coco-like-101point-v2-no-crowd-no-area-ranges",
+    }
+
+
+def reference_artifact_paths(args: argparse.Namespace) -> dict[str, Path]:
+    return {
+        "pytorch_weights": args.weights,
+        "tensorrt_fp32": args.fp32_engine,
+        "tensorrt_fp16": args.fp16_engine,
+    }
+
+
+def load_validated_reference_report(
+    args: argparse.Namespace, manifest: dict[str, Any], input_shape: tuple[int, ...]
+) -> dict[str, Any]:
+    if args.reference_report is None:
+        raise ValueError("reference report path is required")
+    report = json.loads(args.reference_report.read_text(encoding="utf-8"))
+    if report.get("schema_version") != 1:
+        raise ValueError("reference report has an unsupported schema")
+
+    expected_manifest_hash = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+    dataset = report.get("dataset", {})
+    if dataset.get("manifest_sha256") != expected_manifest_hash:
+        raise ValueError("reference report manifest hash does not match the requested manifest")
+    if dataset.get("dataset_id") != manifest["dataset_id"]:
+        raise ValueError("reference report dataset ID does not match the requested manifest")
+
+    settings = report.get("settings", {})
+    for name, expected in expected_settings(args, input_shape).items():
+        if settings.get(name) != expected:
+            raise ValueError(
+                f"reference report setting {name!r} changed: "
+                f"expected {expected!r}, found {settings.get(name)!r}"
+            )
+
+    expected_thresholds = {
+        f"max_{name}_drop": value for name, value in regression_thresholds(args).items()
+    }
+    if report.get("regression_thresholds") != expected_thresholds:
+        raise ValueError("reference report regression thresholds do not match this evaluation")
+
+    artifacts = report.get("artifacts", {})
+    for name, path in reference_artifact_paths(args).items():
+        declared = artifacts.get(name, {})
+        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        if declared.get("sha256") != actual_hash:
+            raise ValueError(f"reference artifact hash changed: {name}")
+
+    if report.get("software") != current_software():
+        raise ValueError("reference report software identity does not match the current environment")
+    for name in ("pytorch", "tensorrt_fp32", "tensorrt_fp16"):
+        backend = report.get("backends", {}).get(name)
+        if not isinstance(backend, dict) or not backend.get("passed"):
+            raise ValueError(f"reference report has no passing {name} backend")
+    return report
+
+
 def changed_detection(reference: list[dict], candidate: list[dict]) -> bool:
     return len(reference) != len(candidate) or [item["class_id"] for item in reference] != [
         item["class_id"] for item in candidate
@@ -246,12 +331,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             prediction_buffers[name][:prediction_offsets[name]], ground_truth
         )
     reference = metrics["pytorch"]
-    thresholds = {
-        "map50_95": args.max_map50_95_drop,
-        "map50": args.max_map50_drop,
-        "precision": args.max_precision_drop,
-        "recall": args.max_recall_drop,
-    }
+    thresholds = regression_thresholds(args)
     backends = {}
     failures = []
     for name, backend_metrics in metrics.items():
@@ -301,17 +381,111 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "tensorrt_int8": args.int8_engine,
             }.items()
         },
-        "software": {
-            "tensorrt": trt.__version__,
-            "numpy": np.__version__,
-            "opencv": cv2.__version__,
-            "torch": importlib.metadata.version("torch"),
-            "ultralytics": importlib.metadata.version("ultralytics"),
-        },
+        "software": current_software(),
         "regression_thresholds": {f"max_{name}_drop": value for name, value in thresholds.items()},
         "backends": backends,
         "changed_or_high_drift_examples": changed_examples[: args.max_inspection_examples],
         "release_gate": {"passed": not failures, "failed_backends": failures},
+    }
+
+
+def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, Any]:
+    validate_args(args)
+    manifest = load_manifest(args.manifest)
+    records = [record for record in manifest["records"] if record["split"] == "validation"]
+    if not records:
+        raise ValueError("manifest contains no validation records")
+
+    yolo_ref.check_cuda(cudart.cudaSetDevice(args.gpu), "cudaSetDevice")
+    runner = TensorRtRunner(args.int8_engine)
+    try:
+        input_shape = runner.input_shape
+        reference = load_validated_reference_report(args, manifest, input_shape)
+        first_image = resolve_path(args.manifest, records[0]["image"])
+        for _ in range(args.warmup):
+            runner.run(first_image, args.confidence, args.iou, args.max_detections)
+
+        ground_truth: dict[int, list[dict]] = {}
+        predictions = allocate_prediction_buffer(len(records), args.max_detections)
+        prediction_offset = 0
+        latencies = []
+        for image_index, record in enumerate(records):
+            image_path = resolve_path(args.manifest, record["image"])
+            label_path = resolve_path(args.manifest, record["label"])
+            ground_truth[image_index] = load_ground_truth(image_path, label_path)
+            result = runner.run(image_path, args.confidence, args.iou, args.max_detections)
+            prediction_offset = append_predictions(
+                predictions, prediction_offset, image_index, result["detections"]
+            )
+            latencies.append(result["latency_ms"])
+            if (image_index + 1) % 100 == 0 or image_index + 1 == len(records):
+                print(f"Evaluated candidate images: {image_index + 1}/{len(records)}", flush=True)
+    finally:
+        runner.close()
+
+    print("Computing detection metrics: tensorrt_int8", flush=True)
+    metrics = detection_metrics_packed(predictions[:prediction_offset], ground_truth)
+    thresholds = regression_thresholds(args)
+    pytorch_metrics = reference["backends"]["pytorch"]["metrics"]
+    deltas = {name: metrics[name] - pytorch_metrics[name] for name in thresholds}
+    passed = all(deltas[name] >= -allowed for name, allowed in thresholds.items())
+    candidate_backend = {
+        "metrics": metrics,
+        "delta_vs_pytorch": deltas,
+        "latency_ms": {
+            "mean": statistics.fmean(latencies),
+            "p50": float(np.percentile(latencies, 50)),
+            "p90": float(np.percentile(latencies, 90)),
+        },
+        "passed": passed,
+        "diagnostics": (
+            "candidate-only mode does not recompute FP32 tensor drift or changed examples"
+        ),
+    }
+    backends = {
+        name: copy.deepcopy(reference["backends"][name])
+        for name in ("pytorch", "tensorrt_fp32", "tensorrt_fp16")
+    }
+    backends["tensorrt_int8"] = candidate_backend
+    artifacts = {
+        name: copy.deepcopy(reference["artifacts"][name])
+        for name in ("pytorch_weights", "tensorrt_fp32", "tensorrt_fp16")
+    }
+    artifacts["tensorrt_int8"] = {
+        "path": str(args.int8_engine),
+        "sha256": hashlib.sha256(args.int8_engine.read_bytes()).hexdigest(),
+    }
+    return {
+        "schema_version": 1,
+        "evaluation_mode": "candidate_only_with_reused_references",
+        "reference_report": {
+            "path": str(args.reference_report),
+            "sha256": hashlib.sha256(args.reference_report.read_bytes()).hexdigest(),
+        },
+        "dataset": {
+            "manifest": str(args.manifest),
+            "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
+            "dataset_id": manifest["dataset_id"],
+            "validation_images": len(records),
+        },
+        "settings": {
+            **expected_settings(args, input_shape),
+            "latency_scope": (
+                "runtime wrapper with H2D, inference, D2H; excludes image loading, "
+                "preprocessing, and decode"
+            ),
+        },
+        "artifacts": artifacts,
+        "software": current_software(),
+        "regression_thresholds": {
+            f"max_{name}_drop": value for name, value in thresholds.items()
+        },
+        "backends": backends,
+        "changed_or_high_drift_examples": [],
+        "release_gate": {
+            "passed": passed,
+            "failed_backends": [] if passed else ["tensorrt_int8"],
+        },
     }
 
 
@@ -333,12 +507,20 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
             f"{result['latency_ms']['mean']:.3f} | {'PASS' if result['passed'] else 'FAIL'} |"
         )
     gate = report["release_gate"]
+    source_note = (
+        "The JSON file is the source of truth for thresholds, deltas, reused-reference identity, "
+        "and candidate metrics. Candidate-only mode does not collect FP32 tensor drift."
+        if report.get("evaluation_mode") == "candidate_only_with_reused_references"
+        else (
+            "The JSON file is the source of truth for thresholds, deltas, tensor drift, "
+            "and inspection examples."
+        )
+    )
     lines.extend([
         "",
         f"Release gate: **{'PASS' if gate['passed'] else 'FAIL'}**",
         "",
-        "The JSON file is the source of truth for thresholds, deltas, tensor drift, "
-        "and inspection examples.",
+        source_note,
     ])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -360,6 +542,14 @@ def parse_args() -> argparse.Namespace:
         default=Path("outputs/yolov8n_static_int8.engine")
     )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument(
+        "--reference-report",
+        type=Path,
+        help=(
+            "Reuse validated PyTorch/FP32/FP16 metrics from a prior full report and run only "
+            "the INT8 candidate."
+        ),
+    )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--confidence", type=float, default=0.001)
@@ -382,7 +572,13 @@ def main() -> int:
             f"COCO dataset manifest not found: {args.manifest}. Run "
             "`python3 assets/coco/prepare_coco.py` from the repository root."
         )
-    report = evaluate(args)
+    if args.reference_report is not None and not args.reference_report.is_file():
+        raise FileNotFoundError(f"reference report not found: {args.reference_report}")
+    report = (
+        evaluate_candidate_with_references(args)
+        if args.reference_report is not None
+        else evaluate(args)
+    )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     json_path = args.output_dir / "precision_evaluation.json"
     markdown_path = args.output_dir / "precision_evaluation.md"

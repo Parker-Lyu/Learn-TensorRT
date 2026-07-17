@@ -1,7 +1,8 @@
-# 12 - YOLOv8 INT8 Calibration and Accuracy Gate
+# 12 - YOLOv8 INT8 Calibration and Accuracy Recovery
 
-Goal: build an entropy-calibrated INT8 TensorRT engine, then decide whether it is releasable using
-latency, tensor drift, and task-level accuracy on one fixed labeled validation split.
+Goal: build reproducible entropy- and MinMax-calibrated INT8 TensorRT engines, measure their quality
+against a fixed labeled validation split, and recover unacceptable PTQ accuracy loss with controlled
+calibration-data and mixed-precision experiments.
 
 The course path uses a reproducibly selected COCO train2017 calibration subset and the complete,
 human-labeled COCO val2017 split. The accuracy gate is based only on annotations independent of the
@@ -13,13 +14,18 @@ evaluated model.
   images, converts val2017 boxes to YOLO format, and verifies every declared hash.
 - `dataset_manifest.py`: creates and validates a manifest for real calibration images and YOLO-format
   validation labels; byte-identical split overlap is rejected.
-- `build_int8_engine.py`: implements `IInt8EntropyCalibrator2`, builds INT8 with optional FP16
-  fallback, and rejects stale calibration caches using a model/data/shape/preprocessing cache key.
+- `build_int8_engine.py`: implements entropy and MinMax calibrators, algorithm-aware calibration
+  cache identity, named FP16 precision profiles, strict precision constraints, persistent TensorRT
+  timing cache, engine metadata, and detailed Engine Inspector evidence.
 - `compare_engines.py`: runs PyTorch plus TensorRT FP32, FP16, and INT8 over the complete manifest,
-  using the same letterbox, decode, confidence, NMS IoU, and maximum-detection settings.
+  or validates and reuses an identity-linked reference report when only a new INT8 candidate needs
+  evaluation. Every backend uses the same letterbox, decode, confidence, NMS IoU, and
+  maximum-detection settings.
 - `evaluation.py`: compact NumPy prediction storage plus reusable YOLO-label parsing, IoU matching,
   101-point AP, mAP50-95, mAP50, precision, recall, and tensor-drift calculations.
-- `tests/test_evaluation.py`: focused metric and invalid-label tests.
+- `precision_recovery/`: ordered experiment implementations and the reproducible recovery log.
+- `tests/`: focused manifest, evaluator, cache-identity, reference-reuse, and precision-profile
+  tests.
 
 Downloaded datasets stay in ignored `assets/coco/data/`; engines, calibration tables, and raw
 evaluation results stay in this lesson's ignored `outputs/` directory.
@@ -55,6 +61,18 @@ python3 build_int8_engine.py --enable-fp16
 python3 compare_engines.py
 ```
 
+Entropy remains the default for the canonical baseline. Select MinMax explicitly for a controlled
+candidate:
+
+```bash
+python3 build_int8_engine.py \
+  --calibrator minmax \
+  --manifest outputs/precision_recovery/02_calibration_coverage/dataset_manifest.json \
+  --cache outputs/minmax.cache \
+  --output outputs/minmax.engine \
+  --enable-fp16
+```
+
 Both commands default to the shared COCO manifest. The evaluator writes
 `outputs/precision_evaluation.json` as the machine-readable source of truth and
 `outputs/precision_evaluation.md` as a concise table. A regression gate failure still writes both
@@ -63,6 +81,21 @@ reports and exits with status `2`.
 The complete evaluation runs 5,000 images through four backends and prints progress every 100
 images. Predictions use fixed-capacity structured NumPy buffers instead of millions of Python
 objects; metric matching groups and sorts each class once before evaluating the IoU thresholds.
+
+During recovery, unchanged PyTorch, FP32, and FP16 results may be reused from a full report. The
+evaluator verifies the manifest, artifact hashes, software versions, input shape, evaluation
+settings, metric implementation, and thresholds before it runs only the new candidate:
+
+```bash
+python3 compare_engines.py \
+  --reference-report outputs/reference/precision_evaluation.json \
+  --int8-engine outputs/candidate.engine \
+  --output-dir outputs/candidate_evaluation
+```
+
+Candidate-only mode preserves the task-level gate but intentionally omits newly computed FP32 raw
+tensor drift and changed-example diagnostics. Run the full four-backend command whenever those
+diagnostics or any reference identity changes.
 
 Run the CPU-only focused tests without a GPU engine:
 
@@ -142,80 +175,35 @@ wrapper overhead, but excludes image loading, preprocessing, and decoding. It is
 than the authoritative performance comparison; 12a uses matched `trtexec` sampling for FP32, FP16,
 and INT8.
 
-## Accuracy Recovery Workflow
+## Recorded Accuracy Recovery
 
-The checked-in report currently accepts FP16 and rejects INT8 under the predeclared accuracy gate.
-Treat that result as an engineering decision, not as a reason to loosen thresholds after seeing the
-numbers. Keep FP16 as the release candidate until a new identity-linked INT8 experiment passes the
-same complete validation split.
+The canonical Entropy INT8 engine failed the predeclared accuracy gate while FP16 passed. Recovery
+experiments kept the ONNX model, complete val2017 split, postprocessing settings, and gate fixed.
+Detailed commands, artifact identities, coverage statistics, Inspector evidence, and reports are in
+[`precision_recovery/README.md`](precision_recovery/README.md).
 
-Work through recovery experiments in this order so each result has one explainable cause.
+| Experiment | mAP50-95 | mAP50 | Recall | Gate |
+| --- | ---: | ---: | ---: | --- |
+| Entropy, canonical 1,000 images | 0.3179 | 0.4560 | 0.7858 | FAIL |
+| Entropy, coverage-aware 3,000 images | 0.3247 | 0.4651 | 0.7940 | FAIL |
+| MinMax, coverage-aware 3,000 images | 0.3444 | 0.4892 | 0.7936 | FAIL |
+| MinMax, final box outputs FP16 | 0.3452 | 0.4893 | 0.7936 | FAIL |
+| MinMax, final box and class outputs FP16 | 0.3447 | 0.4892 | 0.7936 | FAIL |
+| MinMax, complete detection head FP16 | 0.3463 | 0.4897 | 0.7946 | FAIL |
 
-### 1. Prove Preprocessing Parity
+The final mixed-precision candidate passed mAP50-95, precision, and recall, but its mAP50 drop was
+`0.02057` against the allowed `0.02`. The threshold was not loosened after observing the result.
+Matched `trtexec` measurements showed approximately `9.9%` lower mean latency and `20.7%` higher
+throughput than FP16, but performance cannot override the failed quality gate.
 
-Calibration and evaluation must produce byte-identical tensors from the same image. Add a focused
-test that compares both paths after letterbox resize, padding with 114, BGR-to-RGB conversion,
-division by 255, HWC-to-CHW conversion, FP32 casting, and contiguous layout. Require exact equality
-when the implementations are intended to be identical; do not compensate for a preprocessing bug
-by collecting more calibration images.
+The current release decision is therefore FP16. This is also the final legacy-calibrator PTQ
+candidate in the pinned TensorRT 8.6.1 environment. Further recovery belongs in a separate,
+version-pinned explicit Q/DQ or QAT environment and must produce a new model identity before it is
+evaluated against the same gate.
 
-Ordered recovery experiments and reproducible commands are maintained in
-[`precision_recovery/README.md`](precision_recovery/README.md). Step 01 checks synthetic edge cases
-and every image in the hashed calibration split.
-
-### 2. Version A Better Calibration Split
-
-The canonical 1,000-image split covers all 80 classes, but class coverage alone does not guarantee
-representative activation ranges. A follow-up split should cover small/medium/large objects,
-different object counts and aspect ratios, bright/dark/low-contrast images, clutter, occlusion, and
-sparse scenes. Evaluate a fixed 2,000-5,000-image candidate when the extra distribution coverage is
-justified.
-
-Create a new dataset ID and manifest rather than overwriting the current canonical manifest. Run
-FP32, FP16, and every INT8 candidate against the unchanged val2017 split and predeclared thresholds.
-
-### 3. Compare Calibration Algorithms
-
-The current implementation uses `IInt8EntropyCalibrator2`. A controlled follow-up may add a MinMax
-calibrator and compare it with entropy calibration using the same ONNX model, calibration split,
-preprocessing, builder settings, and validation gate. This lesson does not currently implement the
-MinMax variant; add it as an explicit engine configuration with a separate cache and output name.
-
-### 4. Measure Layer Sensitivity And Constrain Precision
-
-`--enable-fp16` permits FP16 tactics but does not force sensitive layers to remain FP16. Build
-separate candidates that progressively constrain likely sensitive regions:
-
-1. DFL and Softmax operations;
-2. final box-regression and class-score convolutions;
-3. the complete detection head;
-4. the neck and detection head, leaving only the backbone in INT8.
-
-Use TensorRT precision constraints and record the exact constrained layer names. Change one region
-per candidate, preserve engine/cache metadata, and rerun the full gate. The useful result is the
-smallest FP16/FP32 fallback set that restores accuracy while retaining a measured speed benefit.
-
-### 5. Inspect Drift Examples
-
-Use `changed_or_high_drift_examples` from `precision_evaluation.json` to look for concentration in
-small targets, crowded scenes, low-confidence detections, particular classes, or box-regression
-shifts. Raw tensor drift helps locate sensitivity but is not itself a release threshold. Confirm
-every proposed fallback with decoded detection metrics.
-
-### 6. Escalate From PTQ To QAT
-
-Use quantization-aware training only after representative PTQ calibration and mixed-precision
-fallback experiments still fail. QAT requires a reproducible training environment, training data,
-quantization-aware fine-tuning, an ONNX model with explicit Q/DQ nodes, a new TensorRT build path,
-and the same complete validation gate. It is a separate model artifact, not another calibration
-cache for the existing ONNX file.
-
-### Decision Rule
-
-Do not adopt INT8 only because it is faster. Compare its accepted throughput gain against FP16, not
-only against FP32. If the final INT8 or mixed-precision candidate still exceeds any declared metric
-drop, or its speedup does not justify the added complexity, retain FP16 and record the failed
-candidate as evidence.
+This outcome is intentional engineering evidence rather than an unfinished engine build: the
+lesson demonstrates reproducible INT8 calibration, identity-linked evaluation, controlled recovery,
+and a defensible fallback decision when PTQ remains outside the declared quality contract.
 
 ## Acceptance Criteria
 
@@ -227,4 +215,7 @@ candidate as evidence.
 - JSON records mAP50-95, mAP50, precision, recall, backend deltas, latency, drift, and inspection
   examples.
 - Predeclared thresholds determine the process exit status.
-- Accuracy loss can be explained with a concrete FP16/mixed-precision/QAT fallback decision.
+- Calibration algorithm, precision constraints, engine identity, and reusable reference identity
+  are recorded and validated.
+- Accuracy loss is explained with a concrete FP16 release decision and a separate explicit-Q/DQ or
+  QAT escalation boundary.
