@@ -364,15 +364,135 @@ Evidence:
   `precision_evaluation.json`
 - `outputs/precision_recovery/04_layer_sensitivity/detection_head_fp16_trtexec.log`
 
+## Step 05: ModelOpt Explicit Q/DQ PTQ
+
+Step 05 calibrates and exports Q/DQ ONNX in `learn-tensorrt-modelopt`, then builds and evaluates the
+explicitly quantized graph in the original `trt_dev` TensorRT 8.6.1 container. It does not alter or
+replace the legacy-calibrator evidence from Steps 01-04. The implementation is in
+`precision_recovery/05_modelopt_ptq/modelopt_ptq.py`; generated ONNX models, metadata, engines, and
+logs belong under the ignored `outputs/precision_recovery/05_modelopt_ptq/` directory.
+
+The first configuration is predeclared as NVIDIA ModelOpt `INT8_DEFAULT_CFG`, which uses `max`
+calibration for INT8 activations and per-channel INT8 weights. Calibration reuses the production
+letterbox/RGB/FP32 normalization path and streams small batches to the GPU. It exports a static
+`images` input of `(1, 3, 640, 640)` and raw `output0` of `(1, 84, 8400)`, then requires ONNX checker
+success and nonzero `QuantizeLinear` and `DequantizeLinear` node counts.
+
+Start the persistent container and run the focused CPU tests inside it:
+
+```bash
+docker start learn-tensorrt-modelopt
+docker exec learn-tensorrt-modelopt bash -lc '
+  cd /workspace/Learn-TensorRT &&
+  python3 -m unittest -v \
+    12_yolov8_int8_calibration/precision_recovery/05_modelopt_ptq/test_modelopt_ptq.py
+'
+```
+
+Run the 32-image pipeline smoke calibration before the formal candidate:
+
+```bash
+docker exec learn-tensorrt-modelopt bash -lc '
+  cd /workspace/Learn-TensorRT &&
+  python3 12_yolov8_int8_calibration/precision_recovery/05_modelopt_ptq/modelopt_ptq.py \
+    --candidate-kind smoke \
+    --calibration-images 32 \
+    --batch-size 4 \
+    --name yolov8n_modelopt_int8_max_smoke32
+'
+```
+
+The smoke artifact validates conversion and explicit Q/DQ export only. Its metadata sets
+`valid_for_accuracy_gate` to `false`; do not evaluate or report it as a PTQ accuracy result.
+
+After the smoke path succeeds, generate the primary formal candidate with all 3,000 images from the
+coverage-aware manifest:
+
+```bash
+docker exec learn-tensorrt-modelopt bash -lc '
+  cd /workspace/Learn-TensorRT &&
+  python3 12_yolov8_int8_calibration/precision_recovery/05_modelopt_ptq/modelopt_ptq.py \
+    --candidate-kind formal \
+    --calibration-images 3000 \
+    --batch-size 4 \
+    --name yolov8n_modelopt_int8_max_train3000
+'
+```
+
+The formal candidate is built in `trt_dev` with `--int8 --fp16`. TensorRT 8.6 requires the INT8
+builder flag even though Q/DQ nodes already provide the quantization scales; its log confirms that
+the legacy calibrator is not used in explicit-precision mode. Do not provide a calibration cache,
+use validation images for calibration, perform QAT, or change an accuracy threshold.
+
+Build the optimized formal explicit Q/DQ graph with INT8 Q/DQ constraints and FP16 for eligible
+high-precision layers. The wrapper uses a dedicated timing cache and records the exact `trtexec`
+argument vector, complete build log, detailed Engine Inspector layer JSON, and artifact hashes:
+
+```bash
+docker exec trt_dev bash -lc '
+  cd /workspace/Projects/Learn-TensorRT &&
+  python3 \
+    12_yolov8_int8_calibration/precision_recovery/05_modelopt_ptq/build_trt86_qdq_engine.py
+'
+```
+
+Evaluate only the new candidate while reusing the identity-validated TRT8.6 PyTorch/FP32/FP16
+references from Step 03. The evaluator still processes all 5,000 validation images and applies the
+unchanged four regression thresholds:
+
+```bash
+docker exec trt_dev bash -lc '
+  cd /workspace/Projects/Learn-TensorRT/12_yolov8_int8_calibration &&
+  python3 compare_engines.py \
+    --manifest outputs/precision_recovery/02_calibration_coverage/dataset_manifest.json \
+    --reference-report \
+      outputs/precision_recovery/03_entropy_vs_minmax/evaluation/precision_evaluation.json \
+    --int8-engine \
+      outputs/precision_recovery/05_modelopt_ptq/yolov8n_modelopt_int8_max_train3000_trt86_int8_fp16.engine \
+    --output-dir outputs/precision_recovery/05_modelopt_ptq/evaluation
+'
+```
+
+Recorded formal result on all 5,000 validation images:
+
+| Candidate | mAP50-95 | mAP50 | Precision | Recall | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| PyTorch reference | 0.3631 | 0.5102 | 0.0427 | 0.8097 | PASS |
+| ModelOpt max Q/DQ, TRT8.6 INT8+FP16 | 0.3453 | 0.4931 | 0.0432 | 0.7998 | PASS |
+
+The Q/DQ candidate changed mAP50-95 by `-0.01781`, mAP50 by `-0.01713`, precision by
+`+0.00057`, and recall by `-0.00991` versus PyTorch. Every delta remained within the unchanged
+limits of `0.02`, `0.02`, `0.03`, and `0.03`, respectively. This is the first Lesson 12 INT8
+candidate to pass the complete quality gate.
+
+Engine Inspector evidence contains both INT8 and FP16 tensor-format descriptions. FP32 remains at
+the external I/O boundary and in selected high-precision tensors, constants, biases, and tactics;
+the recorded keyword counts are evidence mentions, not compute-layer counts. The candidate-only
+wrapper mean latency was `5.124 ms`, while the reused FP16 reference recorded `4.500 ms`. Those
+wrapper measurements are diagnostic and do not replace a matched `trtexec` performance comparison.
+
+Evidence:
+
+- `outputs/precision_recovery/05_modelopt_ptq/yolov8n_modelopt_int8_max_train3000.onnx.json`
+- `outputs/precision_recovery/05_modelopt_ptq/`
+  `yolov8n_modelopt_int8_max_train3000_trt86_int8_fp16.engine.json`
+- `outputs/precision_recovery/05_modelopt_ptq/`
+  `yolov8n_modelopt_int8_max_train3000_trt86_int8_fp16.layers.json`
+- `outputs/precision_recovery/05_modelopt_ptq/evaluation/precision_evaluation.json`
+
 ## Legacy PTQ Conclusion And Handoff
 
-The pinned TensorRT 8.6.1 legacy-calibrator path is complete. Its strongest accuracy candidate was
-the MinMax engine with the complete detection head constrained to FP16. It retained measurable
-performance benefit over FP16 but failed the unchanged mAP50 gate, so FP16 remains the release
-candidate for this environment.
+The pinned TensorRT 8.6.1 legacy-calibrator path is complete. Its strongest legacy accuracy
+candidate was the MinMax engine with the complete detection head constrained to FP16. It retained
+measurable performance benefit over FP16 but failed the unchanged mAP50 gate, so FP16 remained the
+legacy sequence's release candidate.
 
-No ModelOpt package was installed into the pinned environment. A future explicit Q/DQ or QAT
-experiment should run in a separate version-pinned image and reuse only portable source artifacts:
+ModelOpt itself was not installed into the pinned environment. Calibration and Q/DQ export ran in
+the separate version-pinned ModelOpt image; TensorRT 8.6 then consumed the portable ONNX artifact
+and produced the first passing INT8 quality candidate. This preserves the dependency boundary while
+allowing a matched comparison against the established TensorRT 8.6 references.
+
+Future explicit Q/DQ experiments should continue to reuse only portable source artifacts:
 
 - `05_torch_to_onnx/outputs/yolov8n.onnx` as the starting FP32 graph;
 - the versioned calibration manifest and its image hashes;
@@ -392,4 +512,5 @@ and must receive a new hash, engine, performance report, and complete gate resul
 4. Layer-sensitivity and explicit mixed-precision constraints: complete detection-head FP16 was the
    final legacy-PTQ candidate; it improved accuracy but failed mAP50.
 5. Drift examples were captured in full four-backend reports and used as diagnostic evidence.
-6. Explicit Q/DQ or QAT is deferred to a separate version-pinned environment.
+6. ModelOpt explicit Q/DQ PTQ: completed; the 3,000-image max-calibrated TRT8.6 INT8+FP16 candidate
+   passed all four unchanged quality thresholds. QAT remained out of scope.

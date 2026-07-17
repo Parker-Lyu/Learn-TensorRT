@@ -12,6 +12,8 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 DEFAULT_COCO_MANIFEST = (
     Path(__file__).resolve().parents[1] / "assets/coco/data/dataset_manifest.json"
 )
+REPO_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_PATH_MARKERS = ("assets", "12_yolov8_int8_calibration")
 
 
 def sha256(path: Path) -> str:
@@ -87,7 +89,22 @@ def build_manifest(calibration_dir: Path,
 
 def resolve_path(manifest_path: Path, value: str) -> Path:
     path = Path(value)
-    return path if path.is_absolute() else manifest_path.parent / path
+    if not path.is_absolute():
+        return manifest_path.parent / path
+    if path.exists():
+        return path
+
+    # Curated manifests can outlive a container bind-mount location. Relocate only paths that are
+    # visibly repository-owned; content hashes are still checked by load_manifest.
+    for marker in REPOSITORY_PATH_MARKERS:
+        try:
+            marker_index = path.parts.index(marker)
+        except ValueError:
+            continue
+        relocated = REPO_ROOT.joinpath(*path.parts[marker_index:])
+        if relocated.exists():
+            return relocated
+    return path
 
 
 def load_manifest(path: Path, verify_hashes: bool = True) -> dict:

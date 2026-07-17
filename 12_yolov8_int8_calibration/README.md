@@ -1,8 +1,8 @@
 # 12 - YOLOv8 INT8 Calibration and Accuracy Recovery
 
-Goal: build reproducible entropy- and MinMax-calibrated INT8 TensorRT engines, measure their quality
-against a fixed labeled validation split, and recover unacceptable PTQ accuracy loss with controlled
-calibration-data and mixed-precision experiments.
+Goal: build reproducible legacy-calibrated and explicit Q/DQ INT8 TensorRT engines, measure their
+quality against a fixed labeled validation split, and recover unacceptable PTQ accuracy loss with
+controlled calibration-data, ModelOpt, and mixed-precision experiments.
 
 The course path uses a reproducibly selected COCO train2017 calibration subset and the complete,
 human-labeled COCO val2017 split. The accuracy gate is based only on annotations independent of the
@@ -190,20 +190,22 @@ Detailed commands, artifact identities, coverage statistics, Inspector evidence,
 | MinMax, final box outputs FP16 | 0.3452 | 0.4893 | 0.7936 | FAIL |
 | MinMax, final box and class outputs FP16 | 0.3447 | 0.4892 | 0.7936 | FAIL |
 | MinMax, complete detection head FP16 | 0.3463 | 0.4897 | 0.7946 | FAIL |
+| ModelOpt max Q/DQ, TRT8.6 INT8+FP16 | 0.3453 | 0.4931 | 0.7998 | PASS |
 
 The final mixed-precision candidate passed mAP50-95, precision, and recall, but its mAP50 drop was
 `0.02057` against the allowed `0.02`. The threshold was not loosened after observing the result.
 Matched `trtexec` measurements showed approximately `9.9%` lower mean latency and `20.7%` higher
 throughput than FP16, but performance cannot override the failed quality gate.
 
-The current release decision is therefore FP16. This is also the final legacy-calibrator PTQ
-candidate in the pinned TensorRT 8.6.1 environment. Further recovery belongs in a separate,
-version-pinned explicit Q/DQ or QAT environment and must produce a new model identity before it is
-evaluated against the same gate.
+The legacy-calibrator sequence therefore retained FP16 as its release decision. The subsequent
+ModelOpt max-calibrated explicit Q/DQ candidate produced a new ONNX identity, was built as a
+TensorRT 8.6 INT8+FP16 engine, and passed every unchanged accuracy threshold on all 5,000 validation
+images. It is the first INT8 candidate eligible on quality; final deployment selection still
+requires a matched performance comparison against FP16.
 
-This outcome is intentional engineering evidence rather than an unfinished engine build: the
-lesson demonstrates reproducible INT8 calibration, identity-linked evaluation, controlled recovery,
-and a defensible fallback decision when PTQ remains outside the declared quality contract.
+This sequence is intentional engineering evidence rather than a collection of ad hoc builds: the
+lesson demonstrates reproducible INT8 calibration, identity-linked evaluation, a defensible FP16
+fallback when legacy PTQ failed, and explicit Q/DQ recovery without changing the quality contract.
 
 ## Acceptance Criteria
 
@@ -217,5 +219,5 @@ and a defensible fallback decision when PTQ remains outside the declared quality
 - Predeclared thresholds determine the process exit status.
 - Calibration algorithm, precision constraints, engine identity, and reusable reference identity
   are recorded and validated.
-- Accuracy loss is explained with a concrete FP16 release decision and a separate explicit-Q/DQ or
-  QAT escalation boundary.
+- Accuracy loss and recovery are explained through the legacy FP16 fallback decision and the later
+  passing explicit-Q/DQ INT8+FP16 candidate.

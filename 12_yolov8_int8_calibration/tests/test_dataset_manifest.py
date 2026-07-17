@@ -2,10 +2,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dataset_manifest import DEFAULT_COCO_MANIFEST, build_manifest, load_manifest
+from dataset_manifest import DEFAULT_COCO_MANIFEST, REPO_ROOT, build_manifest, load_manifest, resolve_path
 
 
 class DatasetManifestTests(unittest.TestCase):
+    def test_resolve_path_relocates_stale_repository_absolute_path(self) -> None:
+        existing = REPO_ROOT / "12_yolov8_int8_calibration/dataset_manifest.py"
+        stale = Path("/stale/container") / existing.relative_to(REPO_ROOT)
+        self.assertEqual(resolve_path(Path("unused.json"), str(stale)), existing)
+
+    def test_resolve_path_preserves_unknown_missing_absolute_path(self) -> None:
+        missing = Path("/external/dataset/does-not-exist.jpg")
+        self.assertEqual(resolve_path(Path("unused.json"), str(missing)), missing)
+
     def test_default_manifest_is_shared_coco_data(self) -> None:
         expected = Path(__file__).resolve().parents[2] / "assets/coco/data/dataset_manifest.json"
         self.assertEqual(DEFAULT_COCO_MANIFEST, expected)
