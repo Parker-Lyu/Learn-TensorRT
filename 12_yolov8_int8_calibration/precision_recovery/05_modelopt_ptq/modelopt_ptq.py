@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import hashlib
 import json
 import platform
 import sys
@@ -41,7 +40,7 @@ DEFAULT_MANIFEST = (
 DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs/precision_recovery/05_modelopt_ptq"
 INPUT_SHAPE = (1, 3, 640, 640)
 PREPROCESS_ID = "letterbox114-bgr2rgb-fp32-div255-nchw-v1"
-QUANTIZATION_CONFIG_ID = "modelopt-int8-default-max-v1"
+HIGH_PRECISION_DTYPES = {"fp32": "Float", "fp16": "Half"}
 
 
 def positive_int(value: str) -> int:
@@ -113,23 +112,40 @@ class CalibrationBatches:
 class RawDetectionOutput(torch.nn.Module):
     """Expose only YOLO's raw [N, 84, 8400] prediction tensor."""
 
-    def __init__(self, model: torch.nn.Module) -> None:
+    def __init__(self, model: torch.nn.Module, internal_dtype: torch.dtype | None = None) -> None:
         super().__init__()
         self.model = model
+        self.internal_dtype = internal_dtype
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
+        if self.internal_dtype is not None:
+            images = images.to(dtype=self.internal_dtype)
         output = self.model(images)
         if isinstance(output, (tuple, list)):
             output = output[0]
         if not torch.is_tensor(output):
             raise TypeError(f"unexpected YOLO output type: {type(output)!r}")
-        return output
+        return output.float()
+
+
+def quantization_config(high_precision: str) -> tuple[dict[str, Any], str]:
+    try:
+        modelopt_dtype = HIGH_PRECISION_DTYPES[high_precision]
+    except KeyError as error:
+        raise ValueError(f"unsupported high-precision type: {high_precision}") from error
+    config = copy.deepcopy(mtq.INT8_DEFAULT_CFG)
+    if config.get("algorithm") != "max":
+        raise RuntimeError("the predeclared ModelOpt configuration must use max calibration")
+    for pattern in ("*weight_quantizer", "*input_quantizer"):
+        config["quant_cfg"][pattern]["trt_high_precision_dtype"] = modelopt_dtype
+    return config, f"modelopt-int8-default-max-high-precision-{high_precision}-v1"
 
 
 def calibrate_model(
     model: torch.nn.Module,
     batches: CalibrationBatches,
     device: torch.device,
+    config: dict[str, Any],
 ) -> torch.nn.Module:
     def forward_loop(quantized_model: torch.nn.Module) -> None:
         completed = 0
@@ -142,16 +158,24 @@ def calibrate_model(
                 if completed == total or completed % 100 == 0:
                     print(f"Calibrated images: {completed}/{total}", flush=True)
 
-    config = copy.deepcopy(mtq.INT8_DEFAULT_CFG)
-    if config.get("algorithm") != "max":
-        raise RuntimeError("the predeclared ModelOpt configuration must use max calibration")
     return mtq.quantize(model, config, forward_loop)
 
 
-def export_qdq_onnx(model: torch.nn.Module, output_path: Path, device: torch.device) -> None:
+def export_qdq_onnx(
+    model: torch.nn.Module,
+    output_path: Path,
+    device: torch.device,
+    high_precision: str,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     dummy = torch.zeros(INPUT_SHAPE, dtype=torch.float32, device=device)
-    wrapper = RawDetectionOutput(model).eval()
+    internal_dtype = None
+    if high_precision == "fp16":
+        model.half()
+        internal_dtype = torch.float16
+    elif high_precision != "fp32":
+        raise ValueError(f"unsupported high-precision type: {high_precision}")
+    wrapper = RawDetectionOutput(model, internal_dtype).eval()
     with torch.inference_mode():
         output = wrapper(dummy)
     if tuple(output.shape) != (1, 84, 8400):
@@ -181,7 +205,7 @@ def tensor_info(value_info: onnx.ValueInfoProto) -> dict[str, Any]:
     }
 
 
-def inspect_qdq_onnx(path: Path) -> dict[str, Any]:
+def inspect_qdq_onnx(path: Path, high_precision: str) -> dict[str, Any]:
     model = onnx.load(str(path))
     onnx.checker.check_model(model)
     operators = Counter(node.op_type for node in model.graph.node)
@@ -196,6 +220,41 @@ def inspect_qdq_onnx(path: Path) -> dict[str, Any]:
     expected_outputs = [{"name": "output0", "dtype": "FLOAT", "shape": [1, 84, 8400]}]
     if inputs != expected_inputs or outputs != expected_outputs:
         raise ValueError(f"unexpected ONNX I/O contract: inputs={inputs}, outputs={outputs}")
+    constant_dtypes = Counter()
+    constant_values: dict[str, np.ndarray] = {}
+    for node in model.graph.node:
+        for attribute in node.attribute:
+            if attribute.type == onnx.AttributeProto.TENSOR:
+                constant_dtypes[onnx.TensorProto.DataType.Name(attribute.t.data_type)] += 1
+                if node.op_type == "Constant" and node.output:
+                    constant_values[node.output[0]] = onnx.numpy_helper.to_array(attribute.t)
+    scale_audit = {
+        "qdq_nodes_checked": 0,
+        "nodes_with_nonpositive_scale": 0,
+        "nodes_with_positive_subnormal_scale": 0,
+    }
+    for node in model.graph.node:
+        if node.op_type not in {"QuantizeLinear", "DequantizeLinear"}:
+            continue
+        scale = constant_values.get(node.input[1])
+        if scale is None:
+            continue
+        scale_audit["qdq_nodes_checked"] += 1
+        if np.any(scale <= 0):
+            scale_audit["nodes_with_nonpositive_scale"] += 1
+        if np.issubdtype(scale.dtype, np.floating):
+            tiny = np.finfo(scale.dtype).tiny
+            if np.any((scale > 0) & (scale < tiny)):
+                scale_audit["nodes_with_positive_subnormal_scale"] += 1
+    if scale_audit["nodes_with_nonpositive_scale"]:
+        raise ValueError("Q/DQ graph contains non-positive scale coefficients")
+    if high_precision == "fp16":
+        if operators["Cast"] < 2:
+            raise ValueError("FP16 high-precision graph is missing FP32 boundary casts")
+        if constant_dtypes["FLOAT16"] == 0:
+            raise ValueError("FP16 high-precision graph contains no FLOAT16 constants")
+    elif high_precision != "fp32":
+        raise ValueError(f"unsupported high-precision type: {high_precision}")
     return {
         "checker_passed": True,
         "inputs": inputs,
@@ -203,6 +262,8 @@ def inspect_qdq_onnx(path: Path) -> dict[str, Any]:
         "node_count": len(model.graph.node),
         "quantize_linear_nodes": quantize_count,
         "dequantize_linear_nodes": dequantize_count,
+        "qdq_scale_audit": scale_audit,
+        "constant_tensor_dtype_histogram": dict(sorted(constant_dtypes.items())),
         "operator_histogram": dict(sorted(operators.items())),
     }
 
@@ -229,6 +290,9 @@ def write_metadata(
     inspection: dict[str, Any],
     batch_size: int,
     candidate_kind: str,
+    high_precision: str,
+    config_id: str,
+    config: dict[str, Any],
 ) -> None:
     document = load_manifest(manifest, verify_hashes=False)
     metadata = {
@@ -246,8 +310,9 @@ def write_metadata(
         "calibration_batch_size": batch_size,
         "input_shape": list(INPUT_SHAPE),
         "preprocess": PREPROCESS_ID,
-        "quantization_config": QUANTIZATION_CONFIG_ID,
-        "modelopt_config": mtq.INT8_DEFAULT_CFG,
+        "high_precision": high_precision,
+        "quantization_config": config_id,
+        "modelopt_config": config,
         "onnx": str(onnx_path.resolve()),
         "onnx_sha256": sha256(onnx_path),
         "onnx_inspection": inspection,
@@ -269,6 +334,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--name", default="yolov8n_modelopt_int8_max_train3000")
+    parser.add_argument(
+        "--high-precision", choices=tuple(HIGH_PRECISION_DTYPES), default="fp32",
+        help="Data type used by Q/DQ high-precision tensors inside the exported graph.",
+    )
     return parser.parse_args()
 
 
@@ -293,15 +362,16 @@ def main() -> int:
     batches = CalibrationBatches(paths, args.batch_size)
     device = torch.device("cuda:0")
     model = YOLO(str(weights)).model.eval().to(device)
-    quantized_model = calibrate_model(model, batches, device)
+    config, config_id = quantization_config(args.high_precision)
+    quantized_model = calibrate_model(model, batches, device, config)
 
     onnx_path = output_dir / f"{args.name}.onnx"
     metadata_path = output_dir / f"{args.name}.onnx.json"
-    export_qdq_onnx(quantized_model, onnx_path, device)
-    inspection = inspect_qdq_onnx(onnx_path)
+    export_qdq_onnx(quantized_model, onnx_path, device, args.high_precision)
+    inspection = inspect_qdq_onnx(onnx_path, args.high_precision)
     write_metadata(
         metadata_path, weights, manifest, records, onnx_path, inspection,
-        args.batch_size, args.candidate_kind,
+        args.batch_size, args.candidate_kind, args.high_precision, config_id, config,
     )
     print(f"ONNX: {onnx_path}")
     print(f"Metadata: {metadata_path}")

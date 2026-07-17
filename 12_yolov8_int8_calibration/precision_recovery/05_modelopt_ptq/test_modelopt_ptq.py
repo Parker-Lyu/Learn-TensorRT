@@ -13,6 +13,7 @@ from unittest import mock
 
 import cv2
 import numpy as np
+import torch
 
 
 SCRIPT = Path(__file__).resolve().parent / "modelopt_ptq.py"
@@ -23,6 +24,29 @@ SPEC.loader.exec_module(PTQ)
 
 
 class ModelOptPtqTests(unittest.TestCase):
+    def test_fp16_quantization_config_sets_qdq_high_precision_type(self) -> None:
+        config, config_id = PTQ.quantization_config("fp16")
+        self.assertEqual(config["quant_cfg"]["*weight_quantizer"]["trt_high_precision_dtype"], "Half")
+        self.assertEqual(config["quant_cfg"]["*input_quantizer"]["trt_high_precision_dtype"], "Half")
+        self.assertIn("high-precision-fp16", config_id)
+
+    def test_raw_output_wrapper_keeps_fp32_boundary(self) -> None:
+        class DtypeCapture(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.seen_dtype = None
+
+            def forward(self, images: torch.Tensor) -> torch.Tensor:
+                self.seen_dtype = images.dtype
+                return images
+
+        model = DtypeCapture()
+        output = PTQ.RawDetectionOutput(model, torch.float16)(
+            torch.zeros((1, 3, 4, 4), dtype=torch.float32)
+        )
+        self.assertEqual(model.seen_dtype, torch.float16)
+        self.assertEqual(output.dtype, torch.float32)
+
     def test_positive_int_rejects_zero(self) -> None:
         with self.assertRaises(argparse.ArgumentTypeError):
             PTQ.positive_int("0")
@@ -85,11 +109,15 @@ class ModelOptPtqTests(unittest.TestCase):
                     {"checker_passed": True},
                     1,
                     "smoke",
+                    "fp16",
+                    "test-config-v1",
+                    {"algorithm": "max"},
                 )
             document = json.loads(metadata_path.read_text(encoding="utf-8"))
             self.assertEqual(document["candidate_kind"], "smoke")
             self.assertFalse(document["valid_for_accuracy_gate"])
             self.assertEqual(document["preprocess"], PTQ.PREPROCESS_ID)
+            self.assertEqual(document["high_precision"], "fp16")
 
 
 if __name__ == "__main__":
