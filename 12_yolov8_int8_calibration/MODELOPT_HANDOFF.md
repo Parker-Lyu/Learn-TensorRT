@@ -18,6 +18,10 @@ This revised plan is complete. The 3,000-image ModelOpt max candidate passed all
 - precision: `0.0432487458`, delta `+0.0005652262`
 - recall: `0.7997798266`, delta `-0.0099078024`
 
+Matched performance with 500 ms warmup and 120 measured iterations showed `618.236 qps` for the
+Q/DQ candidate versus `650.348 qps` for FP16. The candidate is valid on quality but slower than
+FP16, so FP16 remains the deployment choice while a reduced-FP32 Q/DQ export is investigated.
+
 Primary evidence is under `outputs/precision_recovery/05_modelopt_ptq/`. The corrected reproducible
 commands and decision record are in `precision_recovery/README.md`. The older TensorRT 10 plan below
 is retained only as historical handoff context and must not override this user-approved change.

@@ -471,6 +471,33 @@ the recorded keyword counts are evidence mentions, not compute-layer counts. The
 wrapper mean latency was `5.124 ms`, while the reused FP16 reference recorded `4.500 ms`. Those
 wrapper measurements are diagnostic and do not replace a matched `trtexec` performance comparison.
 
+Collect matched FP16 and Q/DQ timing evidence with the same 500 ms warmup and 120 measured
+iterations used by the earlier recovery candidates:
+
+```bash
+docker exec trt_dev bash -lc '
+  cd /workspace/Projects/Learn-TensorRT &&
+  python3 \
+    12_yolov8_int8_calibration/precision_recovery/05_modelopt_ptq/benchmark_trt86_qdq_engine.py
+'
+```
+
+Recorded matched `trtexec` result:
+
+| Engine | Mean latency (ms) | P90 (ms) | GPU compute mean (ms) | Throughput (qps) |
+| --- | ---: | ---: | ---: | ---: |
+| FP16 reference | 2.717 | 2.729 | 1.523 | 650.348 |
+| ModelOpt Q/DQ INT8+FP16 | 2.792 | 2.805 | 1.602 | 618.236 |
+
+The current Q/DQ engine has `4.94%` lower throughput, `2.75%` higher end-to-end latency, and
+`5.23%` higher GPU compute time than the matched FP16 reference. Transfers were effectively
+unchanged. The INT8 candidate passes the quality gate but does not yet justify replacing FP16 for
+deployment. Engine Inspector shows that 67 of 171 engine layers are reformats; together with the
+remaining high-precision detection-head path, these Q/DQ transitions are plausible contributors to
+the missing INT8 performance gain. The next controlled candidate should assign ModelOpt Q/DQ
+high-precision tensors to FP16 at export time while retaining FP32 external I/O, rather than
+applying fragile fused-layer constraints in TensorRT.
+
 Evidence:
 
 - `outputs/precision_recovery/05_modelopt_ptq/yolov8n_modelopt_int8_max_train3000.onnx.json`
@@ -479,6 +506,9 @@ Evidence:
 - `outputs/precision_recovery/05_modelopt_ptq/`
   `yolov8n_modelopt_int8_max_train3000_trt86_int8_fp16.layers.json`
 - `outputs/precision_recovery/05_modelopt_ptq/evaluation/precision_evaluation.json`
+- `outputs/precision_recovery/05_modelopt_ptq/performance/performance.json`
+- `outputs/precision_recovery/05_modelopt_ptq/performance/`
+  `modelopt_qdq_int8_fp16_trtexec.log`
 
 ## Legacy PTQ Conclusion And Handoff
 

@@ -203,6 +203,12 @@ TensorRT 8.6 INT8+FP16 engine, and passed every unchanged accuracy threshold on 
 images. It is the first INT8 candidate eligible on quality; final deployment selection still
 requires a matched performance comparison against FP16.
 
+The matched comparison used a 500 ms warmup and 120 measured `trtexec` iterations. The Q/DQ engine
+reached `618.236 qps`, compared with `650.348 qps` for FP16, and its mean GPU compute time was
+`1.602 ms` versus `1.523 ms`. The passing Q/DQ candidate is therefore retained as accuracy-recovery
+evidence, but FP16 remains the current deployment choice until a Q/DQ export with FP16
+high-precision tensors demonstrates a measured performance benefit.
+
 This sequence is intentional engineering evidence rather than a collection of ad hoc builds: the
 lesson demonstrates reproducible INT8 calibration, identity-linked evaluation, a defensible FP16
 fallback when legacy PTQ failed, and explicit Q/DQ recovery without changing the quality contract.
