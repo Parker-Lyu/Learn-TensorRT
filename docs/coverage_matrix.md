@@ -10,12 +10,12 @@ Use it as a checklist when reading job descriptions or preparing interview talki
 | --- | --- | --- |
 | Modern C++ engineering and memory safety | Covered as core path | `01_hello_world`, `03_opencv_preprocess`, `07_tensorrt_raii_resource`, `23_cpp_interview_katas` |
 | TensorRT C++ inference lifecycle | Covered as core path | `06_trtexec_engine`, `08_tensorrt_cpp_basic`, `10_yolov8_trt_cpp` |
-| Precision alignment and backend output debugging | Covered as core deployment-debug path | `05_torch_to_onnx`, `06a_polygraphy_precision_alignment`, `12_yolov8_int8_calibration`, `12a_precision_performance_report` |
+| Precision alignment and backend output debugging | Covered as core deployment-debug path | `05_torch_to_onnx`, `06a_polygraphy_precision_alignment`, `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
 | Pinned memory, CUDA streams, async copies, overlap | Covered as core path | `04_cuda_memory_stream`, `11_nsight_performance_diagnosis`, `15_async_video_pipeline` |
 | Zero-copy-style memory paths and Unified Memory trade-offs | Covered as advanced transfer topic | `04_cuda_memory_stream`, `17_cuda_preprocess_npp` |
-| PTQ, entropy calibration, INT8 accuracy regression | Covered as core path | `12_yolov8_int8_calibration`, `12a_precision_performance_report` |
-| Dataset-level detection metrics and regression gates | Covered as core validation path | `12_yolov8_int8_calibration`, `12a_precision_performance_report` |
-| Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `12_yolov8_int8_calibration` |
+| PTQ, entropy calibration, INT8 accuracy regression | Covered as core path | `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
+| Dataset-level detection metrics and regression gates | Covered as core validation path | `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
+| Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `12_yolov8_int8_quantization_engineering` |
 | Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
 | TensorRT custom plugin implementation | Covered as portfolio differentiator | `19a_custom_tensorrt_plugin` |
 | Current TensorRT plugin API and legacy migration | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |

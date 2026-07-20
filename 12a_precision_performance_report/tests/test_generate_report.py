@@ -96,6 +96,17 @@ class GenerateReportTests(unittest.TestCase):
         self.assertIn("Raw Tensor Drift", text)
         self.assertIn("course-v2", text)
 
+    def test_passing_but_slower_int8_retains_fp16(self):
+        performance, evaluation, diagnosis, manifest, manifest_hash = fixtures()
+        evaluation["backends"]["tensorrt_int8"]["passed"] = True
+        evaluation["release_gate"] = {"passed": True, "failed_backends": []}
+        performance["backends"]["fp16"]["throughput_qps"] = 600.0
+        performance["backends"]["int8"]["throughput_qps"] = 500.0
+        performance["backends"]["fp16"]["latency_ms"]["mean"] = 2.0
+        performance["backends"]["int8"]["latency_ms"]["mean"] = 3.0
+        text = MODULE.render(performance, evaluation, diagnosis, manifest, manifest_hash)
+        self.assertIn("retain FP16 for deployment", text)
+
     def test_engine_identity_mismatch_is_rejected(self):
         evidence = list(fixtures())
         evidence[0]["backends"]["int8"]["engine_sha256"] = "f" * 64
@@ -120,11 +131,11 @@ class GenerateReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid trtexec throughput"):
             MODULE.render(*evidence)
 
-    def test_profiler_engine_mismatch_is_rejected(self):
+    def test_profiler_engine_may_be_contextual_across_runtime_versions(self):
         evidence = list(fixtures())
         evidence[2]["artifacts"]["engine"]["sha256"] = "f" * 64
-        with self.assertRaisesRegex(ValueError, "diagnosis"):
-            MODULE.render(*evidence)
+        text = MODULE.render(*evidence)
+        self.assertIn("historical Nsight baseline", text)
 
 
 if __name__ == "__main__":

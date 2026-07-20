@@ -20,7 +20,7 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
-LESSON12_DIR = REPO_ROOT / "12_yolov8_int8_calibration"
+LESSON12_DIR = REPO_ROOT / "12_yolov8_int8_quantization_engineering"
 sys.path.insert(0, str(LESSON12_DIR))
 
 from dataset_manifest import load_manifest, resolve_path  # noqa: E402

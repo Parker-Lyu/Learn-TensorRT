@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "calibration_dataset_id": "coco2017-yolov8n-calibration-v3",
+  "stages": [
+    {
+      "id": "01_legacy_entropy",
+      "runtime": "tensorrt_8_6",
+      "method": "legacy_calibrator",
+      "calibrator": "entropy",
+      "fp16_fallback": true
+    },
+    {
+      "id": "02_legacy_minmax",
+      "runtime": "tensorrt_8_6",
+      "method": "legacy_calibrator",
+      "calibrator": "minmax",
+      "fp16_fallback": true
+    },
+    {
+      "id": "03_detection_head_fp16",
+      "runtime": "tensorrt_8_6",
+      "method": "legacy_calibrator_mixed_precision",
+      "calibrator": "minmax",
+      "precision_profile": "detection_head_fp16",
+      "fp16_fallback": true
+    },
+    {
+      "id": "04_modelopt_qdq_trt8",
+      "runtime": "tensorrt_8_6",
+      "method": "modelopt_explicit_qdq",
+      "activation_calibration": "max",
+      "high_precision_dtype": "float32"
+    },
+    {
+      "id": "05_modelopt_native_fp16_qdq_trt10",
+      "runtime": "tensorrt_10_14",
+      "method": "modelopt_explicit_qdq",
+      "activation_calibration": "max",
+      "high_precision_dtype": "float16"
+    }
+  ]
+}
+

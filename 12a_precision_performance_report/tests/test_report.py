@@ -42,6 +42,14 @@ class PerformanceSummaryTests(unittest.TestCase):
         finally:
             MODULE.command_output = original
 
+    def test_trtexec_version_parser_supports_tensorrt_10(self):
+        original = MODULE.command_output
+        MODULE.command_output = lambda command: "RUNNING [TensorRT v101401]"
+        try:
+            self.assertEqual(MODULE.trtexec_version("trtexec"), "10.14.1")
+        finally:
+            MODULE.command_output = original
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,9 +15,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENGINES = {
-    "fp32": ROOT / "06_trtexec_engine/outputs/yolov8n_static_fp32.engine",
-    "fp16": ROOT / "06_trtexec_engine/outputs/yolov8n_static_fp16.engine",
-    "int8": ROOT / "12_yolov8_int8_calibration/outputs/yolov8n_static_int8.engine",
+    "fp32": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
+    "trt10/references/yolov8n_trt10_fp32.engine",
+    "fp16": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
+    "trt10/references/yolov8n_trt10_fp16.engine",
+    "int8": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
+    "trt10/candidate/yolov8n_modelopt_hp_fp16_trt10.engine",
 }
 THROUGHPUT_PATTERN = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps")
 
@@ -75,9 +78,13 @@ def trtexec_version(executable: str) -> str:
     if not match:
         raise RuntimeError("could not parse TensorRT version from trtexec output")
     digits = match.group(1)
-    if len(digits) < 3:
+    if len(digits) == 4:
+        major, minor, patch = digits[0], digits[1], digits[2:]
+    elif len(digits) >= 6:
+        major, minor, patch = digits[:-4], digits[-4:-2], digits[-2:]
+    else:
         raise RuntimeError("unexpected compact TensorRT version")
-    return f"{digits[0]}.{digits[1]}.{int(digits[2:])}"
+    return f"{int(major)}.{int(minor)}.{int(patch)}"
 
 
 def main() -> int:

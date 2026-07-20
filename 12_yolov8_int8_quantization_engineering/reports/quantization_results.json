@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "dataset": {
+    "dataset_id": "coco2017-yolov8n-calibration-v3-val5000-human-labels-v1",
+    "manifest_sha256": "38c88bff89757dba6e22c44d30398ae0d17f8bd11ec2c09a867b3e975d339a50",
+    "selection_sha256": "58fa6d629136ea73e1d94f13b8b115a32f783ade0e5ea8c68090a4ca732b480e",
+    "candidate_images": 5000,
+    "calibration_images": 3000,
+    "validation_images": 5000,
+    "historical_1000_selected": 828,
+    "preprocessing_parity": "PASS"
+  },
+  "quality_contract": {
+    "max_map50_95_drop": 0.02,
+    "max_map50_drop": 0.02,
+    "max_precision_drop": 0.03,
+    "max_recall_drop": 0.03
+  },
+  "stages": {
+    "legacy_entropy": {
+      "metrics": {
+        "map50_95": 0.31497711663192535,
+        "map50": 0.44987918350958483,
+        "precision": 0.043194823601536286,
+        "recall": 0.7834044309894042
+      },
+      "delta_vs_pytorch": {
+        "map50_95": -0.048117663107895836,
+        "map50": -0.06034750559953811,
+        "precision": 0.0005113040537320507,
+        "recall": -0.02628319801843948
+      },
+      "passed": false,
+      "engine_sha256": "747ff13be7e73154af68d3d6ebeb4877c7cf02f098f08a2abdea0f458d0890d4",
+      "tensorrt": "8.6.1"
+    },
+    "legacy_minmax": {
+      "metrics": {
+        "map50_95": 0.3439324199637997,
+        "map50": 0.48890385241458245,
+        "precision": 0.042994129567342845,
+        "recall": 0.7929544516306591
+      },
+      "delta_vs_pytorch": {
+        "map50_95": -0.019162359776021487,
+        "map50": -0.021322836694540492,
+        "precision": 0.00031061001953860967,
+        "recall": -0.016733177377184494
+      },
+      "passed": false,
+      "engine_sha256": "9026bf9b02e0a7e80265b57be029397db0c24d44b19b9f6d5fb514cf58c64a7e",
+      "tensorrt": "8.6.1"
+    },
+    "detection_head_fp16": {
+      "metrics": {
+        "map50_95": 0.34628882815379763,
+        "map50": 0.4894610036120685,
+        "precision": 0.04272337018172112,
+        "recall": 0.7929544516306591
+      },
+      "delta_vs_pytorch": {
+        "map50_95": -0.01680595158602355,
+        "map50": -0.02076568549705443,
+        "precision": 3.985063391688526e-05,
+        "recall": -0.016733177377184494
+      },
+      "passed": false,
+      "engine_sha256": "6c5de56a5aecfd017a8d1724b349e88027f920b78aadea021c1b1aaf72d5a976",
+      "tensorrt": "8.6.1"
+    },
+    "modelopt_qdq_trt8": {
+      "metrics": {
+        "map50_95": 0.34520069943861215,
+        "map50": 0.49463238976771945,
+        "precision": 0.04516377937076862,
+        "recall": 0.7990092197605615
+      },
+      "delta_vs_pytorch": {
+        "map50_95": -0.017894080301209037,
+        "map50": -0.015594299341403495,
+        "precision": 0.0024802598229643827,
+        "recall": -0.010678409247282139
+      },
+      "passed": true,
+      "engine_sha256": "d870b2682a8bdd991be0e3cf19f3e360ad6615769f47b9409c7676676448aca9",
+      "tensorrt": "8.6.1"
+    },
+    "modelopt_native_fp16_qdq_trt10": {
+      "metrics": {
+        "map50_95": 0.3453503518497524,
+        "map50": 0.49458549671887014,
+        "precision": 0.04587641153635461,
+        "recall": 0.7997798266134581
+      },
+      "delta_vs_pytorch": {
+        "map50_95": -0.017744427890068803,
+        "map50": -0.0156411923902528,
+        "precision": 0.0031928919885503768,
+        "recall": -0.00990780239438549
+      },
+      "passed": true,
+      "engine_sha256": "37cdd240d95dd99532fdf5d2bfa4cf1a699c6ea46ac4bda69473261736665a75",
+      "tensorrt": "10.14.1.48"
+    }
+  },
+  "trt10_performance": {
+    "fp32": {
+      "engine_sha256": "50dbfda3c401976df924838282e02481f7d66edf2ab702080586d7f8137bb812",
+      "throughput_qps": 248.961,
+      "sample_count": 120,
+      "latency_ms": {
+        "mean": 5.160823666666667,
+        "p50": 5.16443,
+        "p90": 5.18597,
+        "p99": 5.21118
+      },
+      "gpu_compute_ms": {
+        "mean": 3.9824511666666664,
+        "p50": 3.98334,
+        "p90": 4.00793,
+        "p99": 4.01617
+      },
+      "h2d_ms": {
+        "mean": 0.755909725,
+        "p50": 0.753479,
+        "p90": 0.766113,
+        "p99": 0.795532
+      },
+      "d2h_ms": {
+        "mean": 0.4224629916666667,
+        "p50": 0.422241,
+        "p90": 0.423462,
+        "p99": 0.426147
+      }
+    },
+    "fp16": {
+      "engine_sha256": "01ec488e13bc25d4dc5a77937cf9c2e4061ad0145992a3e38c450e9413a20777",
+      "throughput_qps": 636.729,
+      "sample_count": 120,
+      "latency_ms": {
+        "mean": 2.7498912499999997,
+        "p50": 2.75,
+        "p90": 2.76489,
+        "p99": 2.7785
+      },
+      "gpu_compute_ms": {
+        "mean": 1.5563585833333335,
+        "p50": 1.55688,
+        "p90": 1.57214,
+        "p99": 1.58441
+      },
+      "h2d_ms": {
+        "mean": 0.7673868583333333,
+        "p50": 0.765137,
+        "p90": 0.773254,
+        "p99": 0.789856
+      },
+      "d2h_ms": {
+        "mean": 0.42614541666666667,
+        "p50": 0.425842,
+        "p90": 0.427979,
+        "p99": 0.434875
+      }
+    },
+    "int8": {
+      "engine_sha256": "37cdd240d95dd99532fdf5d2bfa4cf1a699c6ea46ac4bda69473261736665a75",
+      "throughput_qps": 522.188,
+      "sample_count": 120,
+      "latency_ms": {
+        "mean": 3.08881425,
+        "p50": 3.0896,
+        "p90": 3.10266,
+        "p99": 3.11664
+      },
+      "gpu_compute_ms": {
+        "mean": 1.8977886666666668,
+        "p50": 1.8985,
+        "p90": 1.909,
+        "p99": 1.91925
+      },
+      "h2d_ms": {
+        "mean": 0.7654523083333333,
+        "p50": 0.763794,
+        "p90": 0.771179,
+        "p99": 0.777222
+      },
+      "d2h_ms": {
+        "mean": 0.4255739416666667,
+        "p50": 0.425537,
+        "p90": 0.426758,
+        "p99": 0.434143
+      }
+    }
+  },
+  "trt10_layer_audit": {
+    "total_layers": 196,
+    "compute_output_precision_counts": {
+      "FP16": 49,
+      "INT8": 44
+    },
+    "int8_weight_convolutions_by_output_precision": {
+      "FP16": 25,
+      "INT8": 39
+    },
+    "reformat_count": 90,
+    "qdq_origin_reformat_count": 41,
+    "fp32_external_boundary_conversion_count": 2
+  },
+  "deployment_decision": {
+    "selected_precision": "fp16",
+    "reason": "Q/DQ INT8+FP16 passes quality but is slower than matched FP16",
+    "int8_throughput_change_percent": -17.988971760356453,
+    "int8_gpu_compute_change_percent": 21.937751813086347,
+    "int8_latency_change_percent": 12.324960123423079
+  }
+}

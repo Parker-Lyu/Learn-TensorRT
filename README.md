@@ -50,6 +50,10 @@ This course is developed and tested on Ubuntu. Windows or WSL setups may work, b
 nvcr.io/nvidia/tensorrt:23.10-py3
 ```
 
+Lesson 12 explicitly adds a second, version-pinned ModelOpt environment based on
+`nvcr.io/nvidia/pytorch:25.11-py3`. TensorRT 8.6 and TensorRT 10 evidence are kept in separate
+reference bundles and are never mixed.
+
 4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
 
 5. Complete the core lessons in order, writing a report at each checkpoint. Then choose electives
@@ -61,10 +65,16 @@ from the job descriptions you are targeting instead of completing every elective
 | --- | --- | --- |
 | Foundation | `00_environment_check` through `10_yolov8_trt_cpp` | End-to-end YOLOv8n TensorRT C++ inference |
 | Checkpoint 1 | `10a_end_to_end_validation_report` | Reproducible functional and architecture evidence |
-| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_calibration` | Profiled FP32/FP16/INT8 performance and accuracy |
+| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, quantization evolution, and deployment evidence |
 | Checkpoint 2 | `12a_precision_performance_report` | Application-ready precision and performance report |
 | Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
 | Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |
+
+Lesson 12 is an advanced quantization case study rather than a basic calibration demo. Its recorded
+result is deliberately evidence-driven: explicit Q/DQ restores INT8 quality, but matched TensorRT
+10 measurements show `522.188 qps` for INT8+FP16 versus `636.729 qps` for FP16, so deployment
+retains FP16. See
+[`12_yolov8_int8_quantization_engineering/README.md`](12_yolov8_int8_quantization_engineering/README.md).
 
 ### Elective Tracks
 

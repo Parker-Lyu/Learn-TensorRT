@@ -87,7 +87,9 @@ def validate_evidence(
         if not isinstance(drift, dict) or set(drift) != {"max_abs", "mean_abs", "p99_abs"}:
             raise ValueError(f"{evaluation_key} is missing raw tensor drift evidence")
 
-    if performance["environment"].get("trtexec") != evaluation["software"].get("tensorrt"):
+    trtexec_version = performance["environment"].get("trtexec", "")
+    python_trt_version = evaluation["software"].get("tensorrt", "")
+    if not python_trt_version.startswith(trtexec_version):
         raise ValueError("TensorRT version differs between performance and accuracy evidence")
     required_settings = {
         "confidence", "nms_iou", "max_detections", "metric_implementation", "latency_scope"
@@ -97,11 +99,6 @@ def validate_evidence(
     if diagnosis.get("schema_version") != 2:
         raise ValueError("diagnosis evidence must use schema version 2; rerun lesson 11")
     diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
-    if diagnosis.get("artifacts", {}).get("engine", {}).get("sha256") != performance[
-        "backends"
-    ]["fp32"]["engine_sha256"]:
-        raise ValueError("lesson 11 diagnosis and lesson 12a performance use different FP32 engines")
-
     failed = {
         name for name, backend in evaluation["backends"].items()
         if not backend.get("passed", False)
@@ -171,7 +168,20 @@ def render(
     fp16_decision = backend_decision(performance, evaluation, "fp16")
     int8_decision = backend_decision(performance, evaluation, "int8")
     if evaluation["backends"]["tensorrt_int8"]["passed"]:
-        recommendation = "INT8 is eligible for deployment consideration under this gate."
+        fp16_perf = performance["backends"]["fp16"]
+        int8_perf = performance["backends"]["int8"]
+        if (
+            int8_perf["throughput_qps"] > fp16_perf["throughput_qps"]
+            and int8_perf["latency_ms"]["mean"] < fp16_perf["latency_ms"]["mean"]
+        ):
+            recommendation = (
+                "INT8 passes quality and provides a matched performance benefit, so it is eligible "
+                "for deployment consideration."
+            )
+        else:
+            recommendation = (
+                "INT8 passes quality but is slower than matched FP16; retain FP16 for deployment."
+            )
     elif evaluation["backends"]["tensorrt_fp16"]["passed"]:
         recommendation = "Retain FP16 while investigating INT8 calibration, mixed precision, or QAT."
     else:
@@ -231,16 +241,16 @@ decision; high-drift examples in `precision_evaluation.json` identify images for
 
 ## Timeline Diagnosis
 
-Nsight-derived baseline: {dominant} Lesson 17 tests GPU preprocessing as a measured follow-up; the
-report does not infer that an optimization worked until new timeline evidence is collected.
+Lesson 11 historical Nsight baseline: {dominant} This diagnosis is contextual evidence from the
+pinned TensorRT 8.6 pipeline and is not identity-linked to the TensorRT 10 precision engines. A new
+timeline capture is required before attributing the TensorRT 10 FP16-versus-Q/DQ difference to a
+specific layer or runtime cause.
 
 ## Reproduction
 
 ```bash
-python3 assets/coco/prepare_coco.py
-(cd 11_nsight_performance_diagnosis && python3 profile_yolov8_cpp.py)
-(cd 12_yolov8_int8_calibration && python3 build_int8_engine.py --enable-fp16)
-(cd 12_yolov8_int8_calibration && python3 compare_engines.py)
+# Follow 12_yolov8_int8_quantization_engineering/docs/reproduction.md
+python3 12_yolov8_int8_quantization_engineering/tools/generate_case_study.py
 python3 12a_precision_performance_report/collect_performance.py
 python3 12a_precision_performance_report/generate_report.py
 ```
@@ -267,11 +277,13 @@ def main() -> int:
     parser.add_argument("--performance", type=Path,
                         default=ROOT / "12a_precision_performance_report/outputs/performance.json")
     parser.add_argument("--evaluation", type=Path,
-                        default=ROOT / "12_yolov8_int8_calibration/outputs/precision_evaluation.json")
+                        default=ROOT / "12_yolov8_int8_quantization_engineering/outputs/"
+                        "04_modelopt_qdq/trt10/evaluation/precision_evaluation.json")
     parser.add_argument("--diagnosis", type=Path,
                         default=ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json")
     parser.add_argument("--manifest", type=Path,
-                        default=ROOT / "assets/coco/data/dataset_manifest.json")
+                        default=ROOT / "12_yolov8_int8_quantization_engineering/"
+                        "data/dataset_manifest.json")
     parser.add_argument("--output", type=Path,
                         default=ROOT / "reports/12a_precision_performance.md")
     args = parser.parse_args()

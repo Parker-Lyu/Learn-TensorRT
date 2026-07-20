@@ -90,7 +90,7 @@ alongside the course rather than waiting until the end.
 | --- | --- | --- |
 | Core foundation | `00` through `10` | Environment, C++, CUDA, ONNX, TensorRT, and end-to-end YOLO C++ inference |
 | Checkpoint 1 | `10a` | Functional validation, architecture evidence, and an English project explanation |
-| Core optimization | `11` through `12` | Nsight baseline, FP16/INT8, and multi-image accuracy comparison |
+| Core optimization | `11` through `12` | Nsight diagnosis plus an advanced FP16/INT8 quantization and deployment case study |
 | Checkpoint 2 | `12a` | Reproducible precision and performance report; begin targeted applications |
 | Core pipeline | `13` through `17` | Queues, dynamic batching, async video, multi-stream scheduling, and CUDA/NPP preprocessing |
 | Checkpoint 3 | `17a` | Pipeline load, latency, throughput, and stability report |
@@ -447,47 +447,68 @@ Acceptance criteria:
 - You can identify whether the GPU is busy or waiting.
 - You can explain one optimization using before-and-after timeline evidence.
 
-### `12_yolov8_int8_calibration`
+### `12_yolov8_int8_quantization_engineering`
 
 Purpose:
 
-- Learn practical quantization and its trade-offs using both speed and accuracy evidence.
+- Treat INT8 quantization as an advanced engineering case study rather than a one-command engine build.
+- Follow the technology evolution from legacy TensorRT PTQ to mixed precision and ModelOpt explicit Q/DQ.
+- Make the final deployment decision from fixed quality gates and version-matched performance evidence.
+
+Engineering sequence:
+
+1. Create a versioned calibration-data contract.
+2. Establish immutable PyTorch, TensorRT FP32, and FP16 reference bundles.
+3. Compare legacy Entropy and MinMax calibration with one-variable-at-a-time experiments.
+4. Run one complete-detection-head FP16 sensitivity experiment.
+5. Export ModelOpt explicit-Q/DQ models in a separate pinned environment.
+6. Rebuild FP32 and FP16 references when moving from TensorRT 8.6 to TensorRT 10.
+7. Benchmark only quality-passing candidates and retain FP16 when INT8 has no matched benefit.
 
 Topics:
 
-- Calibration dataset with a saved manifest
-- Fixed labeled validation split, such as COCO val2017 or another versioned public dataset
-- Strict separation between calibration and validation data
-- Entropy calibration
-- KL divergence intuition
-- `IInt8EntropyCalibrator2`
-- Calibration table
-- INT8 engine build
-- Reusable dataset-level evaluator with machine-readable JSON or CSV output
-- Identical preprocessing, decoding, confidence, NMS, IoU, and maximum-detection settings across backends
-- FP32, FP16, and INT8 tensor drift summary across multiple images
-- Decoded box, class, and confidence comparison
-- mAP50-95, mAP50, precision, recall, and absolute metric deltas
-- Regression thresholds declared before inspecting the final comparison
-- Mixed precision fallback
-- Sensitive layer fallback to FP16 or FP32
-- QAT as a fallback when PTQ fails
-- Accuracy comparison
-- Latency comparison
+- Fixed 5,000-image COCO train2017 candidate-pool identity
+- Independently coverage-selected 3,000-image calibration manifest
+- Complete 5,000-image COCO val2017 human-labeled validation split
+- Calibration/validation hash-overlap rejection
+- Byte-identical calibration and evaluation preprocessing verification
+- Predeclared mAP50-95, mAP50, precision, and recall regression thresholds
+- Immutable reference bundles and candidate-only evaluation
+- TensorRT 8.6 Entropy and MinMax legacy calibrators
+- Calibration cache identity and persistent timing caches
+- Strict complete-detection-head FP16 precision constraints
+- Engine Inspector validation of requested and actual precision
+- ModelOpt explicit `QuantizeLinear`/`DequantizeLinear` export
+- TensorRT 8.6 FP32-high-precision Q/DQ build
+- TensorRT 10.14 native-FP16 strongly typed Q/DQ build
+- Runtime-version evidence boundaries
+- Matched `trtexec` latency, GPU compute, and throughput measurements
+- Reformat and Q/DQ-boundary evidence for slower mixed-precision execution
+
+Recorded result:
+
+- Legacy Entropy: quality FAIL.
+- Legacy MinMax: quality FAIL because mAP50 misses the unchanged gate.
+- MinMax with the complete detection head in FP16: quality FAIL.
+- ModelOpt Q/DQ under TensorRT 8.6: quality PASS.
+- ModelOpt native-FP16 Q/DQ under TensorRT 10.14: quality PASS.
+- Matched TensorRT 10 throughput: FP16 `636.729 qps`; INT8+FP16 `522.188 qps`.
+- Deployment retains FP16 because the quality-passing INT8 candidate is slower.
 
 Acceptance criteria:
 
-- You can build an INT8 engine.
-- You can compare FP32, FP16, and INT8 latency.
-- The calibration and validation manifests are saved, versioned, and have no overlapping images.
-- One evaluator runs PyTorch or Ultralytics, TensorRT FP32, FP16, and INT8 on the same complete fixed
-  validation split with identical postprocessing settings.
-- The evaluator writes mAP50-95, mAP50, precision, recall, and backend-to-reference deltas to a
-  machine-readable result file.
-- Predeclared accuracy thresholds determine pass or fail and cause the validation command to return
-  a nonzero status when a release criterion is violated.
-- You can list changed detections or high-drift examples that deserve visual inspection.
-- You can explain any visible accuracy drop and propose a fallback strategy.
+- The candidate-pool identity, selected calibration manifest, validation manifest, hashes, and selection method are saved.
+- Calibration and validation contain no duplicate image content across splits.
+- All 3,000 calibration images produce byte-identical tensors through both production preprocessing paths.
+- PyTorch, FP32, and FP16 references are computed once per runtime identity and reused for later candidates.
+- TensorRT 8.6 references are rejected for TensorRT 10 candidates.
+- Each experiment changes one declared quantization variable and writes distinct artifacts.
+- Failed quality candidates are excluded from authoritative deployment performance comparisons.
+- Explicit Q/DQ candidates pass or fail the same thresholds used by legacy PTQ.
+- Matched performance uses the same TensorRT version, GPU, shapes, warmup, iterations, stream count, and transfer settings.
+- The final report explains why passing accuracy is necessary but insufficient for deploying INT8.
+- The generated case study and machine-readable summary agree with the raw ignored evidence.
+
 
 ### `12a_precision_performance_report`
 
