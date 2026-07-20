@@ -191,6 +191,7 @@ Detailed commands, artifact identities, coverage statistics, Inspector evidence,
 | MinMax, final box and class outputs FP16 | 0.3447 | 0.4892 | 0.7936 | FAIL |
 | MinMax, complete detection head FP16 | 0.3463 | 0.4897 | 0.7946 | FAIL |
 | ModelOpt max Q/DQ, TRT8.6 INT8+FP16 | 0.3453 | 0.4931 | 0.7998 | PASS |
+| ModelOpt native FP16 Q/DQ, TRT10 INT8+FP16 | 0.3452 | 0.4937 | 0.8011 | PASS |
 
 The final mixed-precision candidate passed mAP50-95, precision, and recall, but its mAP50 drop was
 `0.02057` against the allowed `0.02`. The threshold was not loosened after observing the result.
@@ -200,14 +201,21 @@ throughput than FP16, but performance cannot override the failed quality gate.
 The legacy-calibrator sequence therefore retained FP16 as its release decision. The subsequent
 ModelOpt max-calibrated explicit Q/DQ candidate produced a new ONNX identity, was built as a
 TensorRT 8.6 INT8+FP16 engine, and passed every unchanged accuracy threshold on all 5,000 validation
-images. It is the first INT8 candidate eligible on quality; final deployment selection still
-requires a matched performance comparison against FP16.
+images. It was the first INT8 candidate eligible on quality.
 
 The matched comparison used a 500 ms warmup and 120 measured `trtexec` iterations. The Q/DQ engine
 reached `618.236 qps`, compared with `650.348 qps` for FP16, and its mean GPU compute time was
 `1.602 ms` versus `1.523 ms`. The passing Q/DQ candidate is therefore retained as accuracy-recovery
-evidence, but FP16 remains the current deployment choice until a Q/DQ export with FP16
-high-precision tensors demonstrates a measured performance benefit.
+evidence. A follow-up native FP16-high-precision Q/DQ export was then evaluated with new matched
+TensorRT 10.14 references. It also passed the complete gate: its deltas versus PyTorch were
+`-0.01789` mAP50-95, `-0.01648` mAP50, `+0.00128` precision, and `-0.00859` recall.
+
+The TensorRT 10 matched comparison reached `635.628 qps` for FP16 and `507.842 qps` for native Q/DQ
+INT8+FP16. Mean GPU compute was `1.559 ms` and `1.951 ms`, respectively. Inspector evidence showed
+that native FP16 high-precision tensors reduced FP32-output compute, but the candidate still had 87
+reformats, including 41 with Q/DQ origin. The final deployment decision therefore remains FP16:
+both explicit-Q/DQ INT8 candidates are quality-eligible evidence, but neither provides a matched
+performance benefit.
 
 This sequence is intentional engineering evidence rather than a collection of ad hoc builds: the
 lesson demonstrates reproducible INT8 calibration, identity-linked evaluation, a defensible FP16
@@ -225,5 +233,5 @@ fallback when legacy PTQ failed, and explicit Q/DQ recovery without changing the
 - Predeclared thresholds determine the process exit status.
 - Calibration algorithm, precision constraints, engine identity, and reusable reference identity
   are recorded and validated.
-- Accuracy loss and recovery are explained through the legacy FP16 fallback decision and the later
-  passing explicit-Q/DQ INT8+FP16 candidate.
+- Accuracy loss and recovery are explained through the legacy FP16 fallback decision, the passing
+  explicit-Q/DQ candidates, and the final matched evidence that retains FP16 for deployment.

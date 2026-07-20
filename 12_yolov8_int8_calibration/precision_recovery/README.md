@@ -7,16 +7,16 @@ during these experiments.
 
 ## Outcome Summary
 
-The TensorRT 8.6.1 legacy-calibrator recovery sequence is complete. MinMax calibration on the
-coverage-aware 3,000-image split recovered most of the original Entropy regression. Explicit FP16
-profiles for final box outputs, final box-and-class outputs, and the complete detection head were
-then evaluated under the unchanged 5,000-image gate.
+The TensorRT 8.6.1 legacy-calibrator sequence and the version-pinned ModelOpt explicit-Q/DQ
+sequence are complete. Legacy MinMax mixed precision nearly recovered the regression but failed the
+unchanged mAP50 threshold. ModelOpt Q/DQ candidates passed the complete 5,000-image gate in both
+TensorRT 8.6 and TensorRT 10.14.
 
-The strongest accuracy candidate used MinMax with the complete detection head in FP16. It achieved
-`0.3463` mAP50-95 and `0.4897` mAP50, retained approximately `20.7%` higher matched throughput than
-FP16, and still failed because its mAP50 drop was `0.02057` against the allowed `0.02`. FP16 remains
-the release candidate. Explicit Q/DQ or QAT is intentionally deferred to a separate version-pinned
-environment; no ModelOpt package was installed here.
+The final TensorRT 10 native FP16-high-precision Q/DQ candidate reached `0.3452` mAP50-95 and
+`0.4937` mAP50 and passed all four original thresholds. It nevertheless reached only `507.842 qps`
+versus `635.628 qps` for the matched TensorRT 10 FP16 reference. FP16 therefore remains the release
+and deployment choice. The INT8 candidate is retained as reproducible quality-recovery evidence;
+QAT, training, and threshold relaxation remained out of scope.
 
 ## 01 - Preprocessing Parity
 
@@ -510,17 +510,56 @@ Evidence:
 - `outputs/precision_recovery/05_modelopt_ptq/performance/`
   `modelopt_qdq_int8_fp16_trtexec.log`
 
-## Legacy PTQ Conclusion And Handoff
+## Step 06: TensorRT 10 Native FP16 Q/DQ
+
+Status: **QUALITY PASS, DEPLOYMENT RETAINS FP16** on 2026-07-18.
+
+Step 06 consumed the immutable native FP16-high-precision Q/DQ graph exported in Step 05 and built
+new TensorRT 10.14 FP32, FP16, and strongly typed INT8+FP16 engines. All three expose `images FLOAT
+[1,3,640,640]` and `output0 FLOAT [1,84,8400]`. Eight calibration images passed unlabeled shape,
+dtype, finiteness, range, and deterministic-repeatability checks before labels were consulted.
+
+The one complete four-backend gate used the unchanged 5,000-image manifest and exited with status
+`0`:
+
+| Backend | mAP50-95 | mAP50 | Precision | Recall | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| PyTorch | 0.3631 | 0.5102 | 0.0427 | 0.8097 | PASS |
+| TensorRT 10 FP32 | 0.3631 | 0.5102 | 0.0427 | 0.8097 | PASS |
+| TensorRT 10 FP16 | 0.3635 | 0.5105 | 0.0426 | 0.8096 | PASS |
+| TensorRT 10 native Q/DQ INT8+FP16 | 0.3452 | 0.4937 | 0.0440 | 0.8011 | PASS |
+
+The candidate reduced FP32-output compute from the Step 05 Inspector category count of 12 to four,
+but TensorRT 10 produced 87 reformats, including 41 Q/DQ-origin reformats, compared with 67 total
+reformats in the Step 05 engine. Its 64 INT8-weight convolutions include 39 with INT8 outputs and 25
+with FP16 outputs.
+
+Matched performance used a 500 ms warmup and 120 measured samples:
+
+| Engine | Mean latency (ms) | P90 (ms) | GPU compute mean (ms) | Throughput (qps) |
+| --- | ---: | ---: | ---: | ---: |
+| TensorRT 10 FP32 | 5.163 | 5.190 | 3.988 | 248.584 |
+| TensorRT 10 FP16 | 2.749 | 2.758 | 1.559 | 635.628 |
+| TensorRT 10 native Q/DQ INT8+FP16 | 3.138 | 3.152 | 1.951 | 507.842 |
+
+The passing INT8 candidate is approximately `20.1%` slower in throughput than FP16 and has
+approximately `25.2%` higher mean GPU compute time. Quality eligibility therefore does not change
+the FP16 deployment decision. Detailed commands and artifact hashes are documented in
+`precision_recovery/06_trt10_native_fp16_qdq/README.md`; generated evidence is under the matching
+ignored `outputs/precision_recovery/06_trt10_native_fp16_qdq/` directory.
+
+## PTQ Conclusion And Handoff
 
 The pinned TensorRT 8.6.1 legacy-calibrator path is complete. Its strongest legacy accuracy
 candidate was the MinMax engine with the complete detection head constrained to FP16. It retained
 measurable performance benefit over FP16 but failed the unchanged mAP50 gate, so FP16 remained the
 legacy sequence's release candidate.
 
-ModelOpt itself was not installed into the pinned environment. Calibration and Q/DQ export ran in
-the separate version-pinned ModelOpt image; TensorRT 8.6 then consumed the portable ONNX artifact
-and produced the first passing INT8 quality candidate. This preserves the dependency boundary while
-allowing a matched comparison against the established TensorRT 8.6 references.
+ModelOpt itself was not installed into the pinned TensorRT 8.6 environment. Calibration and Q/DQ
+export ran in the separate version-pinned ModelOpt image. TensorRT 8.6 produced the first passing
+INT8 quality candidate, and TensorRT 10.14 later consumed the same portable native FP16 Q/DQ ONNX
+for a complete matched experiment. Both candidates passed quality, but neither outperformed its
+matched FP16 reference.
 
 Future explicit Q/DQ experiments should continue to reuse only portable source artifacts:
 
@@ -544,3 +583,5 @@ and must receive a new hash, engine, performance report, and complete gate resul
 5. Drift examples were captured in full four-backend reports and used as diagnostic evidence.
 6. ModelOpt explicit Q/DQ PTQ: completed; the 3,000-image max-calibrated TRT8.6 INT8+FP16 candidate
    passed all four unchanged quality thresholds. QAT remained out of scope.
+7. TensorRT 10 native FP16 Q/DQ: completed; the candidate passed all four unchanged thresholds but
+   was slower than the matched TensorRT 10 FP16 reference, so FP16 remains the deployment choice.
