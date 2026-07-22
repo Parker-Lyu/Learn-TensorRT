@@ -20,6 +20,11 @@ beginning, not quick demo shortcuts.
 ## Lesson Modules
 
 - Keep lesson directories as complete runnable implementations in the normal course history.
+- Design each lesson so a third party can reproduce it from scratch using only the repository at
+  that revision and its documented external prerequisites. A lesson may depend on earlier lessons,
+  but must not depend on files, generated artifacts, undocumented local state, or other resources
+  that existed during development and were later deleted. Document any cross-lesson dependencies
+  and the commands needed to reproduce the lesson in its README.
 - Do not add separate `_practice` lesson folders or TODO-only starter copies unless explicitly
   requested.
 - When a lesson benefits from hands-on guidance, put concise checkpoints or experiments in that
