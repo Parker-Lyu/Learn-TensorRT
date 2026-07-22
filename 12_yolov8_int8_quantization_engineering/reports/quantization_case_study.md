@@ -25,7 +25,7 @@ candidate is deployed only when it also beats a version-matched FP16 reference.
 | Legacy MinMax INT8+FP16 | 8.6.1 | 0.3439 | 0.4889 | 0.0430 | 0.7930 | FAIL |
 | MinMax + complete detection head FP16 | 8.6.1 | 0.3463 | 0.4895 | 0.0427 | 0.7930 | FAIL |
 | ModelOpt Q/DQ INT8+FP16 | 8.6.1 | 0.3452 | 0.4946 | 0.0452 | 0.7990 | PASS |
-| ModelOpt native-FP16 Q/DQ INT8+FP16 | 10.14.1.48 | 0.3454 | 0.4946 | 0.0459 | 0.7998 | PASS |
+| ModelOpt Q/DQ INT8+FP16 (native FP16 high precision) | 10.14.1.48 | 0.3454 | 0.4946 | 0.0459 | 0.7998 | PASS |
 
 Entropy loses too much task accuracy. MinMax recovers most of it but misses the fixed mAP50 gate.
 Moving the complete detection head to FP16 improves mAP50-95 but still misses mAP50, so the remaining

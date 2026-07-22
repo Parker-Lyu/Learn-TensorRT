@@ -13,10 +13,11 @@ The complete case study is generated from machine-readable evidence in
 and complete-detection-head FP16 candidates failed the unchanged quality contract. ModelOpt
 explicit-Q/DQ candidates passed in TensorRT 8.6 and TensorRT 10.14.
 
-The final TensorRT 10 native-FP16 Q/DQ candidate reached `0.3454` mAP50-95 and `0.4946` mAP50, but
-matched performance reached only `522.188 qps` versus `636.729 qps` for FP16. Its mean GPU compute
-time was `1.898 ms` versus `1.556 ms`. FP16 therefore remains the deployment decision: INT8 quality
-was recovered, but deployment value was not demonstrated.
+The final TensorRT 10 explicit-Q/DQ INT8+FP16 candidate, using native FP16 for its high-precision
+tensors, reached `0.3454` mAP50-95 and `0.4946` mAP50, but matched performance reached only
+`522.188 qps` versus `636.729 qps` for the FP16 reference. Its mean GPU compute time was `1.898 ms`
+versus `1.556 ms`. FP16 therefore remains the deployment decision: INT8 quality was recovered, but
+deployment value was not demonstrated.
 
 ## Engineering Questions
 
@@ -192,10 +193,11 @@ The NGC image already supplies its CUDA, PyTorch, and TensorRT stack; do not rep
 with unrelated host or PyPI CUDA builds. Capture the actual versions after construction because an
 NGC image and pip resolver can change transitive packages.
 
-The TensorRT 8.6 FP32-high-precision Q/DQ candidate and the TensorRT 10 native-FP16 Q/DQ candidate
-remain consecutive stages of the same course. Switching runtime, however, creates a hard evidence
-boundary: build new TensorRT 10 FP32 and FP16 engines and generate a new TensorRT 10 reference
-bundle before evaluating the native-FP16 Q/DQ candidate.
+The TensorRT 8.6 Q/DQ candidate with FP32 high-precision tensors and the TensorRT 10 Q/DQ INT8+FP16
+candidate with native FP16 high-precision tensors remain consecutive stages of the same course.
+Switching runtime, however, creates a hard evidence boundary: build new TensorRT 10 FP32 and FP16
+engines and generate a new TensorRT 10 reference bundle before evaluating the TensorRT 10 Q/DQ
+INT8+FP16 candidate.
 
 ### 5. Deployment Decision
 

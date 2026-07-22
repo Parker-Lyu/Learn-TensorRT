@@ -175,7 +175,9 @@ def main() -> int:
         "legacy_minmax": "Legacy MinMax INT8+FP16",
         "detection_head_fp16": "MinMax + complete detection head FP16",
         "modelopt_qdq_trt8": "ModelOpt Q/DQ INT8+FP16",
-        "modelopt_native_fp16_qdq_trt10": "ModelOpt native-FP16 Q/DQ INT8+FP16",
+        "modelopt_native_fp16_qdq_trt10": (
+            "ModelOpt Q/DQ INT8+FP16 (native FP16 high precision)"
+        ),
     }
     for name in EVALUATIONS:
         stage = stages[name]

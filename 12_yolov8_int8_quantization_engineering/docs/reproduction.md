@@ -78,8 +78,8 @@ python3 compare_engines.py \
   --output-dir outputs/03_detection_head_fp16/evaluation
 ```
 
-Export Q/DQ graphs inside `learn-tensorrt-modelopt`. FP32-high precision targets TensorRT 8.6;
-native FP16 high precision targets TensorRT 10:
+Export Q/DQ INT8 graphs inside `learn-tensorrt-modelopt`. FP32 high-precision tensors target
+TensorRT 8.6; native FP16 high-precision tensors target the TensorRT 10 INT8+FP16 candidate:
 
 ```bash
 cd /workspace/Learn-TensorRT
