@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LESSON_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_ANNOTATIONS = REPO_ROOT / "assets/coco/data/downloads/annotations_trainval2017.zip"
 DEFAULT_SELECTION = LESSON_DIR / "data/calibration_selection.json"
+DEFAULT_SELECTION_CONFIG = LESSON_DIR / "configs/calibration_selection.json"
 DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs/data_preparation/representativeness"
 INSTANCE_ANNOTATIONS = "annotations/instances_train2017.json"
 
@@ -67,15 +68,25 @@ def load_annotations(path: Path) -> dict[str, Any]:
             ) from error
 
 
-def selected_image_ids(path: Path) -> list[int]:
+def selection_records(path: Path) -> list[dict[str, Any]]:
     document = load_json(path)
-    values = document.get("selected_ids")
-    if not isinstance(values, list) or not values:
-        raise ValueError("selection document must contain a non-empty selected_ids list")
+    records = document.get("selected_images")
+    if not isinstance(records, list) or not records:
+        raise ValueError("selection document must contain a non-empty selected_images list")
+    if any(not isinstance(record, dict) for record in records):
+        raise ValueError("selected_images entries must be objects")
+    return records
+
+
+def selected_image_ids(path: Path) -> list[int]:
+    records = selection_records(path)
+    values = [record.get("image_id") for record in records if isinstance(record, dict)]
+    if len(values) != len(records):
+        raise ValueError("selected_images entries must be objects with image IDs")
     if any(not isinstance(value, int) or value <= 0 for value in values):
-        raise ValueError("selected_ids must contain positive integer COCO image IDs")
+        raise ValueError("selected image IDs must be positive COCO image IDs")
     if len(values) != len(set(values)):
-        raise ValueError("selected_ids contains duplicates")
+        raise ValueError("selected_images contains duplicate image IDs")
     return values
 
 
@@ -213,6 +224,10 @@ def metric_status(rank: float) -> str:
     return "FAIL"
 
 
+def core_metric_status(rank: float, maximum_rank: float) -> str:
+    return "PASS" if rank <= maximum_rank else "FAIL"
+
+
 def support_coverage(sample: np.ndarray, population: np.ndarray) -> dict[str, Any]:
     """Check coverage of twenty approximately equal-mass population intervals."""
     edges = np.unique(np.percentile(population, np.linspace(0.0, 100.0, 21)))
@@ -334,14 +349,18 @@ def fmt(value: float) -> str:
 
 
 def write_markdown(report: dict[str, Any], destination: Path, figure_name: str) -> None:
-    fidelity = report["conclusion"]["distribution_fidelity"]
+    random_baseline = report["conclusion"]["strict_random_baseline_status"]
     coverage = report["conclusion"]["support_coverage"]
     verdict = report["conclusion"]["geometry_representativeness"]
+    selection_status = report["conclusion"]["calibration_selection_status"]
+    core_status = report["conclusion"]["natural_core_fidelity"]
     lines = [
         "# Calibration Geometry Representativeness",
         "",
+        f"- Calibration selection: **{selection_status}**",
         f"- Geometry verdict: **{verdict}**",
-        f"- Distribution fidelity: **{fidelity}**",
+        f"- Natural-core fidelity: **{core_status}**",
+        f"- Final mixed set vs. pure-random baseline: **{random_baseline}**",
         f"- Support coverage: **{coverage}**",
         f"- Population: {report['population']['images']:,} images, "
         f"{report['population']['non_crowd_boxes']:,} non-crowd boxes",
@@ -392,6 +411,40 @@ def write_markdown(report: dict[str, Any], destination: Path, figure_name: str) 
     lines.extend(
         [
             "",
+            "## Explicit Tail Quotas",
+            "",
+            "| Tail group | Images | Selection threshold |",
+            "|---|---:|---:|",
+        ]
+    )
+    for name in ("small_object", "large_object", "crowded", "extreme_aspect", "dark", "bright"):
+        lines.append(
+            f"| {name} | {report['tail_groups']['counts'][name]} | "
+            f"{fmt(report['tail_groups']['thresholds'][name])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Natural 80% Core",
+            "",
+            "The natural core is checked separately against random subsets of the same 2,400-image "
+            "size. Unlike the final mixed set, it is expected to preserve frequency distributions.",
+            "",
+            "| Metric | Core KS | Random p99 | Baseline percentile | Status |",
+            "|---|---:|---:|---:|:---:|",
+        ]
+    )
+    for spec in METRICS:
+        metric = report["natural_core_metrics"][spec.key]
+        lines.append(
+            f"| {spec.title} | {metric['ks_distance']:.4f} | "
+            f"{metric['random_baseline']['p99']:.4f} | "
+            f"{metric['random_baseline']['selected_percentile_rank']:.1f}% | "
+            f"{metric['distribution_status']} |"
+        )
+    lines.extend(
+        [
+            "",
             "## COCO Object-size Shares",
             "",
             "| Size | Full train2017 | Selected 3000 | Difference |",
@@ -426,6 +479,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--annotations", type=Path, default=DEFAULT_ANNOTATIONS)
     parser.add_argument("--selection", type=Path, default=DEFAULT_SELECTION)
+    parser.add_argument("--selection-config", type=Path, default=DEFAULT_SELECTION_CONFIG)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--random-trials", type=int, default=200)
     parser.add_argument("--seed", type=int, default=12)
@@ -436,7 +490,14 @@ def main() -> int:
     args = parse_args()
     if args.random_trials < 20:
         raise ValueError("--random-trials must be at least 20")
-    selected_ids = selected_image_ids(args.selection)
+    selection_document = load_json(args.selection)
+    records = selection_records(args.selection)
+    selected_ids = [record["image_id"] for record in records]
+    core_ids = [
+        record["image_id"] for record in records if record.get("role") == "natural_core"
+    ]
+    config = load_json(args.selection_config)
+    acceptance = config["acceptance"]
     document = load_annotations(args.annotations)
     image_ids, image_metrics, box_metrics, metadata = build_geometry(document)
     del document
@@ -445,6 +506,7 @@ def main() -> int:
     if missing:
         raise ValueError(f"selected image IDs are absent from train2017: {missing[:5]}")
     selected_indices = np.asarray([offsets[value] for value in selected_ids], dtype=np.int64)
+    core_indices = np.asarray([offsets[value] for value in core_ids], dtype=np.int64)
     if selected_indices.size >= len(image_ids):
         raise ValueError("selection must be smaller than the train2017 population")
 
@@ -458,13 +520,22 @@ def main() -> int:
     selected_values.update(
         {key: concatenate_images(values, selected_indices) for key, values in box_metrics.items()}
     )
+    core_values = {key: values[core_indices] for key, values in image_metrics.items()}
+    core_values.update(
+        {key: concatenate_images(values, core_indices) for key, values in box_metrics.items()}
+    )
 
     rng = random.Random(args.seed)
     random_index_sets = [
         np.asarray(rng.sample(range(len(image_ids)), len(selected_ids)), dtype=np.int64)
         for _ in range(args.random_trials)
     ]
+    random_core_index_sets = [
+        np.asarray(rng.sample(range(len(image_ids)), len(core_ids)), dtype=np.int64)
+        for _ in range(args.random_trials)
+    ]
     metrics: dict[str, dict[str, Any]] = {}
+    core_metrics: dict[str, dict[str, Any]] = {}
     for spec in METRICS:
         if spec.level == "image":
             samples = [image_metrics[spec.key][indices] for indices in random_index_sets]
@@ -473,6 +544,23 @@ def main() -> int:
         metrics[spec.key] = analyze_metric(
             spec, selected_values[spec.key], population_values[spec.key], samples
         )
+        if spec.level == "image":
+            core_samples = [
+                image_metrics[spec.key][indices] for indices in random_core_index_sets
+            ]
+        else:
+            core_samples = [
+                concatenate_images(box_metrics[spec.key], indices)
+                for indices in random_core_index_sets
+            ]
+        core_metrics[spec.key] = analyze_metric(
+            spec, core_values[spec.key], population_values[spec.key], core_samples
+        )
+        core_rank = core_metrics[spec.key]["random_baseline"]["selected_percentile_rank"]
+        core_metrics[spec.key]["distribution_status"] = core_metric_status(
+            core_rank,
+            float(acceptance["natural_core_random_baseline_percentile_max"]),
+        )
 
     distribution_statuses = [metric["distribution_status"] for metric in metrics.values()]
     coverage_statuses = [metric["support_coverage"]["status"] for metric in metrics.values()]
@@ -480,16 +568,54 @@ def main() -> int:
         "FAIL" if "FAIL" in distribution_statuses else "WARN" if "WARN" in distribution_statuses else "PASS"
     )
     coverage = "FAIL" if "FAIL" in coverage_statuses else "PASS"
-    if coverage == "FAIL":
-        geometry_verdict = "NOT_GEOMETRICALLY_REPRESENTATIVE"
-    elif distribution_fidelity == "FAIL":
-        geometry_verdict = "NOT_DISTRIBUTIONALLY_REPRESENTATIVE_BUT_SUPPORT_COVERED"
-    elif distribution_fidelity == "WARN":
-        geometry_verdict = "REPRESENTATIVE_WITH_MINOR_DISTRIBUTION_SHIFT"
-    else:
-        geometry_verdict = "REPRESENTATIVE"
+    core_fidelity = (
+        "FAIL"
+        if any(metric["distribution_status"] == "FAIL" for metric in core_metrics.values())
+        else "PASS"
+    )
 
     all_indices = range(len(image_ids))
+    population_sizes = coco_size_distribution(box_metrics["box_scale_px"], all_indices)
+    selected_sizes = coco_size_distribution(box_metrics["box_scale_px"], selected_indices)
+    image_ks_ok = all(
+        metrics[spec.key]["ks_distance"]
+        <= float(acceptance["final_image_metric_ks_max"])
+        for spec in METRICS
+        if spec.level == "image"
+    )
+    box_ks_ok = all(
+        metrics[spec.key]["ks_distance"]
+        <= float(acceptance["final_box_metric_ks_max"])
+        for spec in METRICS
+        if spec.level == "box"
+    )
+    size_delta_ok = all(
+        abs(selected_sizes["shares"][name] - population_sizes["shares"][name])
+        <= float(acceptance["final_coco_size_share_delta_max"])
+        for name in ("small", "medium", "large")
+    )
+    full_median = metrics["objects_per_image"]["population_quantiles"]["p50"]
+    selected_median = metrics["objects_per_image"]["selected_quantiles"]["p50"]
+    object_median_shift = abs(selected_median / max(full_median, 1.0) - 1.0)
+    object_count_ok = object_median_shift <= float(
+        acceptance["final_object_count_median_relative_shift_max"]
+    )
+    calibration_status = (
+        "PASS"
+        if core_fidelity == "PASS"
+        and coverage == "PASS"
+        and image_ks_ok
+        and box_ks_ok
+        and size_delta_ok
+        and object_count_ok
+        else "FAIL"
+    )
+    geometry_verdict = (
+        "REPRESENTATIVE_WITH_EXPLICIT_TAIL_COVERAGE"
+        if calibration_status == "PASS"
+        else "CALIBRATION_SELECTION_REQUIRES_REVISION"
+    )
+
     report = {
         "schema_version": 1,
         "method": {
@@ -512,16 +638,44 @@ def main() -> int:
         },
         "selection": {
             "images": len(selected_ids),
+            "natural_core_images": len(core_ids),
             "non_crowd_boxes": int(selected_values["box_scale_px"].size),
+        },
+        "tail_groups": {
+            "counts": {
+                name: sum(record.get("role") == name for record in records)
+                for name in config["tail_groups"]
+            },
+            "thresholds": selection_document["thresholds"],
         },
         "annotation_notes": metadata,
         "metrics": metrics,
+        "natural_core_metrics": core_metrics,
         "coco_object_sizes": {
-            "population": coco_size_distribution(box_metrics["box_scale_px"], all_indices),
-            "selected": coco_size_distribution(box_metrics["box_scale_px"], selected_indices),
+            "population": population_sizes,
+            "selected": selected_sizes,
+        },
+        "acceptance": {
+            "config": acceptance,
+            "checks": {
+                "natural_core_fidelity": core_fidelity,
+                "support_coverage": coverage,
+                "final_image_ks": "PASS" if image_ks_ok else "FAIL",
+                "final_box_ks": "PASS" if box_ks_ok else "FAIL",
+                "coco_size_share_delta": "PASS" if size_delta_ok else "FAIL",
+                "object_count_median_shift": "PASS" if object_count_ok else "FAIL",
+            },
         },
         "conclusion": {
-            "distribution_fidelity": distribution_fidelity,
+            "calibration_selection_status": calibration_status,
+            "natural_core_fidelity": core_fidelity,
+            "strict_random_baseline_status": (
+                "MATCH"
+                if distribution_fidelity == "PASS"
+                else "BORDERLINE"
+                if distribution_fidelity == "WARN"
+                else "EXPECTED_SHIFT_FROM_EXPLICIT_TAIL_QUOTAS"
+            ),
             "support_coverage": coverage,
             "geometry_representativeness": geometry_verdict,
             "scope": "image dimensions, object count, and non-crowd box geometry only",
@@ -536,7 +690,10 @@ def main() -> int:
     write_markdown(report, markdown_path, figure_path.name)
     json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Geometry verdict: {geometry_verdict}")
-    print(f"Distribution fidelity: {distribution_fidelity}")
+    print(
+        "Final mixed set vs. pure-random baseline: "
+        f"{report['conclusion']['strict_random_baseline_status']}"
+    )
     print(f"Support coverage: {coverage}")
     print(f"Markdown report: {markdown_path}")
     print(f"JSON report: {json_path}")

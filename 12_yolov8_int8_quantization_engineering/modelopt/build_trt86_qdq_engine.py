@@ -16,7 +16,7 @@ import tensorrt as trt
 LESSON_DIR = Path(__file__).resolve().parents[1]
 EXPORT_DIR = LESSON_DIR / "outputs/04_modelopt_qdq/export"
 OUTPUT_DIR = LESSON_DIR / "outputs/04_modelopt_qdq/trt8"
-DEFAULT_ONNX = EXPORT_DIR / "yolov8n_modelopt_qdq_calibration_v3.onnx"
+DEFAULT_ONNX = EXPORT_DIR / "yolov8n_modelopt_qdq_calibration_v4.onnx"
 DEFAULT_ENGINE = OUTPUT_DIR / "yolov8n_modelopt_qdq_trt86_int8_fp16.engine"
 
 

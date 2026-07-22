@@ -26,7 +26,7 @@ LAYER_AUDIT = OUTPUTS / "04_modelopt_qdq/trt10/layer_audit.json"
 DATA_MANIFEST = LESSON / "data/dataset_manifest.json"
 SELECTION = LESSON / "data/calibration_selection.json"
 PARITY = OUTPUTS / "00_qualification/preprocessing_parity.json"
-COVERAGE = OUTPUTS / "data_preparation/coverage_report.json"
+SELECTION_REPORT = OUTPUTS / "data_preparation/selection_report.json"
 QUALITY_CONTRACT = LESSON / "configs/quality_contract.json"
 EXPERIMENTS = LESSON / "configs/experiments.json"
 EXPERIMENT_IDS = {
@@ -60,7 +60,7 @@ def main() -> int:
     manifest = load(DATA_MANIFEST)
     selection = load(SELECTION)
     parity = load(PARITY)
-    coverage = load(COVERAGE)
+    selection_report = load(SELECTION_REPORT)
     quality_contract = load(QUALITY_CONTRACT)
     experiments_hash = sha256(EXPERIMENTS)
     evaluations = {name: load(path) for name, path in EVALUATIONS.items()}
@@ -128,10 +128,20 @@ def main() -> int:
             "dataset_id": manifest["dataset_id"],
             "manifest_sha256": manifest_hash,
             "selection_sha256": sha256(SELECTION),
-            "candidate_images": len(selection["candidate_pool"]),
             "calibration_images": manifest["calibration_count"],
             "validation_images": manifest["validation_count"],
-            "historical_1000_selected": coverage["selected_from_historical_1000"],
+            "natural_core_images": selection_report["counts"]["natural_core"],
+            "tail_images": sum(
+                selection_report["counts"][name]
+                for name in (
+                    "small_object",
+                    "large_object",
+                    "crowded",
+                    "extreme_aspect",
+                    "dark",
+                    "bright",
+                )
+            ),
             "preprocessing_parity": "PASS",
         },
         "quality_contract": {
@@ -199,12 +209,12 @@ candidate is deployed only when it also beats a version-matched FP16 reference.
 ## Data Qualification
 
 - Dataset: `{manifest['dataset_id']}`.
-- Candidate pool: {len(selection['candidate_pool'])} fixed COCO train2017 images.
-- Calibration: {manifest['calibration_count']} independently coverage-selected images.
+- Calibration: {manifest['calibration_count']} COCO train2017 images.
+- Natural-distribution core: {selection_report['counts']['natural_core']} images (80%).
+- Explicit geometry and brightness tails: {manifest['calibration_count'] - selection_report['counts']['natural_core']} images (20%).
 - Validation: all {manifest['validation_count']} COCO val2017 images with human labels.
 - Calibration manifest SHA-256: `{manifest_hash}`.
 - Selection metadata SHA-256: `{sha256(SELECTION)}`.
-- Historical 1,000-image members selected again: {coverage['selected_from_historical_1000']}; old membership was not forced.
 - Preprocessing parity: PASS for all 3,000 calibration images with byte-identical FP32 tensors.
 
 ## Quantization Evolution

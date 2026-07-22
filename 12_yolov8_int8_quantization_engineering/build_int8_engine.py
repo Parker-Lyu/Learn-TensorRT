@@ -9,11 +9,11 @@ import json
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
-import cv2
 import numpy as np
 import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
+from calibration_preprocessing import letterbox, preprocess
 from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
 
 PRECISION_PROFILES = {
@@ -58,33 +58,6 @@ def image_paths(directory: Path) -> list[Path]:
     if not paths:
         raise FileNotFoundError(f"no calibration images found under {directory}")
     return paths
-
-
-def letterbox(image_bgr: np.ndarray, size: tuple[int, int]) -> np.ndarray:
-    width, height = size
-    scale = min(width / image_bgr.shape[1], height / image_bgr.shape[0])
-    resized_width = max(1, min(width, int(round(image_bgr.shape[1] * scale))))
-    resized_height = max(1, min(height, int(round(image_bgr.shape[0] * scale))))
-    resized = cv2.resize(image_bgr, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
-    output = np.full((height, width, 3), 114, dtype=np.uint8)
-    pad_left = (width - resized_width) // 2
-    pad_top = (height - resized_height) // 2
-    output[pad_top:pad_top + resized_height, pad_left:pad_left + resized_width] = resized
-    return output
-
-
-def preprocess(path: Path, input_shape: tuple[int, int, int, int]) -> np.ndarray:
-    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    if image is None:
-        raise FileNotFoundError(f"failed to read calibration image: {path}")
-    _, channels, height, width = input_shape
-    if channels != 3:
-        raise ValueError(f"expected 3-channel input, got shape {input_shape}")
-    letterboxed = letterbox(image, (width, height))
-    rgb = cv2.cvtColor(letterboxed, cv2.COLOR_BGR2RGB)
-    tensor = rgb.astype(np.float32) / 255.0
-    tensor = np.transpose(tensor, (2, 0, 1))[None, ...]
-    return np.ascontiguousarray(tensor)
 
 
 class CalibrationResources:

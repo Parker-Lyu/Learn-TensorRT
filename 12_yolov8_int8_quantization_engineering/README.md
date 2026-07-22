@@ -1,263 +1,134 @@
 # 12 - YOLOv8 INT8 Quantization Engineering
 
-This advanced case study follows the engineering evolution from TensorRT legacy calibration to
-ModelOpt explicit Q/DQ quantization. The objective is not to produce an INT8 engine at any cost. It
-is to establish reproducible data and quality contracts, reject unqualified candidates, and deploy
-INT8 only when it improves matched performance without violating quality.
+This lesson treats INT8 as an evidence-driven deployment decision. It builds a reproducible
+calibration dataset, proves preprocessing parity, evaluates legacy TensorRT calibration and
+ModelOpt explicit Q/DQ, applies one unchanged task-quality gate, and compares only
+version-matched engines.
 
+## Learning Objectives
 
-## Recorded Outcome
+By the end of the lesson, the evidence should answer:
 
-The complete case study is generated from machine-readable evidence in
-[`reports/quantization_case_study.md`](reports/quantization_case_study.md). Legacy Entropy, MinMax,
-and complete-detection-head FP16 candidates failed the unchanged quality contract. ModelOpt
-explicit-Q/DQ candidates passed in TensorRT 8.6 and TensorRT 10.14.
+1. Does the calibration set mostly follow the intended input distribution?
+2. Are small, large, crowded, unusual-aspect, dark, and bright inputs still represented?
+3. Are calibration and evaluation preprocessing byte-identical?
+4. Does each INT8 candidate pass the predeclared detection-quality gate?
+5. If quality passes, is INT8 faster than FP16 in the same TensorRT environment?
 
-The final TensorRT 10 explicit-Q/DQ INT8+FP16 candidate, using native FP16 for its high-precision
-tensors, reached `0.3454` mAP50-95 and `0.4946` mAP50, but matched performance reached only
-`522.188 qps` versus `636.729 qps` for the FP16 reference. Its mean GPU compute time was `1.898 ms`
-versus `1.556 ms`. FP16 therefore remains the deployment decision: INT8 quality was recovered, but
-deployment value was not demonstrated.
+## Canonical Data Contract
 
-## Engineering Questions
+Validation uses all 5,000 labeled COCO val2017 images. Calibration uses 3,000 images selected from
+the complete 118,287-image train2017 annotation population. Calibration and validation are checked
+for duplicate content, and generated manifests record every selected image hash.
 
-By the end of the lesson, the evidence must answer:
+The calibration policy intentionally combines distribution fidelity with explicit tail coverage:
 
-1. Why are these calibration images representative?
-2. Which model, data, preprocessing, postprocessing, metric, runtime, and engines define the
-   reference?
-3. Which single variable changes in each candidate experiment?
-4. Does the candidate pass the predeclared task-quality gate?
-5. If it passes, is it faster than the version-matched FP16 reference?
-6. Is the extra quantization complexity justified for deployment?
+- 2,400 images (80%) are a deterministic random sample from train2017's natural image
+  distribution;
+- 600 images (20%) are split equally across small-object, large-object, crowded,
+  extreme-aspect-ratio, dark, and bright groups;
+- category coverage is a minimum constraint on the natural core, not a request for uniform class
+  frequency;
+- dark and bright groups are measured after the exact 640x640 letterbox, RGB conversion, and
+  normalization used by calibration.
 
-## Fixed Data And Quality Contract
+The selection configuration is committed in `configs/calibration_selection.json`. The immutable
+result is `data/calibration_selection.json`; normal course runs recompute the selection and require
+an exact match rather than silently replacing it.
 
-Validation uses the complete 5,000-image COCO val2017 split with human labels. Calibration and
-validation must have no byte-identical image overlap. The release thresholds and evaluation
-settings are declared in `configs/quality_contract.json` before candidate results are inspected.
-`compare_engines.py` loads confidence, NMS, maximum detections, input shape, metric ID, and every
-allowed regression directly from this file; these values are not duplicated as CLI defaults. Every
-evaluation records the contract hash, and reference reuse rejects a different contract.
+## Prepare And Inspect The Dataset
 
-The canonical calibration set is a new, independently selected 3,000-image split. It is selected
-from a fixed 5,000-image train2017 candidate pool using category seeding followed by deterministic
-farthest-point coverage over object scale, image and box geometry, luminance, contrast, saturation,
-and edge density.
-
-Both sets are fixed course data. `data/calibration_selection.json` commits the exact 5,000 candidate
-image IDs, file names, SHA-256 hashes, algorithm version, and ordered 3,000-image result. The
-candidate pool was assembled during course dataset engineering by combining the earlier 1,000-image
-stratified calibration set with 4,000 additional COCO train2017 candidates intended to broaden the
-pool before coverage selection. Recreating that historical pool-construction process is not part of
-the lesson; reproducing its committed identity and the 3,000-image selection is.
-
-From a fresh clone, first prepare the shared COCO annotations and labeled validation split, then
-download the exact fixed candidate pool and reproduce the selection inside the pinned `trt_dev`
-container:
+Run inside the pinned `trt_dev` container from the repository root:
 
 ```bash
 python3 assets/coco/prepare_coco.py
 
 python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
-  --download-candidates \
   --materialize
-```
 
-The second command downloads each candidate from the official COCO train2017 endpoint, verifies its
-committed hash, recomputes the coverage features, and requires the ordered 3,000 selected IDs to
-match the committed contract exactly. It materializes the selected images under ignored
-`assets/coco/data/`, writes regenerated selection evidence and the coverage report under ignored
-`outputs/data_preparation/`, and recreates `data/dataset_manifest.json`. It never overwrites the
-committed selection contract. A data, algorithm, or environment change that alters the result stops
-the command and requires an explicitly versioned new dataset and new downstream evidence.
-
-Evaluate whether the selected 3,000 images preserve the full train2017 image-size and box-geometry
-distributions, and whether they cover the population support:
-
-```bash
 python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_representativeness.py
 ```
 
-The script reads dimensions and boxes directly from the COCO annotation archive, so the complete
-train2017 image download is not required. It compares the selected set's Kolmogorov-Smirnov distance
-with 200 deterministic random 3,000-image subsets, checks equal-mass distribution intervals, and
-writes a Markdown report, JSON evidence, and distribution figure under ignored
-`outputs/data_preparation/representativeness/`. The conclusion is deliberately limited to image
-dimensions, object counts, and non-crowd box geometry; it does not replace the lesson's existing
-category and image-content coverage evidence.
+The shared preparer downloads annotations and val2017. The lesson selector reads the full
+train2017 annotation population, downloads a fixed brightness-screening pool and the selected
+images from the official COCO endpoint, verifies hashes, and materializes only the final 3,000
+images. A full train2017 image archive is not required.
 
-## Reference Bundles
-
-PyTorch, TensorRT FP32, and TensorRT FP16 are evaluated once per immutable environment identity.
-Every later INT8 candidate runs alone and reuses that reference bundle. The bundle identity covers:
-
-- model weights and ONNX hashes;
-- validation manifest and quality-contract hashes;
-- preprocessing, postprocessing, and metric implementation IDs;
-- TensorRT/CUDA/GPU runtime identity;
-- FP32 and FP16 engine hashes.
-
-Changing an INT8 engine, calibration cache, calibration algorithm, or precision profile does not
-invalidate the reference. Changing any reference identity does. In particular, a TensorRT 8.6
-reference can never be reused for a TensorRT 10 experiment.
-
-Generated bundles belong under:
+Generated evidence is written under:
 
 ```text
-outputs/references/trt86_full/reference_bundle.json
+outputs/data_preparation/
+  selection_report.json
+  representativeness/
+    representativeness_report.json
+    representativeness_report.md
+    geometry_distributions.png
 ```
 
-After the one complete evaluation, create the bundle with:
+The representativeness report separates two questions: whether frequency distributions resemble a
+natural sample, and whether important support regions are covered. Coverage alone is not described
+as distribution fidelity.
+
+## Preprocessing Contract
+
+`calibration_preprocessing.py` is the calibration-side implementation used by both dataset
+selection and TensorRT engine calibration. Qualification independently compares it with the
+evaluation path:
 
 ```bash
-python3 12_yolov8_int8_quantization_engineering/tools/create_reference_bundle.py \
-  --report <full-reference-report.json> \
-  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
-  --quality-contract \
-    12_yolov8_int8_quantization_engineering/configs/quality_contract.json \
-  --output \
-    12_yolov8_int8_quantization_engineering/outputs/references/trt86_full/reference_bundle.json
+python3 12_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
-The existing evaluator's candidate-only mode is the required execution model: first generate one
-complete reference report and its bundle, then pass `--reference-bundle` and the declared
-`--experiment-id` for each candidate. The evaluator validates the bundle identity, experiment
-matrix, engine build metadata, and source-model metadata before inference. Do not rerun PyTorch,
-FP32, and FP16 merely because a new INT8 candidate was built.
+The required tensor is contiguous FP32 NCHW RGB with shape `1x3x640x640`, generated using the same
+linear resize, centered padding value 114, channel conversion, and `/255` normalization.
+
+## Fixed Quality Contract
+
+`configs/quality_contract.json` fixes the validation dataset identity, input shape, confidence and
+NMS thresholds, maximum detections, metric implementation, and maximum allowed regression before
+candidate results are inspected. Every evaluation records the quality-contract and manifest hashes.
+
+Changing the calibration selection invalidates calibration caches, INT8 engines, source-model
+metadata, evaluation reports, and downstream performance conclusions. Regenerate them rather than
+reusing evidence with a different manifest hash.
 
 ## Experiment Sequence
 
-The declared matrix is `configs/experiments.json`. Each stage changes one quantization decision.
+The declared matrix is `configs/experiments.json`. Each stage changes one quantization decision:
 
-### 0. Qualification And Reference
+1. Qualify data identity and preprocessing, then build FP32 and FP16 references.
+2. Build legacy Entropy INT8+FP16.
+3. Change only the legacy calibrator to MinMax.
+4. Keep MinMax and constrain the complete YOLOv8 detection head to FP16.
+5. Export ModelOpt explicit-Q/DQ candidates.
+6. Rebuild references when moving from TensorRT 8.6 to TensorRT 10.
+7. Benchmark only candidates that pass the unchanged quality gate.
 
-- verify dataset hashes and calibration/validation separation;
-- prove calibration and evaluation preprocessing are byte-identical;
-- build version-matched FP32 and FP16 engines;
-- evaluate PyTorch, FP32, and FP16 once;
-- save the immutable reference bundle.
+TensorRT 8.6 candidates run in `trt_dev`. ModelOpt export and TensorRT 10 evidence run in the
+environment declared by `configs/environments.json`. A reference bundle is reusable only while its
+model, dataset manifest, quality contract, preprocessing, postprocessing, runtime, and reference
+engine identities remain unchanged.
 
-Preprocessing parity is a prerequisite, not an accuracy-recovery experiment.
+Complete commands are in [`docs/reproduction.md`](docs/reproduction.md).
 
-```bash
-python3 tools/verify_preprocessing_parity.py
-```
+## Deployment Decision Rule
 
-### 1. Legacy Entropy PTQ
+Dataset statistics qualify the calibration inputs, not the engine. A calibration set is considered
+usable only when the resulting engine passes the task-quality gate. A quality-passing INT8 engine is
+eligible for deployment only when it also improves matched performance enough to justify its added
+complexity.
 
-Build a TensorRT 8.6 entropy-calibrated INT8 engine from the canonical 3,000-image manifest. Record
-the calibration algorithm, cache identity, timing cache, builder flags, engine hash, Inspector
-evidence, and task-quality result.
-
-### 2. Legacy MinMax PTQ
-
-Change only the calibration algorithm to MinMax. Use distinct cache and engine identities so a
-calibration table cannot be reused under the wrong algorithm.
-
-### 3. Detection-Head Mixed-Precision Diagnosis
-
-Keep the MinMax experiment fixed and constrain the complete YOLOv8 detection head to FP16 with
-strict TensorRT precision constraints. The profile follows the prediction towers through reshape,
-concatenation, DFL, box decoding, class sigmoid, and final output assembly. The builder validates the
-expected 67-layer data-flow structure, and the Engine Inspector must prove that every internal head
-output is FP16; only the explicit external FP32 output boundary is allowed.
-
-This is the only layer-sensitivity candidate in the formal course. The historical box-only and
-box-plus-class-output experiments are intentionally omitted because they add procedural noise
-without changing the engineering conclusion.
-
-### 4. ModelOpt Explicit Q/DQ
-
-Legacy calibration leaves scale placement largely to TensorRT. This stage moves quantization intent
-into the model graph with ModelOpt `QuantizeLinear`/`DequantizeLinear` nodes and builds an
-INT8+FP16 engine. It uses a second image and environment because the pinned TensorRT 8.6 development
-container does not provide the required ModelOpt/TensorRT 10 toolchain.
-
-The local environments used for this course are recorded in `configs/environments.json`:
-
-- `trt_dev`: `nvcr.io/nvidia/tensorrt:23.10-py3`, TensorRT 8.6.1 and CUDA 12.2;
-- `learn-tensorrt-modelopt`: `nvcr.io/nvidia/pytorch:25.11-py3`, TensorRT 10.14.1.48,
-  CUDA 13.0, ModelOpt 0.37.0, and Ultralytics 8.4.22.
-
-The ModelOpt environment can be reconstructed approximately as follows. Pin exact package versions
-in the experiment metadata rather than silently accepting future latest releases:
+After collecting fresh evidence, generate the curated case study:
 
 ```bash
-docker pull nvcr.io/nvidia/pytorch:25.11-py3
-
-docker run -d --gpus all \
-  --name learn-tensorrt-modelopt \
-  --ipc=host \
-  -v "$PWD:/workspace/Learn-TensorRT" \
-  nvcr.io/nvidia/pytorch:25.11-py3 sleep infinity
-
-docker exec learn-tensorrt-modelopt bash -lc '
-  python3 -m pip install \
-    nvidia-modelopt==0.37.0 \
-    ultralytics==8.4.22 \
-    onnx==1.18.0
-'
-
-docker exec learn-tensorrt-modelopt bash -lc '
-  python3 -c "import modelopt, tensorrt, torch, onnx, cv2, ultralytics"
-'
+python3 12_yolov8_int8_quantization_engineering/tools/generate_case_study.py
 ```
 
-The NGC image already supplies its CUDA, PyTorch, and TensorRT stack; do not replace those packages
-with unrelated host or PyPI CUDA builds. Capture the actual versions after construction because an
-NGC image and pip resolver can change transitive packages.
+The generator rejects missing or identity-mismatched evidence instead of combining unrelated runs.
 
-The TensorRT 8.6 Q/DQ candidate with FP32 high-precision tensors and the TensorRT 10 Q/DQ INT8+FP16
-candidate with native FP16 high-precision tensors remain consecutive stages of the same course.
-Switching runtime, however, creates a hard evidence boundary: build new TensorRT 10 FP32 and FP16
-engines and generate a new TensorRT 10 reference bundle before evaluating the TensorRT 10 Q/DQ
-INT8+FP16 candidate.
+## Verification
 
-### 5. Deployment Decision
-
-Only quality-passing candidates are eligible for matched performance testing. Compare the selected
-Q/DQ INT8+FP16 candidate against the FP16 reference built in the same container and TensorRT
-version. Use identical shapes, warmup, measured iterations, transfer settings, and synchronization.
-
-The recorded case-study result is intentionally non-obvious: INT8+FP16 passed the quality gate but
-was slower than pure FP16. Possible causes include:
-
-- insufficient INT8 kernel coverage, leaving substantial FP16 or FP32 computation;
-- Q/DQ boundaries introducing reformat, cast, quantize, and dequantize work;
-- tensor layouts or channel dimensions that prevent efficient INT8 tactics;
-- mixed-precision boundaries increasing memory traffic and synchronization;
-- tactic selection choosing slower kernels for this GPU and batch size;
-- the model being too small or batch-1 execution being too latency-bound to amortize conversions.
-
-A follow-up investigation could compare Engine Inspector layer precision and formats, count Q/DQ-
-origin reformats, inspect `trtexec --dumpProfile` layer times, compare tactic choices, use Nsight
-Systems for launch/transfer gaps, use Nsight Compute for kernel utilization, and test supported
-batch sizes. That root-cause investigation is deliberately outside this lesson. The engineering
-decision remains: passing accuracy makes a candidate eligible; it does not make it deployable.
-
-## Reproduction
-
-The complete commands and output layout are documented in
-[`docs/reproduction.md`](docs/reproduction.md). The important execution rule is that TRT8
-candidates reuse the TRT8 reference, while the runtime change requires one new full TRT10
-reference evaluation before any TRT10 candidate reuse.
-
-## Deliverables
-
-- versioned 3,000-image calibration manifest and coverage report;
-- one reference bundle for TensorRT 8.6 and one for TensorRT 10;
-- Entropy, MinMax, detection-head FP16, and Q/DQ candidate metadata;
-- machine-readable quality reports with unchanged gates;
-- matched FP16 versus passing Q/DQ performance evidence;
-- `reports/quantization_case_study.md` containing the final decision.
-
-Generated datasets, engines, calibration tables, timing caches, predictions, and raw benchmark
-captures stay in ignored output directories.
-
-## CPU Verification
-
-Run inside `trt_dev` so NumPy and OpenCV match the course environment:
+Run the lesson CPU tests inside `trt_dev`:
 
 ```bash
 PYTHONPATH=12_yolov8_int8_quantization_engineering \
@@ -274,4 +145,6 @@ python3 -m unittest discover \
   -p 'test_*.py' -v
 ```
 
-GPU-, TensorRT-, and ModelOpt-dependent commands must run in the matching container described above.
+Generated datasets, calibration caches, engines, predictions, and benchmark captures remain in
+ignored output directories. Curated reports should be committed only after all linked evidence has
+been regenerated from the canonical manifest.

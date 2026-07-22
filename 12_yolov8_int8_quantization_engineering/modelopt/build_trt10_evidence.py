@@ -23,7 +23,7 @@ FP32_ONNX = REPO_ROOT / "05_torch_to_onnx/outputs/yolov8n.onnx"
 QDQ_ONNX = (
     LESSON_DIR
     / "outputs/04_modelopt_qdq/export/"
-    "yolov8n_modelopt_qdq_native_fp16_calibration_v3.onnx"
+    "yolov8n_modelopt_qdq_native_fp16_calibration_v4.onnx"
 )
 EXPECTED_TRT_VERSION = "10.14.1.48"
 EXPECTED_IO = [

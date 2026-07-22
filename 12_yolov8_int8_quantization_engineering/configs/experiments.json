@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "calibration_dataset_id": "coco2017-yolov8n-calibration-v3",
+  "calibration_dataset_id": "coco2017-yolov8n-calibration-v4",
   "stages": [
     {
       "id": "01_legacy_entropy",

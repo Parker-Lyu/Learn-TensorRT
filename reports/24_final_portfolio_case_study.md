@@ -7,22 +7,16 @@ preprocessing, server/edge integration exercises, and reusable language bindings
 ## Evidence Map
 
 - [10a functional and architecture validation](10a_end_to_end_validation.md)
-- [12a precision and performance decision](12a_precision_performance.md)
 - [17a pipeline performance and reliability](17a_pipeline_performance.md)
 
 The linked reports retain commands and raw-artifact paths; this case study does not duplicate them.
 
 ## Precision Decision
 
-| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s | Accuracy gate |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| FP32 | 120 | 4.399 | 4.398 | 4.426 | 4.434 | 227.3 | PASS |
-| FP16 | 120 | 2.711 | 2.712 | 2.725 | 2.734 | 368.9 | PASS |
-| INT8 | 120 | 2.380 | 2.378 | 2.389 | 2.430 | 420.2 | FAIL |
-
-FP16 is the current deployment choice; INT8 remains blocked by the declared fixed-dataset accuracy gate. The decision uses the canonical 5,000-image human-labeled validation split and
-identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating numerical
-conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run reliability.
+Pending regeneration from lesson 12's current calibration manifest. No FP32, FP16, or INT8
+deployment recommendation is carried across a calibration-dataset identity change. A one-input
+Polygraphy alignment remains useful for locating numerical conversion bugs, but it cannot replace
+dataset accuracy, tail latency, or long-run reliability.
 
 ## Pipeline Result
 
@@ -77,7 +71,7 @@ DeepStream, and Jetson runtime acceptance remains explicitly hardware/container 
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
 CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
-improve INT8 calibration, mixed precision, or QAT, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
+regenerate the precision evidence, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
 DeepStream, and Jetson hardware.
 
 ## Resume Bullets
@@ -92,8 +86,8 @@ DeepStream, and Jetson hardware.
 ## Five-Minute English Presentation
 
 Start with the deployment goal and controlled YOLOv8 model. Explain ONNX/TensorRT correctness and
-why raw alignment precedes detection metrics. Present the measured precision decision from the 12a
-gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
+why raw alignment precedes detection metrics. Present the precision decision only after regenerating
+the 12a gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
 the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
 remaining soak/TSAN/hardware gates, and why those limitations are reported rather than hidden.
 

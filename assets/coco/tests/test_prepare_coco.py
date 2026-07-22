@@ -50,13 +50,11 @@ class CocoPreparationTests(unittest.TestCase):
                 (labels / "000000000002.txt").read_text(encoding="utf-8"), ""
             )
 
-    def test_committed_manifest_defines_the_complete_dataset(self) -> None:
+    def test_committed_manifest_defines_shared_validation_data(self) -> None:
         document = PREPARE.load_canonical_document(PREPARE.CANONICAL_MANIFEST)
-        calibration = PREPARE.canonical_records(document, "calibration")
-        validation = PREPARE.canonical_records(document, "validation")
-        self.assertEqual(len(calibration), 1000)
+        validation = PREPARE.validation_records(document)
+        self.assertEqual(document["calibration_count"], 0)
         self.assertEqual(len(validation), 5000)
-        self.assertEqual(len({record["image_sha256"] for record in calibration}), 1000)
         self.assertTrue(all("label_sha256" in record for record in validation))
 
     def test_manifest_destination_rejects_path_escape(self) -> None:
@@ -64,7 +62,7 @@ class CocoPreparationTests(unittest.TestCase):
             manifest = Path(directory) / "dataset_manifest.json"
             record = {"image": "../../outside.jpg"}
             with self.assertRaisesRegex(ValueError, "escapes"):
-                PREPARE.checked_destination(manifest, record, "calibration/images")
+                PREPARE.checked_destination(manifest, record, "validation/images")
 
 
 if __name__ == "__main__":

@@ -6,22 +6,23 @@ Run GPU and TensorRT commands only in the matching containers declared in
 ## 0. Reproduce The Fixed Dataset
 
 Run from the repository root inside `trt_dev`. The first command prepares the pinned COCO
-annotations and labeled val2017 split. The second downloads the exact committed 5,000-image
-candidate pool, verifies every image hash, recomputes the ordered 3,000-image selection, and
-materializes it for calibration:
+annotations and labeled val2017 split. The second reproduces the canonical 80% natural-distribution
+core and 20% explicit-tail selection from the complete train2017 annotation population, downloads
+the required images, verifies every image hash, and materializes the final 3,000 images:
 
 ```bash
 python3 assets/coco/prepare_coco.py
 
 python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
-  --download-candidates \
   --materialize
+
+python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_representativeness.py
 ```
 
 `data/calibration_selection.json` is a read-only release contract, not a generated local baseline.
-The preparation command must reproduce it exactly. Regenerated selection metadata and coverage
-evidence are written below `outputs/data_preparation/`; a mismatch stops preparation without
-changing the committed contract.
+The preparation command must reproduce it exactly. Selection and distribution evidence are written
+below `outputs/data_preparation/`; a mismatch stops preparation without changing the committed
+contract. The complete train2017 image archive is not required.
 
 ## 1. TensorRT 8.6 Reference And Candidates
 
@@ -86,11 +87,11 @@ cd /workspace/Learn-TensorRT
 
 python3 12_yolov8_int8_quantization_engineering/modelopt/modelopt_ptq.py \
   --high-precision fp32 \
-  --name yolov8n_modelopt_qdq_calibration_v3
+  --name yolov8n_modelopt_qdq_calibration_v4
 
 python3 12_yolov8_int8_quantization_engineering/modelopt/modelopt_ptq.py \
   --high-precision fp16 \
-  --name yolov8n_modelopt_qdq_native_fp16_calibration_v3
+  --name yolov8n_modelopt_qdq_native_fp16_calibration_v4
 ```
 
 Return to `trt_dev` to build and evaluate the TRT8 Q/DQ candidate against the existing TRT8

@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Download and verify the canonical COCO dataset declared by the committed manifest."""
+"""Download and verify the shared COCO annotations and validation dataset."""
 
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import hashlib
 import json
 import shutil
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 import zipfile
 from collections import defaultdict
@@ -30,14 +28,12 @@ ANNOTATIONS_URL = (
     "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 )
 VAL_IMAGES_URL = "http://images.cocodataset.org/zips/val2017.zip"
-TRAIN_IMAGE_URL = "http://images.cocodataset.org/train2017/{file_name}"
 ARCHIVE_SHA256 = {
     "annotations_trainval2017.zip": (
         "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268"
     ),
     "val2017.zip": "4f7e2ccb2866ec5041993c9cf2a952bbed69647b115d0f74da7ce8f4bef82f05",
 }
-EXPECTED_CALIBRATION_IMAGES = 1_000
 EXPECTED_VAL_IMAGES = 5_000
 EXPECTED_CATEGORIES = 80
 USER_AGENT = "Learn-TensorRT-COCO-preparer/1.0"
@@ -110,18 +106,19 @@ def verify_archive(path: Path) -> None:
         raise RuntimeError(f"corrupt ZIP member {corrupt_member!r} in {path}")
 
 
-def canonical_records(document: dict[str, Any], split: str) -> list[dict[str, Any]]:
+def validation_records(document: dict[str, Any]) -> list[dict[str, Any]]:
     if document.get("schema_version") != 1:
         raise ValueError("canonical manifest must use schema version 1")
     records = document.get("records")
     if not isinstance(records, list):
         raise ValueError("canonical manifest records must be a list")
-    selected = [record for record in records if record.get("split") == split]
-    expected = EXPECTED_CALIBRATION_IMAGES if split == "calibration" else EXPECTED_VAL_IMAGES
-    if len(selected) != expected:
-        raise ValueError(f"expected {expected} {split} records, found {len(selected)}")
+    selected = [record for record in records if record.get("split") == "validation"]
+    if len(selected) != EXPECTED_VAL_IMAGES:
+        raise ValueError(
+            f"expected {EXPECTED_VAL_IMAGES} validation records, found {len(selected)}"
+        )
     if len({record["image"] for record in selected}) != len(selected):
-        raise ValueError(f"canonical manifest contains duplicate {split} image paths")
+        raise ValueError("canonical manifest contains duplicate validation image paths")
     return selected
 
 
@@ -129,10 +126,9 @@ def load_canonical_document(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"committed canonical manifest is missing: {path}")
     document = json.loads(path.read_text(encoding="utf-8"))
-    calibration = canonical_records(document, "calibration")
-    validation = canonical_records(document, "validation")
-    if document.get("calibration_count") != len(calibration):
-        raise ValueError("canonical calibration_count does not match its records")
+    validation = validation_records(document)
+    if document.get("calibration_count") != 0:
+        raise ValueError("shared manifest must not contain calibration images")
     if document.get("validation_count") != len(validation):
         raise ValueError("canonical validation_count does not match its records")
     return document
@@ -154,41 +150,6 @@ def checked_destination(manifest_path: Path, record: dict[str, Any], prefix: str
     except ValueError as error:
         raise ValueError(f"manifest path escapes {allowed_root}: {destination}") from error
     return destination
-
-
-def download_calibration_images(
-    records: list[dict[str, Any]], manifest_path: Path, workers: int
-) -> list[Path]:
-    def fetch(record: dict[str, Any]) -> Path:
-        destination = checked_destination(
-            manifest_path, record, "calibration/images"
-        )
-        expected_hash = record["image_sha256"]
-        if destination.is_file():
-            try:
-                validate_jpeg(destination)
-                verify_sha256(destination, expected_hash)
-                return destination
-            except RuntimeError:
-                destination.unlink()
-        file_name = urllib.parse.quote(destination.name)
-        download_file(TRAIN_IMAGE_URL.format(file_name=file_name), destination)
-        validate_jpeg(destination)
-        try:
-            verify_sha256(destination, expected_hash)
-        except RuntimeError:
-            destination.unlink(missing_ok=True)
-            raise
-        return destination
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(fetch, record) for record in records]
-        paths = []
-        for completed, future in enumerate(concurrent.futures.as_completed(futures), start=1):
-            paths.append(future.result())
-            if completed % 100 == 0 or completed == len(futures):
-                print(f"  calibration images: {completed}/{len(futures)}")
-    return sorted(paths)
 
 
 def extract_annotation(archive_path: Path, member: str, output_dir: Path) -> Path:
@@ -320,25 +281,19 @@ def main() -> int:
     annotations_archive = downloads_dir / "annotations_trainval2017.zip"
     val_archive = downloads_dir / "val2017.zip"
 
-    print(f"Canonical dataset: {manifest['dataset_id']}")
+    print(f"Shared dataset: {manifest['dataset_id']}")
     print("Downloading pinned COCO archives (existing files are reused)...")
     download_file(ANNOTATIONS_URL, annotations_archive, show_progress=True)
     download_file(VAL_IMAGES_URL, val_archive, show_progress=True)
     verify_archive(annotations_archive)
     verify_archive(val_archive)
 
-    print("Downloading the exact calibration images declared by the manifest...")
-    calibration_records = canonical_records(manifest, "calibration")
-    calibration_paths = download_calibration_images(
-        calibration_records, manifest_path, args.workers
-    )
-
     print("Extracting val2017 and recreating the manifest-declared YOLO labels...")
-    validation_records = canonical_records(manifest, "validation")
+    records = validation_records(manifest)
     validation_paths = extract_validation_images(
         val_archive,
         output_root / "validation/images",
-        validation_records,
+        records,
         manifest_path,
     )
     val_annotations = extract_annotation(
@@ -356,7 +311,6 @@ def main() -> int:
     load_manifest(manifest_path)
     summary = {
         "dataset_id": manifest["dataset_id"],
-        "calibration_images": len(calibration_paths),
         "validation_images": len(validation_paths),
         "validation_boxes_excluding_crowd": box_count,
         "manifest": str(manifest_path),
@@ -370,7 +324,7 @@ def main() -> int:
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps(summary, indent=2))
-    print("Canonical COCO data is ready for lesson 12.")
+    print("Shared COCO annotations and validation data are ready.")
     return 0
 
 

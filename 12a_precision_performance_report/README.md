@@ -4,7 +4,8 @@ This reporting checkpoint combines lessons 06, 11, and the formal quantization c
 numbers. It collects at least 100 synchronized timing samples for FP32, FP16, and INT8, records the
 wall-time throughput reported by `trtexec`, then renders performance, raw drift, detection quality,
 release thresholds, and profiler diagnosis into
-`reports/12a_precision_performance.md`.
+`reports/12a_precision_performance.md` after lesson 12 has produced fresh, identity-linked engine
+and accuracy evidence.
 
 Latency percentiles come from `trtexec --exportTimes`. Throughput comes from the `trtexec` summary
 rather than `1000 / mean latency`, because transfers and compute from different inferences may
@@ -35,10 +36,9 @@ metadata.
 
 ## Precision Decision Policy
 
-The current report uses the reorganized Lesson 12 evidence. Explicit Q/DQ INT8+FP16 passes every
-fixed quality threshold, but matched TensorRT 10 throughput is `522.188 qps` versus `636.729 qps`
-for FP16. FP16 therefore remains the deployment choice because the quality-passing INT8 candidate
-does not provide a performance benefit.
+No precision recommendation is committed while lesson 12's canonical calibration dataset is being
+qualified. Generate a new report only from engines, accuracy evidence, and performance captures
+whose dataset-manifest hash matches the current lesson 12 contract.
 
 Quantization implementation and candidate selection belong in the new Lesson 12. This checkpoint
 consumes only its final quality-eligible candidate; it does not repeat failed-candidate experiments
@@ -52,6 +52,5 @@ Change the decision only after all affected evidence is regenerated:
 4. rerun the profiler evidence when the compared FP32 engine or environment changed;
 5. regenerate this report and accept the result only if all identity checks pass.
 
-The generated report is the source of truth for measured numbers and pass/fail state. If a future
-candidate passes, update this README summary in the same change so it cannot preserve an obsolete
-precision recommendation.
+The generated report is the source of truth for measured numbers and pass/fail state. Do not copy a
+recommendation from an engine built with a different calibration manifest.

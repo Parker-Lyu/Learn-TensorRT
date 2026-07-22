@@ -330,7 +330,7 @@ def parse_args() -> argparse.Namespace:
         help="Smoke artifacts validate the pipeline but are never valid accuracy candidates.",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--name", default="yolov8n_modelopt_qdq_calibration_v3")
+    parser.add_argument("--name", default="yolov8n_modelopt_qdq_calibration_v4")
     parser.add_argument(
         "--high-precision", choices=tuple(HIGH_PRECISION_DTYPES), default="fp32",
         help="Data type used by Q/DQ high-precision tensors inside the exported graph.",
