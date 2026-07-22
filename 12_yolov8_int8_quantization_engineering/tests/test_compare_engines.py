@@ -23,15 +23,33 @@ class ReferenceReuseTests(unittest.TestCase):
             weights=weights,
             fp32_engine=fp32,
             fp16_engine=fp16,
-            confidence=0.001,
-            iou=0.7,
-            max_detections=300,
             warmup=3,
-            max_map50_95_drop=0.02,
-            max_map50_drop=0.02,
-            max_precision_drop=0.03,
-            max_recall_drop=0.03,
         )
+        quality_contract = root / "quality_contract.json"
+        quality_contract.write_text(json.dumps({
+            "schema_version": 1,
+            "dataset_manifest_id": "fixture-v1",
+            "validation_dataset_id": "fixture-validation-v1",
+            "input_shape": [1, 3, 640, 640],
+            "evaluation": {
+                "confidence_threshold": 0.001,
+                "nms_iou_threshold": 0.7,
+                "max_detections": 300,
+                "metric": "fixture-metric-v1",
+            },
+            "maximum_drop_from_pytorch": {
+                "map50_95": 0.02,
+                "map50": 0.02,
+                "precision": 0.03,
+                "recall": 0.03,
+            },
+        }), encoding="utf-8")
+        experiments = root / "experiments.json"
+        experiments.write_text('{"schema_version": 1, "stages": [{"id": "fixture"}]}')
+        args.quality_contract = quality_contract
+        args.quality_contract_document = compare.load_quality_contract(quality_contract)
+        args.experiments = experiments
+        compare.configure_quality_contract(args)
         input_shape = (1, 3, 640, 640)
         report = {
             "schema_version": 1,
@@ -40,6 +58,12 @@ class ReferenceReuseTests(unittest.TestCase):
                 "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
             },
             "settings": compare.expected_settings(args, input_shape),
+            "quality_contract": compare.contract_identity(
+                quality_contract, args.quality_contract_document
+            ),
+            "experiment": {
+                "matrix_sha256": hashlib.sha256(experiments.read_bytes()).hexdigest()
+            },
             "regression_thresholds": {
                 f"max_{name}_drop": value
                 for name, value in compare.regression_thresholds(args).items()
@@ -68,7 +92,7 @@ class ReferenceReuseTests(unittest.TestCase):
     def test_changed_evaluation_setting_rejects_reference_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             args, input_shape = self.make_fixture(Path(directory))
-            args.confidence = 0.25
+            args.quality_contract_document["evaluation"]["confidence_threshold"] = 0.25
             with self.assertRaisesRegex(ValueError, "setting 'confidence' changed"):
                 compare.load_validated_reference_report(
                     args, {"dataset_id": "fixture-v1"}, input_shape
@@ -77,4 +101,3 @@ class ReferenceReuseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "dataset_manifest_id": "coco2017-yolov8n-calibration-v3-val5000-human-labels-v1",
   "validation_dataset_id": "coco2017-val5000-human-labels-v1",
   "input_shape": [1, 3, 640, 640],
   "evaluation": {

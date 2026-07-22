@@ -27,6 +27,15 @@ DATA_MANIFEST = LESSON / "data/dataset_manifest.json"
 SELECTION = LESSON / "data/calibration_selection.json"
 PARITY = OUTPUTS / "00_qualification/preprocessing_parity.json"
 COVERAGE = OUTPUTS / "data_preparation/coverage_report.json"
+QUALITY_CONTRACT = LESSON / "configs/quality_contract.json"
+EXPERIMENTS = LESSON / "configs/experiments.json"
+EXPERIMENT_IDS = {
+    "legacy_entropy": "01_legacy_entropy",
+    "legacy_minmax": "02_legacy_minmax",
+    "detection_head_fp16": "03_detection_head_fp16",
+    "modelopt_qdq_trt8": "04_modelopt_qdq_trt8",
+    "modelopt_native_fp16_qdq_trt10": "05_modelopt_native_fp16_qdq_trt10",
+}
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -52,6 +61,8 @@ def main() -> int:
     selection = load(SELECTION)
     parity = load(PARITY)
     coverage = load(COVERAGE)
+    quality_contract = load(QUALITY_CONTRACT)
+    experiments_hash = sha256(EXPERIMENTS)
     evaluations = {name: load(path) for name, path in EVALUATIONS.items()}
     performance = load(PERFORMANCE)
     audit = load(LAYER_AUDIT)["engines"]["tensorrt_int8"]
@@ -62,9 +73,20 @@ def main() -> int:
     manifest_hash = sha256(DATA_MANIFEST)
     if any(item["dataset"]["manifest_sha256"] != manifest_hash for item in evaluations.values()):
         raise ValueError("an evaluation report uses a different manifest hash")
-    thresholds = {json.dumps(item["regression_thresholds"], sort_keys=True) for item in evaluations.values()}
-    if len(thresholds) != 1:
-        raise ValueError("evaluation reports do not share one quality contract")
+    drops = quality_contract["maximum_drop_from_pytorch"]
+    expected_thresholds = {
+        f"max_{name}_drop": value for name, value in drops.items()
+    }
+    for name, report in evaluations.items():
+        if report.get("regression_thresholds") != expected_thresholds:
+            raise ValueError(f"{name} evaluation does not match the quality contract")
+        if report.get("quality_contract", {}).get("sha256") != sha256(QUALITY_CONTRACT):
+            raise ValueError(f"{name} evaluation has a different quality-contract identity")
+        experiment = report.get("experiment", {})
+        if experiment.get("id") != EXPERIMENT_IDS[name]:
+            raise ValueError(f"{name} evaluation has the wrong experiment identity")
+        if experiment.get("matrix_sha256") != experiments_hash:
+            raise ValueError(f"{name} evaluation has a different experiment matrix")
     if parity.get("status") != "PASS" or parity["comparison"]["images_failed"] != 0:
         raise ValueError("preprocessing parity did not pass")
 
@@ -112,7 +134,11 @@ def main() -> int:
             "historical_1000_selected": coverage["selected_from_historical_1000"],
             "preprocessing_parity": "PASS",
         },
-        "quality_contract": json.loads(next(iter(thresholds))),
+        "quality_contract": {
+            "sha256": sha256(QUALITY_CONTRACT),
+            "document": quality_contract,
+        },
+        "experiment_matrix_sha256": experiments_hash,
         "stages": stages,
         "trt10_performance": {
             name: {

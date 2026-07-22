@@ -21,6 +21,11 @@ import tensorrt as trt
 from cuda.bindings import runtime as cudart
 
 from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path
+from experiment_contract import (
+    DEFAULT_ENVIRONMENTS,
+    DEFAULT_EXPERIMENTS,
+    validate_engine_for_experiment,
+)
 from evaluation import (
     allocate_prediction_buffer,
     append_predictions,
@@ -28,6 +33,14 @@ from evaluation import (
     load_ground_truth,
     tensor_drift,
 )
+from quality_contract import (
+    DEFAULT_QUALITY_CONTRACT,
+    contract_identity,
+    evaluation_settings,
+    load_quality_contract,
+    regression_thresholds as contract_regression_thresholds,
+)
+from reference_bundle import assert_compatible, load_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LESSON09 = REPO_ROOT / "09_yolov8_trt_python"
@@ -124,14 +137,23 @@ def create_trt_runners(engine_paths: dict[str, Path]) -> dict[str, TensorRtRunne
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    required = [args.weights, args.fp32_engine, args.fp16_engine, args.int8_engine, args.manifest]
+    required = [
+        args.weights,
+        args.onnx,
+        args.fp32_engine,
+        args.fp16_engine,
+        args.int8_engine,
+        args.manifest,
+        args.quality_contract,
+        args.experiments,
+        args.environments,
+        args.engine_metadata,
+    ]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise FileNotFoundError("required evaluation artifact(s) missing: " + ", ".join(missing))
-    if not 0.0 <= args.confidence <= 1.0 or not 0.0 <= args.iou <= 1.0:
-        raise ValueError("--confidence and --iou must be in [0, 1]")
-    if args.max_detections <= 0 or args.warmup < 0:
-        raise ValueError("--max-detections must be positive and --warmup cannot be negative")
+    if args.warmup < 0:
+        raise ValueError("--warmup cannot be negative")
     if args.gpu < 0 or args.inspect_p99 < 0.0 or args.max_inspection_examples <= 0:
         raise ValueError("GPU index/inspection threshold/count are outside their valid range")
     expected_device = f"cuda:{args.gpu}"
@@ -141,9 +163,60 @@ def validate_args(args: argparse.Namespace) -> None:
             f"--device must be {expected_device} when --gpu is {args.gpu}; "
             "all backends must run on the same GPU"
         )
-    for name in ("max_map50_95_drop", "max_map50_drop", "max_precision_drop", "max_recall_drop"):
-        if getattr(args, name) < 0.0:
-            raise ValueError(f"--{name.replace('_', '-')} cannot be negative")
+
+
+def configure_quality_contract(args: argparse.Namespace) -> None:
+    contract = load_quality_contract(args.quality_contract)
+    settings = evaluation_settings(contract)
+    args.quality_contract_document = contract
+    args.confidence = settings["confidence"]
+    args.iou = settings["nms_iou"]
+    args.max_detections = settings["max_detections"]
+
+
+def validate_experiment(args: argparse.Namespace) -> dict[str, Any]:
+    return validate_engine_for_experiment(
+        args.experiment_id,
+        args.experiments,
+        args.environments,
+        args.int8_engine,
+        args.engine_metadata,
+        args.manifest,
+        trt.__version__,
+    )
+
+
+def validate_reference_bundle(
+    args: argparse.Namespace, experiment: dict[str, Any]
+) -> dict[str, Any]:
+    if args.reference_bundle is None:
+        raise ValueError("candidate-only evaluation requires --reference-bundle")
+    bundle = load_bundle(args.reference_bundle)
+    settings = evaluation_settings(args.quality_contract_document)
+    expected = {
+        "weights_sha256": hashlib.sha256(args.weights.read_bytes()).hexdigest(),
+        "onnx_sha256": hashlib.sha256(args.onnx.read_bytes()).hexdigest(),
+        "validation_manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
+        "quality_contract_sha256": hashlib.sha256(
+            args.quality_contract.read_bytes()
+        ).hexdigest(),
+        "preprocessing_id": "yolov8-letterbox-114-rgb-fp32-chw-v1",
+        "postprocessing_id": (
+            f"yolov8-decode-conf-{settings['confidence']}-nms-{settings['nms_iou']}-"
+            f"maxdet-{settings['max_detections']}-v1"
+        ),
+        "metric_id": settings["metric_implementation"],
+        "runtime_id": experiment["stage"]["runtime"],
+        "fp32_engine_sha256": hashlib.sha256(args.fp32_engine.read_bytes()).hexdigest(),
+        "fp16_engine_sha256": hashlib.sha256(args.fp16_engine.read_bytes()).hexdigest(),
+    }
+    assert_compatible(bundle, expected)
+    args.reference_report = Path(bundle["reference_report"])
+    return {
+        "path": str(args.reference_bundle.resolve()),
+        "sha256": hashlib.sha256(args.reference_bundle.read_bytes()).hexdigest(),
+        "reference_id": bundle["reference_id"],
+    }
 
 
 def current_software() -> dict[str, str]:
@@ -157,23 +230,17 @@ def current_software() -> dict[str, str]:
 
 
 def regression_thresholds(args: argparse.Namespace) -> dict[str, float]:
-    return {
-        "map50_95": args.max_map50_95_drop,
-        "map50": args.max_map50_drop,
-        "precision": args.max_precision_drop,
-        "recall": args.max_recall_drop,
-    }
+    return contract_regression_thresholds(args.quality_contract_document)
 
 
 def expected_settings(args: argparse.Namespace, input_shape: tuple[int, ...]) -> dict[str, Any]:
-    return {
-        "confidence": args.confidence,
-        "nms_iou": args.iou,
-        "max_detections": args.max_detections,
-        "input_shape": list(input_shape),
-        "warmup": args.warmup,
-        "metric_implementation": "course-coco-like-101point-v2-no-crowd-no-area-ranges",
-    }
+    settings = evaluation_settings(args.quality_contract_document)
+    if list(input_shape) != settings["input_shape"]:
+        raise ValueError(
+            f"engine input shape {list(input_shape)} does not match quality contract "
+            f"{settings['input_shape']}"
+        )
+    return {**settings, "warmup": args.warmup}
 
 
 def reference_artifact_paths(args: argparse.Namespace) -> dict[str, Path]:
@@ -199,6 +266,12 @@ def load_validated_reference_report(
         raise ValueError("reference report manifest hash does not match the requested manifest")
     if dataset.get("dataset_id") != manifest["dataset_id"]:
         raise ValueError("reference report dataset ID does not match the requested manifest")
+    expected_contract = contract_identity(args.quality_contract, args.quality_contract_document)
+    if report.get("quality_contract", {}).get("sha256") != expected_contract["sha256"]:
+        raise ValueError("reference report quality-contract identity changed")
+    expected_matrix_hash = hashlib.sha256(args.experiments.read_bytes()).hexdigest()
+    if report.get("experiment", {}).get("matrix_sha256") != expected_matrix_hash:
+        raise ValueError("reference report experiment-matrix identity changed")
 
     settings = report.get("settings", {})
     for name, expected in expected_settings(args, input_shape).items():
@@ -239,6 +312,9 @@ def changed_detection(reference: list[dict], candidate: list[dict]) -> bool:
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     validate_args(args)
     manifest = load_manifest(args.manifest)
+    if manifest["dataset_id"] != args.quality_contract_document["dataset_manifest_id"]:
+        raise ValueError("dataset manifest ID does not match the quality contract")
+    experiment = validate_experiment(args)
     records = [record for record in manifest["records"] if record["split"] == "validation"]
     if not records:
         raise ValueError("manifest contains no validation records")
@@ -382,6 +458,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             }.items()
         },
         "software": current_software(),
+        "quality_contract": contract_identity(
+            args.quality_contract, args.quality_contract_document
+        ),
+        "experiment": experiment,
         "regression_thresholds": {f"max_{name}_drop": value for name, value in thresholds.items()},
         "backends": backends,
         "changed_or_high_drift_examples": changed_examples[: args.max_inspection_examples],
@@ -392,6 +472,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, Any]:
     validate_args(args)
     manifest = load_manifest(args.manifest)
+    if manifest["dataset_id"] != args.quality_contract_document["dataset_manifest_id"]:
+        raise ValueError("dataset manifest ID does not match the quality contract")
+    experiment = validate_experiment(args)
+    reference_bundle_identity = validate_reference_bundle(args, experiment)
     records = [record for record in manifest["records"] if record["split"] == "validation"]
     if not records:
         raise ValueError("manifest contains no validation records")
@@ -462,6 +546,7 @@ def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, An
             "path": str(args.reference_report),
             "sha256": hashlib.sha256(args.reference_report.read_bytes()).hexdigest(),
         },
+        "reference_bundle": reference_bundle_identity,
         "dataset": {
             "manifest": str(args.manifest),
             "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
@@ -477,6 +562,10 @@ def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, An
         },
         "artifacts": artifacts,
         "software": current_software(),
+        "quality_contract": contract_identity(
+            args.quality_contract, args.quality_contract_document
+        ),
+        "experiment": experiment,
         "regression_thresholds": {
             f"max_{name}_drop": value for name, value in thresholds.items()
         },
@@ -528,6 +617,7 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_COCO_MANIFEST)
+    parser.add_argument("--onnx", type=Path, default=Path("../05_torch_to_onnx/outputs/yolov8n.onnx"))
     parser.add_argument("--weights", type=Path, default=Path("../assets/yolov8n.pt"))
     parser.add_argument(
         "--fp32-engine", type=Path,
@@ -542,24 +632,26 @@ def parse_args() -> argparse.Namespace:
         default=Path("outputs/yolov8n_static_int8.engine")
     )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument("--quality-contract", type=Path, default=DEFAULT_QUALITY_CONTRACT)
+    parser.add_argument("--experiments", type=Path, default=DEFAULT_EXPERIMENTS)
+    parser.add_argument("--environments", type=Path, default=DEFAULT_ENVIRONMENTS)
+    parser.add_argument("--experiment-id", required=True)
     parser.add_argument(
-        "--reference-report",
+        "--engine-metadata",
+        type=Path,
+        help="Candidate build metadata; defaults to <engine>.json.",
+    )
+    parser.add_argument(
+        "--reference-bundle",
         type=Path,
         help=(
-            "Reuse validated PyTorch/FP32/FP16 metrics from a prior full report and run only "
+            "Validate and reuse an immutable PyTorch/FP32/FP16 reference bundle, then run only "
             "the INT8 candidate."
         ),
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--confidence", type=float, default=0.001)
-    parser.add_argument("--iou", type=float, default=0.7)
-    parser.add_argument("--max-detections", type=int, default=300)
     parser.add_argument("--warmup", type=int, default=3)
-    parser.add_argument("--max-map50-95-drop", type=float, default=0.02)
-    parser.add_argument("--max-map50-drop", type=float, default=0.02)
-    parser.add_argument("--max-precision-drop", type=float, default=0.03)
-    parser.add_argument("--max-recall-drop", type=float, default=0.03)
     parser.add_argument("--inspect-p99", type=float, default=0.1)
     parser.add_argument("--max-inspection-examples", type=int, default=20)
     return parser.parse_args()
@@ -567,16 +659,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    configure_quality_contract(args)
+    args.reference_report = None
+    if args.engine_metadata is None:
+        args.engine_metadata = args.int8_engine.with_suffix(args.int8_engine.suffix + ".json")
     if not args.manifest.is_file():
         raise FileNotFoundError(
             f"COCO dataset manifest not found: {args.manifest}. Run "
             "`python3 assets/coco/prepare_coco.py` from the repository root."
         )
-    if args.reference_report is not None and not args.reference_report.is_file():
-        raise FileNotFoundError(f"reference report not found: {args.reference_report}")
+    if args.reference_bundle is not None and not args.reference_bundle.is_file():
+        raise FileNotFoundError(f"reference bundle not found: {args.reference_bundle}")
     report = (
         evaluate_candidate_with_references(args)
-        if args.reference_report is not None
+        if args.reference_bundle is not None
         else evaluate(args)
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -592,4 +688,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

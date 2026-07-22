@@ -5,9 +5,6 @@ ModelOpt explicit Q/DQ quantization. The objective is not to produce an INT8 eng
 is to establish reproducible data and quality contracts, reject unqualified candidates, and deploy
 INT8 only when it improves matched performance without violating quality.
 
-This course replaces the earlier calibration-and-recovery implementation. Its 1,000-image baseline,
-incremental 1,000-to-3,000 recovery story, repeated four-backend evaluations, and small
-layer-fallback experiments are intentionally excluded from the formal course.
 
 ## Recorded Outcome
 
@@ -38,13 +35,14 @@ By the end of the lesson, the evidence must answer:
 Validation uses the complete 5,000-image COCO val2017 split with human labels. Calibration and
 validation must have no byte-identical image overlap. The release thresholds and evaluation
 settings are declared in `configs/quality_contract.json` before candidate results are inspected.
+`compare_engines.py` loads confidence, NMS, maximum detections, input shape, metric ID, and every
+allowed regression directly from this file; these values are not duplicated as CLI defaults. Every
+evaluation records the contract hash, and reference reuse rejects a different contract.
 
 The canonical calibration set is a new, independently selected 3,000-image split. It is selected
 from a fixed 5,000-image train2017 candidate pool using category seeding followed by deterministic
 farthest-point coverage over object scale, image and box geometry, luminance, contrast, saturation,
-and edge density. The old 1,000 images are allowed to compete in the candidate pool but are not
-automatically retained. This produces a new manifest identity and intentionally invalidates the
-old calibration cache, INT8 engines, and candidate metrics.
+and edge density.
 
 Prepare the new manifest and materialize its selected images from the already downloaded local
 candidate pool:
@@ -78,7 +76,7 @@ reference can never be reused for a TensorRT 10 experiment.
 Generated bundles belong under:
 
 ```text
-outputs/references/<runtime-id>/<reference-id>/
+outputs/references/trt86_full/reference_bundle.json
 ```
 
 After the one complete evaluation, create the bundle with:
@@ -89,13 +87,15 @@ python3 12_yolov8_int8_quantization_engineering/tools/create_reference_bundle.py
   --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
   --quality-contract \
     12_yolov8_int8_quantization_engineering/configs/quality_contract.json \
-  --runtime-id <gpu-trt-cuda-runtime-id> \
-  --output outputs/references/<runtime-id>/reference_bundle.json
+  --output \
+    12_yolov8_int8_quantization_engineering/outputs/references/trt86_full/reference_bundle.json
 ```
 
 The existing evaluator's candidate-only mode is the required execution model: first generate one
-complete reference report, then pass it as the validated reference for each candidate. Do not rerun
-PyTorch, FP32, and FP16 merely because a new INT8 candidate was built.
+complete reference report and its bundle, then pass `--reference-bundle` and the declared
+`--experiment-id` for each candidate. The evaluator validates the bundle identity, experiment
+matrix, engine build metadata, and source-model metadata before inference. Do not rerun PyTorch,
+FP32, and FP16 merely because a new INT8 candidate was built.
 
 ## Experiment Sequence
 
@@ -129,8 +129,10 @@ calibration table cannot be reused under the wrong algorithm.
 ### 3. Detection-Head Mixed-Precision Diagnosis
 
 Keep the MinMax experiment fixed and constrain the complete YOLOv8 detection head to FP16 with
-strict TensorRT precision constraints. The builder must validate every expected layer and the
-Engine Inspector must prove that the requested precision was applied.
+strict TensorRT precision constraints. The profile follows the prediction towers through reshape,
+concatenation, DFL, box decoding, class sigmoid, and final output assembly. The builder validates the
+expected 67-layer data-flow structure, and the Engine Inspector must prove that every internal head
+output is FP16; only the explicit external FP32 output boundary is allowed.
 
 This is the only layer-sensitivity candidate in the formal course. The historical box-only and
 box-plus-class-output experiments are intentionally omitted because they add procedural noise

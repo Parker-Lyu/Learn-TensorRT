@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from collections import Counter
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 import cv2
@@ -22,11 +22,21 @@ PRECISION_PROFILES = {
 }
 
 DETECTION_HEAD_PREFIXES = ("/model.22/cv2.", "/model.22/cv3.")
-DETECTION_HEAD_EXPECTED_TYPES = {
+DETECTION_HEAD_TOWER_EXPECTED_TYPES = {
     trt.LayerType.CONVOLUTION: 18,
     trt.LayerType.ACTIVATION: 12,
     trt.LayerType.ELEMENTWISE: 12,
 }
+DETECTION_HEAD_EXPECTED_TYPES = {
+    trt.LayerType.CONVOLUTION: 19,
+    trt.LayerType.ACTIVATION: 13,
+    trt.LayerType.ELEMENTWISE: 18,
+    trt.LayerType.SHUFFLE: 10,
+    trt.LayerType.CONCATENATION: 4,
+    trt.LayerType.SLICE: 2,
+    trt.LayerType.SOFTMAX: 1,
+}
+DETECTION_HEAD_TENSOR_PREFIX = "/model.22/"
 
 
 def check_cuda(result: tuple, operation: str):
@@ -261,18 +271,52 @@ def precision_profile_layers(network, profile: str) -> list:
         raise ValueError(f"unsupported precision profile: {profile}") from error
 
     if profile == "detection_head_fp16":
-        selected = [
-            network.get_layer(index)
-            for index in range(network.num_layers)
-            if network.get_layer(index).name.startswith(DETECTION_HEAD_PREFIXES)
-        ]
+        layers = [network.get_layer(index) for index in range(network.num_layers)]
+        towers = [layer for layer in layers if layer.name.startswith(DETECTION_HEAD_PREFIXES)]
+        tower_counts = Counter(layer.type for layer in towers)
+        if tower_counts != Counter(DETECTION_HEAD_TOWER_EXPECTED_TYPES):
+            readable = {str(layer_type): count for layer_type, count in tower_counts.items()}
+            raise ValueError(
+                "detection_head_fp16 matched unexpected prediction-tower structure: "
+                f"expected {DETECTION_HEAD_TOWER_EXPECTED_TYPES}, found {readable}"
+            )
+
+        consumers = defaultdict(list)
+        for layer in layers:
+            for input_index in range(layer.num_inputs):
+                tensor = layer.get_input(input_index)
+                if tensor is not None:
+                    consumers[tensor.name].append(layer)
+
+        selected = []
+        selected_names = set()
+        pending = deque(towers)
+        while pending:
+            layer = pending.popleft()
+            if layer.name in selected_names:
+                continue
+            selected_names.add(layer.name)
+            selected.append(layer)
+            for output_index in range(layer.num_outputs):
+                pending.extend(consumers[layer.get_output(output_index).name])
+
         type_counts = Counter(layer.type for layer in selected)
         if type_counts != Counter(DETECTION_HEAD_EXPECTED_TYPES):
             readable = {str(layer_type): count for layer_type, count in type_counts.items()}
             raise ValueError(
-                "detection_head_fp16 matched an unexpected layer structure: "
+                "detection_head_fp16 matched an unexpected complete-head structure: "
                 f"expected {DETECTION_HEAD_EXPECTED_TYPES}, found {readable}"
             )
+        network_outputs = {
+            network.get_output(index).name for index in range(network.num_outputs)
+        }
+        selected_outputs = {
+            layer.get_output(index).name
+            for layer in selected
+            for index in range(layer.num_outputs)
+        }
+        if not network_outputs.issubset(selected_outputs):
+            raise ValueError("detection_head_fp16 does not reach every network output")
         return selected
 
     if not required_names:
@@ -317,6 +361,54 @@ def apply_precision_profile(network, config, profile: str) -> list[str]:
     return constrained
 
 
+def validate_detection_head_inspector(
+    layer_information: str, network_output_names: set[str]
+) -> dict[str, object]:
+    document = json.loads(layer_information)
+    layers = document.get("Layers")
+    if not isinstance(layers, list):
+        raise ValueError("Engine Inspector did not return a layer list")
+
+    checked = []
+    violations = []
+    boundary_conversions = []
+    for layer in layers:
+        tensors = layer.get("Inputs", []) + layer.get("Outputs", [])
+        names = [layer.get("Name", "")] + [tensor.get("Name", "") for tensor in tensors]
+        if not any(DETECTION_HEAD_TENSOR_PREFIX in name for name in names):
+            continue
+        outputs = layer.get("Outputs", [])
+        if not outputs:
+            continue
+        checked.append(layer.get("Name", ""))
+        for output in outputs:
+            name = output.get("Name", "")
+            tensor_format = output.get("Format/Datatype", "")
+            if name in network_output_names:
+                if "FP16" not in tensor_format:
+                    boundary_conversions.append({"layer": layer.get("Name", ""), "tensor": name})
+                continue
+            if "FP16" not in tensor_format:
+                violations.append({
+                    "layer": layer.get("Name", ""),
+                    "tensor": name,
+                    "format": tensor_format,
+                })
+    if not checked:
+        raise ValueError("Engine Inspector contains no detection-head execution layers")
+    if violations:
+        preview = ", ".join(item["layer"] for item in violations[:5])
+        raise ValueError(
+            f"detection-head FP16 verification failed for {len(violations)} output(s): {preview}"
+        )
+    return {
+        "status": "PASS",
+        "head_execution_layers_checked": len(checked),
+        "non_fp16_internal_outputs": 0,
+        "external_output_conversions": boundary_conversions,
+    }
+
+
 def configure_timing_cache(config, path: Path | None):
     if path is None:
         return None
@@ -346,6 +438,7 @@ def write_engine_evidence(
     calibration_count: int,
     identity: str,
     constrained_layers: list[str],
+    network_output_names: set[str],
 ) -> None:
     runtime = trt.Runtime(logger)
     engine = runtime.deserialize_cuda_engine(serialized_engine)
@@ -355,6 +448,11 @@ def write_engine_evidence(
     layer_information = inspector.get_engine_information(trt.LayerInformationFormat.JSON)
     inspector_path = args.output.with_suffix(args.output.suffix + ".layers.json")
     inspector_path.write_text(layer_information + "\n", encoding="utf-8")
+    precision_verification = None
+    if args.precision_profile == "detection_head_fp16":
+        precision_verification = validate_detection_head_inspector(
+            layer_information, network_output_names
+        )
 
     metadata = {
         "schema_version": 1,
@@ -377,6 +475,7 @@ def write_engine_evidence(
             {"name": name, "compute_precision": "FP16", "output_type": "FP16"}
             for name in constrained_layers
         ],
+        "precision_verification": precision_verification,
         "input_shape": list(args.input_shape),
         "workspace_mib": args.workspace_mib,
         "fp16_fallback_enabled": args.enable_fp16,
@@ -413,6 +512,9 @@ def build_engine(args: argparse.Namespace) -> None:
     if args.enable_fp16:
         config.set_flag(trt.BuilderFlag.FP16)
     constrained_layers = apply_precision_profile(network, config, args.precision_profile)
+    network_output_names = {
+        network.get_output(index).name for index in range(network.num_outputs)
+    }
     configure_timing_cache(config, args.timing_cache)
 
     input_tensor = network.get_input(0)
@@ -449,6 +551,7 @@ def build_engine(args: argparse.Namespace) -> None:
             len(calibration_paths),
             identity,
             constrained_layers,
+            network_output_names,
         )
     finally:
         calibrator.close()

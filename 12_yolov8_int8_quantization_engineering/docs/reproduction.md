@@ -14,21 +14,30 @@ cd /workspace/Projects/Learn-TensorRT/12_yolov8_int8_quantization_engineering
 python3 build_int8_engine.py \
   --calibrator entropy \
   --enable-fp16 \
+  --timing-cache outputs/trt86.timing.cache \
   --output outputs/01_legacy_entropy/yolov8n_entropy.engine \
   --cache outputs/01_legacy_entropy/yolov8n_entropy.cache
 
 python3 compare_engines.py \
+  --experiment-id 01_legacy_entropy \
   --int8-engine outputs/01_legacy_entropy/yolov8n_entropy.engine \
   --output-dir outputs/references/trt86_full
+
+python3 tools/create_reference_bundle.py \
+  --report outputs/references/trt86_full/precision_evaluation.json \
+  --onnx ../05_torch_to_onnx/outputs/yolov8n.onnx \
+  --output outputs/references/trt86_full/reference_bundle.json
 
 python3 build_int8_engine.py \
   --calibrator minmax \
   --enable-fp16 \
+  --timing-cache outputs/trt86.timing.cache \
   --output outputs/02_legacy_minmax/yolov8n_minmax.engine \
   --cache outputs/02_legacy_minmax/yolov8n_minmax.cache
 
 python3 compare_engines.py \
-  --reference-report outputs/references/trt86_full/precision_evaluation.json \
+  --experiment-id 02_legacy_minmax \
+  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
   --int8-engine outputs/02_legacy_minmax/yolov8n_minmax.engine \
   --output-dir outputs/02_legacy_minmax/evaluation
 
@@ -36,11 +45,13 @@ python3 build_int8_engine.py \
   --calibrator minmax \
   --precision-profile detection_head_fp16 \
   --enable-fp16 \
+  --timing-cache outputs/trt86.timing.cache \
   --output outputs/03_detection_head_fp16/yolov8n_minmax_head_fp16.engine \
   --cache outputs/02_legacy_minmax/yolov8n_minmax.cache
 
 python3 compare_engines.py \
-  --reference-report outputs/references/trt86_full/precision_evaluation.json \
+  --experiment-id 03_detection_head_fp16 \
+  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
   --int8-engine outputs/03_detection_head_fp16/yolov8n_minmax_head_fp16.engine \
   --output-dir outputs/03_detection_head_fp16/evaluation
 ```
@@ -70,7 +81,8 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/build_trt86_qdq_engine.
 
 cd 12_yolov8_int8_quantization_engineering
 python3 compare_engines.py \
-  --reference-report outputs/references/trt86_full/precision_evaluation.json \
+  --experiment-id 04_modelopt_qdq_trt8 \
+  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
   --int8-engine outputs/04_modelopt_qdq/trt8/yolov8n_modelopt_qdq_trt86_int8_fp16.engine \
   --output-dir outputs/04_modelopt_qdq/trt8/evaluation
 
@@ -82,10 +94,16 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/validate_trt10_outputs.
 
 cd 12_yolov8_int8_quantization_engineering
 python3 compare_engines.py \
+  --experiment-id 05_modelopt_native_fp16_qdq_trt10 \
   --fp32-engine outputs/04_modelopt_qdq/trt10/references/yolov8n_trt10_fp32.engine \
   --fp16-engine outputs/04_modelopt_qdq/trt10/references/yolov8n_trt10_fp16.engine \
   --int8-engine outputs/04_modelopt_qdq/trt10/candidate/yolov8n_modelopt_hp_fp16_trt10.engine \
   --output-dir outputs/04_modelopt_qdq/trt10/evaluation
+
+python3 tools/create_reference_bundle.py \
+  --report outputs/04_modelopt_qdq/trt10/evaluation/precision_evaluation.json \
+  --onnx ../05_torch_to_onnx/outputs/yolov8n.onnx \
+  --output outputs/04_modelopt_qdq/trt10/evaluation/reference_bundle.json
 
 cd /workspace/Learn-TensorRT
 python3 12_yolov8_int8_quantization_engineering/modelopt/benchmark_trt10_evidence.py

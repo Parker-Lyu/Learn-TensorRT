@@ -7,14 +7,24 @@
       "runtime": "tensorrt_8_6",
       "method": "legacy_calibrator",
       "calibrator": "entropy",
-      "fp16_fallback": true
+      "fp16_fallback": true,
+      "engine_metadata": {
+        "calibration_algorithm": "entropy",
+        "precision_profile": "none",
+        "fp16_fallback_enabled": true
+      }
     },
     {
       "id": "02_legacy_minmax",
       "runtime": "tensorrt_8_6",
       "method": "legacy_calibrator",
       "calibrator": "minmax",
-      "fp16_fallback": true
+      "fp16_fallback": true,
+      "engine_metadata": {
+        "calibration_algorithm": "minmax",
+        "precision_profile": "none",
+        "fp16_fallback_enabled": true
+      }
     },
     {
       "id": "03_detection_head_fp16",
@@ -22,22 +32,46 @@
       "method": "legacy_calibrator_mixed_precision",
       "calibrator": "minmax",
       "precision_profile": "detection_head_fp16",
-      "fp16_fallback": true
+      "fp16_fallback": true,
+      "engine_metadata": {
+        "calibration_algorithm": "minmax",
+        "precision_profile": "detection_head_fp16",
+        "fp16_fallback_enabled": true,
+        "precision_verification.status": "PASS"
+      }
     },
     {
       "id": "04_modelopt_qdq_trt8",
       "runtime": "tensorrt_8_6",
       "method": "modelopt_explicit_qdq",
       "activation_calibration": "max",
-      "high_precision_dtype": "float32"
+      "high_precision_dtype": "float32",
+      "engine_metadata": {
+        "build_mode": "explicit-qdq-int8-with-fp16-high-precision"
+      },
+      "source_model_metadata": {
+        "candidate_kind": "formal",
+        "valid_for_accuracy_gate": true,
+        "high_precision": "fp32",
+        "modelopt_config.algorithm": "max"
+      }
     },
     {
       "id": "05_modelopt_native_fp16_qdq_trt10",
       "runtime": "tensorrt_10_14",
       "method": "modelopt_explicit_qdq",
       "activation_calibration": "max",
-      "high_precision_dtype": "float16"
+      "high_precision_dtype": "float16",
+      "engine_metadata": {
+        "name": "tensorrt_int8",
+        "build_mode": "strongly-typed-native-fp16-qdq-int8"
+      },
+      "source_model_metadata": {
+        "candidate_kind": "formal",
+        "valid_for_accuracy_gate": true,
+        "high_precision": "fp16",
+        "modelopt_config.algorithm": "max"
+      }
     }
   ]
 }
-

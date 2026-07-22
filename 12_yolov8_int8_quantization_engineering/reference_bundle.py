@@ -21,6 +21,19 @@ REQUIRED_IDENTITY_FIELDS = (
     "fp32_engine_sha256",
     "fp16_engine_sha256",
 )
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_recorded_path(value: str) -> Path:
+    path = Path(value)
+    if path.exists():
+        return path
+    if "Learn-TensorRT" in path.parts:
+        index = path.parts.index("Learn-TensorRT")
+        relocated = REPO_ROOT.joinpath(*path.parts[index + 1 :])
+        if relocated.exists():
+            return relocated
+    return path
 
 
 def sha256(path: Path) -> str:
@@ -73,11 +86,12 @@ def load_bundle(path: Path) -> dict[str, Any]:
     expected_id = reference_id(identity)
     if document.get("reference_id") != expected_id:
         raise ValueError("reference bundle identity hash does not match its contents")
-    report = Path(document["reference_report"])
+    report = resolve_recorded_path(document["reference_report"])
     if not report.is_file():
         raise FileNotFoundError(f"reference report not found: {report}")
     if sha256(report) != document.get("reference_report_sha256"):
         raise ValueError("reference report hash does not match the bundle")
+    document["reference_report"] = str(report.resolve())
     return document
 
 
@@ -87,4 +101,3 @@ def assert_compatible(bundle: dict[str, Any], expected: dict[str, Any]) -> None:
     differences = [field for field in REQUIRED_IDENTITY_FIELDS if actual[field] != wanted[field]]
     if differences:
         raise ValueError("reference bundle is incompatible: " + ", ".join(differences))
-

@@ -20,7 +20,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--quality-contract", type=Path, default=LESSON_DIR / "configs/quality_contract.json")
-    parser.add_argument("--runtime-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -29,6 +28,8 @@ def main() -> int:
     args = parse_args()
     report = json.loads(args.report.read_text(encoding="utf-8"))
     contract = json.loads(args.quality_contract.read_text(encoding="utf-8"))
+    if report.get("dataset", {}).get("dataset_id") != contract.get("dataset_manifest_id"):
+        raise ValueError("reference report dataset ID does not match the quality contract")
     artifacts = report["artifacts"]
     settings = report["settings"]
     evaluation = contract["evaluation"]
@@ -56,6 +57,11 @@ def main() -> int:
     }
     if report.get("regression_thresholds") != expected_thresholds:
         raise ValueError("reference report thresholds do not match the quality contract")
+    if report.get("quality_contract", {}).get("sha256") != sha256(args.quality_contract):
+        raise ValueError("reference report quality-contract identity does not match the contract")
+    runtime_id = report.get("experiment", {}).get("stage", {}).get("runtime")
+    if not isinstance(runtime_id, str) or not runtime_id:
+        raise ValueError("reference report has no validated experiment runtime")
     identity = {
         "weights_sha256": artifacts["pytorch_weights"]["sha256"],
         "onnx_sha256": sha256(args.onnx),
@@ -67,7 +73,7 @@ def main() -> int:
             f"maxdet-{settings['max_detections']}-v1"
         ),
         "metric_id": settings["metric_implementation"],
-        "runtime_id": args.runtime_id,
+        "runtime_id": runtime_id,
         "fp32_engine_sha256": artifacts["tensorrt_fp32"]["sha256"],
         "fp16_engine_sha256": artifacts["tensorrt_fp16"]["sha256"],
     }
