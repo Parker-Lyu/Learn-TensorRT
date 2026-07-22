@@ -3,6 +3,28 @@
 Run GPU and TensorRT commands only in the matching containers declared in
 `../configs/environments.json`.
 
+## 0. Reproduce The Fixed Dataset
+
+Run from the repository root inside `trt_dev`. The first command prepares the pinned COCO
+annotations and labeled val2017 split. The second downloads the exact committed 5,000-image
+candidate pool, verifies every image hash, recomputes the ordered 3,000-image selection, and
+materializes it for calibration:
+
+```bash
+python3 assets/coco/prepare_coco.py
+
+python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
+  --download-candidates \
+  --materialize
+```
+
+`data/calibration_selection.json` is a read-only release contract, not a generated local baseline.
+The preparation command must reproduce it exactly. Regenerated selection metadata and coverage
+evidence are written below `outputs/data_preparation/`; a mismatch stops preparation without
+changing the committed contract.
+
+## 1. TensorRT 8.6 Reference And Candidates
+
 The first TensorRT 8.6 full evaluation establishes the reference and evaluates Entropy in the same
 5,000-image pass. Later TRT8 candidates reuse that report and run only their new engine.
 

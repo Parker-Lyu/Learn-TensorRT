@@ -1,9 +1,10 @@
 # COCO 2017 Dataset Preparation
 
-This directory provides the reproducible dataset used by lesson 12 and its later reports. The
-preparer reads the committed lesson-12 manifest, downloads its exact COCO 2017 calibration and
-validation images, converts the human-reviewed validation boxes to YOLO format, and verifies every
-declared hash.
+This directory provides the shared COCO 2017 dataset foundation used by lesson 12 and later
+reports. The preparer reads its committed v1 manifest, downloads the exact 1,000-image calibration
+baseline and complete validation split, converts the validation boxes to YOLO format, and verifies
+every declared hash. Lesson 12 adds a separately versioned 5,000-candidate/3,000-calibration
+contract on top of these shared annotations and validation assets.
 
 Run from the repository root with Python 3.9 or newer:
 
@@ -53,7 +54,15 @@ bounds, and excludes `iscrowd` regions because lesson 12's compact evaluator has
 semantics. This makes the labels suitable for the course accuracy gate, but the evaluator is not a
 drop-in replacement for the official `pycocotools` metric implementation.
 
-After preparation, lesson 12 consumes the canonical manifest by default:
+After preparing these shared prerequisites, reproduce lesson 12's fixed calibration selection:
+
+```bash
+python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
+  --download-candidates \
+  --materialize
+```
+
+Lesson 12 then consumes its own committed manifest by default:
 
 ```bash
 python3 build_int8_engine.py --enable-fp16

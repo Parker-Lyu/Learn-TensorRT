@@ -44,19 +44,32 @@ from a fixed 5,000-image train2017 candidate pool using category seeding followe
 farthest-point coverage over object scale, image and box geometry, luminance, contrast, saturation,
 and edge density.
 
-Prepare the new manifest and materialize its selected images from the already downloaded local
-candidate pool:
+Both sets are fixed course data. `data/calibration_selection.json` commits the exact 5,000 candidate
+image IDs, file names, SHA-256 hashes, algorithm version, and ordered 3,000-image result. The
+candidate pool was assembled during course dataset engineering by combining the earlier 1,000-image
+stratified calibration set with 4,000 additional COCO train2017 candidates intended to broaden the
+pool before coverage selection. Recreating that historical pool-construction process is not part of
+the lesson; reproducing its committed identity and the 3,000-image selection is.
+
+From a fresh clone, first prepare the shared COCO annotations and labeled validation split, then
+download the exact fixed candidate pool and reproduce the selection inside the pinned `trt_dev`
+container:
 
 ```bash
+python3 assets/coco/prepare_coco.py
+
 python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
+  --download-candidates \
   --materialize
 ```
 
-The script writes ignored raw evidence under `outputs/data_preparation/`, the canonical manifest to
-`data/dataset_manifest.json`, and the fixed 5,000-image candidate-pool identity plus selected IDs to
-`data/calibration_selection.json`. Review and commit both data files only after the selection is
-final. Re-running with identical candidate metadata, annotations, and algorithm version must
-produce the same selected IDs and hashes.
+The second command downloads each candidate from the official COCO train2017 endpoint, verifies its
+committed hash, recomputes the coverage features, and requires the ordered 3,000 selected IDs to
+match the committed contract exactly. It materializes the selected images under ignored
+`assets/coco/data/`, writes regenerated selection evidence and the coverage report under ignored
+`outputs/data_preparation/`, and recreates `data/dataset_manifest.json`. It never overwrites the
+committed selection contract. A data, algorithm, or environment change that alters the result stops
+the command and requires an explicitly versioned new dataset and new downstream evidence.
 
 ## Reference Bundles
 
