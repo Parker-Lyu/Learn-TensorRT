@@ -72,6 +72,21 @@ match the committed contract exactly. It materializes the selected images under 
 committed selection contract. A data, algorithm, or environment change that alters the result stops
 the command and requires an explicitly versioned new dataset and new downstream evidence.
 
+Evaluate whether the selected 3,000 images preserve the full train2017 image-size and box-geometry
+distributions, and whether they cover the population support:
+
+```bash
+python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_representativeness.py
+```
+
+The script reads dimensions and boxes directly from the COCO annotation archive, so the complete
+train2017 image download is not required. It compares the selected set's Kolmogorov-Smirnov distance
+with 200 deterministic random 3,000-image subsets, checks equal-mass distribution intervals, and
+writes a Markdown report, JSON evidence, and distribution figure under ignored
+`outputs/data_preparation/representativeness/`. The conclusion is deliberately limited to image
+dimensions, object counts, and non-crowd box geometry; it does not replace the lesson's existing
+category and image-content coverage evidence.
+
 ## Reference Bundles
 
 PyTorch, TensorRT FP32, and TensorRT FP16 are evaluated once per immutable environment identity.
