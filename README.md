@@ -102,3 +102,10 @@ cmake --build build
 ## Requirements
 
 - Ubuntu host capable of running Docker and NVIDIA containers
+
+
+## 🚀 From Learning to Landing
+
+[![Career Opportunities](https://img.shields.io/badge/Career-Land_Your_Dream_Role-brightgreen.svg?style=for-the-badge&logo=rocket)](https://github.com/Parker-Lyu/Learn-TensorRT)
+
+Happy coding, and may this repository help you land your ideal role in high-performance AI engineering!🎉
