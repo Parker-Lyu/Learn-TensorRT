@@ -56,25 +56,22 @@ The early lessons stay small so each topic is runnable and understandable. As th
 the same code should grow toward a portfolio-quality C++ deployment project instead of remaining a
 set of disconnected demos.
 
-Architectural habits to carry through the course:
+Engineering capabilities developed through the course:
 
-- Keep reusable logic behind small C++ APIs, with headers and source files separated when the lesson
-  has more than one concept.
-- Prefer CMake library targets for reusable components, then link a small executable for the lesson
-  artifact.
-- Add focused tests for reusable algorithms and resource wrappers once a lesson has meaningful edge
-  cases.
-- Use the development environment derived from `nvcr.io/nvidia/pytorch:25.11-py3` for C++, CUDA,
-  TensorRT, PyTorch export, ModelOpt, and validation. Introduce a separate lean runtime Dockerfile
-  later when packaging becomes the lesson goal.
+- Reusable logic is organized behind small C++ APIs, with headers and source files separated when a
+  lesson grows beyond one concept.
+- Reusable components become CMake library targets linked by small lesson executables.
+- Focused tests protect reusable algorithms and resource wrappers once meaningful edge cases appear.
+- C++, CUDA, TensorRT, PyTorch export, ModelOpt, and validation share the development environment
+  derived from `nvcr.io/nvidia/pytorch:25.11-py3`. Runtime packaging is introduced near the final
+  portfolio stage, after the inference pipeline is complete.
 - Treat Unified Memory and zero-copy-style paths as performance trade-offs to measure, not as magic
   shortcuts. `cudaMallocManaged` simplifies ownership but can still page migrate on discrete GPUs.
 - Record the TensorRT, CUDA, driver, GPU, and container versions behind every engine and benchmark.
   Serialized engines are deployment artifacts tied to a compatibility context, not portable model
   files to copy blindly between environments.
-- Keep TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17 as the reproducible baseline for every core
-  lesson. When an elective studies another platform or runtime, document that portability boundary
-  and keep its artifacts separate instead of silently changing the course baseline.
+- TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17 remain the reproducible baseline for every core
+  lesson. Electives that study another platform or runtime make that portability boundary explicit.
 
 By the final portfolio stage, the strongest version of the project should resemble this shape:
 
@@ -94,8 +91,8 @@ industrial_deployment_trtexec/
 └── CMakeLists.txt
 ```
 
-This final structure is a destination, not a reason to overload lesson 01. Each lesson should still
-produce one runnable artifact and one concise README.
+This final structure is a destination rather than the starting point for lesson 01. Each implemented
+lesson provides one runnable artifact and one concise README.
 
 ## Learning Flow
 
@@ -121,10 +118,8 @@ alongside the course rather than waiting until the end.
 
 ## Course Plan
 
-This document is the source of truth for planned lessons. A lesson directory is created only when
-implementation starts, and that implementation should include its runnable artifact, concise
-README, and proportionate verification. Planned lessons do not need README-only placeholder
-directories.
+This document is the source of truth for the planned course sequence. Each implemented lesson
+provides a runnable artifact, concise documentation, and verification proportionate to its scope.
 
 ### `00_environment_check`
 
@@ -502,11 +497,11 @@ Topics:
 - Matched `trtexec` latency, GPU compute, and throughput measurements
 - Reformat and Q/DQ-boundary evidence for slower mixed-precision execution
 
-Target experiment result to reproduce on the course baseline:
+Deployment decision:
 
-- ModelOpt native-FP16 Q/DQ under TensorRT 10.14: quality PASS.
-- Matched TensorRT 10.14 throughput: FP16 `636.729 qps`; INT8+FP16 `522.188 qps`.
-- Deployment retains FP16 because the quality-passing INT8 candidate is slower.
+- Select the fastest candidate that passes the predeclared quality gates under a matched benchmark.
+- Retain FP16 when no INT8 candidate provides both an acceptable quality result and a meaningful,
+  version-matched performance benefit.
 
 Acceptance criteria:
 
@@ -521,8 +516,7 @@ Acceptance criteria:
 - Every explicit Q/DQ candidate passes or fails the same predeclared quality thresholds.
 - Matched performance uses the same TensorRT version, GPU, shapes, warmup, iterations, stream count, and transfer settings.
 - The final report explains why passing accuracy is necessary but insufficient for deploying INT8.
-- The generated case study and machine-readable summary agree with the raw ignored evidence.
-
+- The generated case study and machine-readable summary agree with the saved raw evidence.
 
 ### `12a_precision_performance_report`
 

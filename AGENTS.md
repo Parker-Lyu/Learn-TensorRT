@@ -17,6 +17,8 @@ beginning, not quick demo shortcuts.
 
 ## Course Style
 
+- Keep `README.md`, `docs/learning_roadmap.md`, and `docs/coverage_matrix.md` written for third-party
+  learners taking the course; keep agent-only implementation instructions in `AGENTS.md`.
 - Each implementation lesson should produce a runnable artifact and one concise README. Reporting
   checkpoints should produce a reproducible report and document how it was generated.
 - Lesson code should be easy to read, but still structured like code that can evolve.
