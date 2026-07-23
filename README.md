@@ -8,6 +8,19 @@
 A practical, zero-fluff C++17 learning repository focused on **TensorRT 10.x High-Performance Deployment** and **Low-Latency Pipeline Engineering**. 
 
 Built around an end-to-end YOLOv8 object detection pipeline, this project bridges the gap between basic model export and senior-level production deployment—covering explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling.  
+
+
+## Target Audience
+
+This repository is designed for developers bridging the gap between algorithm research and production engineering:
+
+* **Algorithm Engineers Transitioning to Deployment:** You have solid deep learning knowledge (PyTorch, ONNX) but need to master C++ for production-grade inference.
+* **Junior/Mid-level Deployment Engineers:** You have used the Python TensorRT API or `trtexec`, and want to level up to explicit Q/DQ quantization, CUDA zero-copy, multi-stream asynchronous execution, and Nsight profiling.
+* **Engineers Building a Production Portfolio:** You are targeting senior-level Edge CV or high-performance AI deployment roles and need a reference project that demonstrates real-world pipeline architecture.
+
+**⚠️ Prerequisites:** This is a heavy C++ engineering course. You should have basic familiarity with modern C++ (11/14/17) and CMake. While Python-only developers will face a learning curve, there is no need to worry—in the era of AI coding agents (like Codex or Claude Code), grasping C++ paradigms and debugging CMake is significantly faster and more efficient than ever before. Let the AI be your pair programmer.
+
+
 ## Learning Roadmap
 
 Read the full roadmap first:
@@ -36,7 +49,7 @@ git clone git@github.com:Parker-Lyu/Learn-TensorRT.git
 cd Learn-TensorRT
 ```
 
-2. Use a coding agent such as Codex or Claude Code to prepare the development environment by following the agent guide:
+2. Use a coding agent such as Codex or Claude Code to prepare the development environment by following the agent guide, it will pull a image and build your container.
 
 ```bash
 00_environment_check/agent_env_setup.md
