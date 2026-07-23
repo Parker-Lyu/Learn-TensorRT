@@ -1,6 +1,16 @@
 # Learn TensorRT
 
-A focused C++17 learning repository for TensorRT deployment and inference optimization.
+A focused ISO C++17 learning repository for TensorRT deployment and inference optimization.
+
+The course targets one reproducible development baseline:
+
+- NVIDIA NGC image: `nvcr.io/nvidia/pytorch:25.11-py3`
+- TensorRT 10.14 (`10.14.1.48` in the pinned image)
+- CUDA Toolkit 13.0
+- ISO C++17 for both host C++ and CUDA C++ targets
+
+The image also provides the PyTorch and ModelOpt environment used by the export and explicit-Q/DQ
+quantization lessons.
 
 The main learning path uses YOLOv8n as the running model, because it is small enough for fast experiments and realistic enough to cover model export, TensorRT engine building, preprocessing, postprocessing, FP16, INT8, async inference, accuracy regression checks, and benchmark reporting.
 
@@ -44,15 +54,20 @@ cd Learn-TensorRT
 
 This course is developed and tested on Ubuntu. Windows or WSL setups may work, but they are not the reference environment and may require extra troubleshooting.
 
-3. Start the TensorRT container and bind-mount this project directory into the container. Keep the course image unchanged unless a lesson explicitly asks for a separate experiment:
+3. Start the pinned development container and bind-mount this project directory into it. Keep the
+course image unchanged unless a lesson explicitly documents a portability experiment:
 
 ```bash
-nvcr.io/nvidia/tensorrt:23.10-py3
+nvcr.io/nvidia/pytorch:25.11-py3
 ```
 
-Lesson 12 explicitly adds a second, version-pinned ModelOpt environment based on
-`nvcr.io/nvidia/pytorch:25.11-py3`. TensorRT 8.6 and TensorRT 10 evidence are kept in separate
-reference bundles and are never mixed.
+This is the single development environment for C++ TensorRT, CUDA, PyTorch export, and ModelOpt
+work. Install course-specific packages in a project-derived image or a documented container setup;
+do not replace the CUDA, TensorRT, or PyTorch stack supplied by the base image.
+
+TensorRT engines, timing caches, profiler captures, and benchmark results created with the former
+TensorRT 8.6 environment are historical migration evidence. They are not valid TensorRT 10.14
+artifacts and must be regenerated before a lesson or report is accepted on the new baseline.
 
 4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
 
@@ -105,11 +120,12 @@ cmake --build build
 
 ## Requirements
 
-- Ubuntu 22.04 or another recent Linux distribution
-- NVIDIA GPU and driver
-- CUDA Toolkit
-- TensorRT
-- C++17 compiler
-- CMake 3.10 or newer
-- OpenCV
-- Python 3 for model export and validation
+- Ubuntu host capable of running Docker and NVIDIA containers
+- NVIDIA GPU, compatible NVIDIA driver, Docker Engine, and NVIDIA Container Toolkit on the host
+- `nvcr.io/nvidia/pytorch:25.11-py3` as the development base image
+- TensorRT 10.14 and CUDA Toolkit 13.0 from the pinned image
+- ISO C++17 for C++ and CUDA C++ targets
+- CMake from the pinned image
+- OpenCV development files and course-specific Python packages installed in the derived development
+  environment
+- Python 3 from the pinned image for model export, ModelOpt, and validation

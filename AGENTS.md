@@ -1,9 +1,19 @@
 # Project Instructions For Codex
 
-This repository is a TensorRT deployment learning project. C++17 is the primary implementation
+This repository is a TensorRT deployment learning project. ISO C++17 is the primary implementation
 language for inference and systems lessons, while Python and shell scripts support model export,
 validation, profiling, and report generation. It should teach good engineering habits from the
 beginning, not quick demo shortcuts.
+
+## Course Baseline
+
+- Use `nvcr.io/nvidia/pytorch:25.11-py3` as the single upstream development image.
+- Target TensorRT 10.14 (`10.14.1.48` in the pinned image) and CUDA Toolkit 13.0.
+- Compile host C++ and CUDA C++ as ISO C++17 without GNU language extensions.
+- Use the PyTorch and ModelOpt stack supplied by the development image for model export and
+  explicit-Q/DQ workflows.
+- Treat artifacts and measurements from TensorRT 8.6 as historical migration evidence only. Rebuild
+  engines, timing caches, references, and benchmark evidence with TensorRT 10.14.
 
 ## Course Style
 
@@ -49,7 +59,8 @@ beginning, not quick demo shortcuts.
 
 ## C++ Style
 
-- Use modern C++17 and target-based CMake.
+- Use ISO C++17 and target-based CMake. Do not raise the repository-wide language standard without
+  an explicit course decision.
 - Prefer RAII, standard containers, and clear ownership over manual memory management.
 - Validate inputs in public helper functions, not only in `main`.
 - Check file and resource errors explicitly.
@@ -64,6 +75,8 @@ beginning, not quick demo shortcuts.
 
 - Each C++ lesson should have its own `CMakeLists.txt`.
 - Use `target_compile_features(<target> PRIVATE cxx_std_17)`.
+- Set `CXX_EXTENSIONS OFF`. For targets that compile `.cu` sources, also require
+  `CUDA_STANDARD 17`, `CUDA_STANDARD_REQUIRED ON`, and `CUDA_EXTENSIONS OFF`.
 - Prefer target-specific include paths, libraries, and properties.
 - For lessons with reusable components, build those components as explicit library targets and link
   a small executable target on top.
@@ -85,24 +98,29 @@ beginning, not quick demo shortcuts.
 
 ## Container And Delivery Style
 
-- Use the pinned TensorRT development container from `00_environment_check` as the default build and
-  test environment.
+- Use the development environment derived from `nvcr.io/nvidia/pytorch:25.11-py3` as the default
+  build and test environment.
 - Do not install CUDA, TensorRT, or OpenCV directly on the host unless the user explicitly asks for a
   host-native experiment.
-- Add Dockerfiles only when a lesson explicitly targets packaging or runtime delivery; keep early
-  lessons focused on container usage rather than image-authoring ceremony.
+- A repository development Dockerfile may add course dependencies such as OpenCV, ONNX Runtime, and
+  test tools, but it must not silently replace the base image's CUDA, TensorRT, or PyTorch stack.
+- Add runtime-delivery Dockerfiles only when a lesson explicitly targets packaging; keep early
+  lessons focused on using the reproducible development environment.
 - When Docker packaging is introduced, separate development images from lean runtime images and
   document what files must be copied into the runtime image.
 
 ## Dependency And Compatibility Style
 
-- Preserve compatibility with the pinned TensorRT development container unless a lesson explicitly
-  studies a newer version.
+- Preserve compatibility with TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17 in the pinned
+  development image unless a lesson explicitly studies portability to another environment.
 - Do not silently upgrade TensorRT, CUDA, OpenCV, ONNX, or Python package versions.
 - Avoid adding third-party dependencies when the standard library or an existing project dependency
   is sufficient.
 - Treat serialized TensorRT engines as environment-specific generated artifacts; do not commit them
   unless explicitly requested.
+- Never reuse an engine, timing cache, golden output, or performance baseline from TensorRT 8.6 as
+  TensorRT 10.14 acceptance evidence. Regenerate it and record the runtime, CUDA, GPU, driver, and
+  container identity.
 
 ## Verification
 

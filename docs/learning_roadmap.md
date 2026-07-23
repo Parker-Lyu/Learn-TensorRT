@@ -4,6 +4,23 @@ This roadmap is designed for an AI algorithm engineer who already understands mo
 
 The goal is not to collect demos. The goal is to build a portfolio-quality project that proves you can take a model from PyTorch to a production-like inference pipeline, measure it, optimize it, and explain the trade-offs.
 
+## Course Baseline
+
+The roadmap uses one development environment for the complete core path:
+
+- `nvcr.io/nvidia/pytorch:25.11-py3`
+- TensorRT 10.14 (`10.14.1.48` in the pinned image)
+- CUDA Toolkit 13.0
+- ISO C++17 for host C++ and CUDA C++ targets
+
+PyTorch export and ModelOpt explicit-Q/DQ work run in the same environment as TensorRT C++ builds
+and validation. A derived development image may add OpenCV, ONNX Runtime, Ultralytics, and test
+tools without replacing the base CUDA, TensorRT, or PyTorch stack.
+
+Any TensorRT 8.6 engines, timing caches, reports, or recorded measurements in the repository are
+historical migration evidence. The target implementation and all new acceptance evidence must be
+rebuilt with the baseline above.
+
 ## Target Outcome
 
 The core path and elective tracks are designed so that, after completing the relevant lessons, you
@@ -48,16 +65,17 @@ Architectural habits to carry through the course:
   artifact.
 - Add focused tests for reusable algorithms and resource wrappers once a lesson has meaningful edge
   cases.
-- Use the pinned TensorRT Dev Container as the normal development environment; introduce Dockerfile
-  authoring later when packaging and runtime delivery become the lesson goal.
+- Use the development environment derived from `nvcr.io/nvidia/pytorch:25.11-py3` for C++, CUDA,
+  TensorRT, PyTorch export, ModelOpt, and validation. Introduce a separate lean runtime Dockerfile
+  later when packaging becomes the lesson goal.
 - Treat Unified Memory and zero-copy-style paths as performance trade-offs to measure, not as magic
   shortcuts. `cudaMallocManaged` simplifies ownership but can still page migrate on discrete GPUs.
 - Record the TensorRT, CUDA, driver, GPU, and container versions behind every engine and benchmark.
   Serialized engines are deployment artifacts tied to a compatibility context, not portable model
   files to copy blindly between environments.
-- Keep the pinned TensorRT 23.10 environment as the reproducible baseline for completed lessons.
-  When a lesson needs current APIs such as `IPluginV3`, give that lesson an explicit compatible
-  container and document the migration boundary instead of silently changing every earlier result.
+- Keep TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17 as the reproducible baseline for every core
+  lesson. When an elective studies another platform or runtime, document that portability boundary
+  and keep its artifacts separate instead of silently changing the course baseline.
 
 By the final portfolio stage, the strongest version of the project should resemble this shape:
 
@@ -115,6 +133,7 @@ Purpose:
 
 - Record the local machine, driver, CUDA, TensorRT, Python, compiler, and OpenCV versions.
 - Keep reproducible commands for checking the environment.
+- Verify the single `nvcr.io/nvidia/pytorch:25.11-py3` development environment before later lessons.
 
 Deliverables:
 
@@ -126,6 +145,7 @@ Acceptance criteria:
 
 - You can explain what GPU, driver, CUDA Toolkit, TensorRT, and compiler versions are being used.
 - You know whether the environment is host-based or container-based.
+- The report identifies TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17 as the course baseline.
 
 ### `01_hello_world`
 
@@ -452,18 +472,19 @@ Acceptance criteria:
 Purpose:
 
 - Treat INT8 quantization as an advanced engineering case study rather than a one-command engine build.
-- Follow the technology evolution from legacy TensorRT PTQ to mixed precision and ModelOpt explicit Q/DQ.
+- Use ModelOpt explicit Q/DQ and TensorRT 10.14 strongly typed networks as the target PTQ path.
+- Preserve legacy TensorRT PTQ results only as migration context, not as current acceptance evidence.
 - Make the final deployment decision from fixed quality gates and version-matched performance evidence.
 
 Engineering sequence:
 
 1. Create a versioned calibration-data contract.
-2. Establish immutable PyTorch, TensorRT FP32, and FP16 reference bundles.
-3. Compare legacy Entropy and MinMax calibration with one-variable-at-a-time experiments.
-4. Run one complete-detection-head FP16 sensitivity experiment.
-5. Export ModelOpt explicit-Q/DQ models in a separate pinned environment.
-6. Rebuild FP32 and FP16 references when moving from TensorRT 8.6 to TensorRT 10.
-7. Benchmark only quality-passing candidates and retain FP16 when INT8 has no matched benefit.
+2. Establish immutable PyTorch, TensorRT 10.14 FP32, and FP16 reference bundles.
+3. Export ModelOpt explicit-Q/DQ candidates in the single course development environment.
+4. Build strongly typed TensorRT 10.14 engines and inspect requested versus actual precision.
+5. Validate each candidate against the unchanged task-quality gate.
+6. Benchmark only quality-passing candidates with a version-matched TensorRT 10.14 reference.
+7. Retain FP16 when INT8 has no matched quality and performance benefit.
 
 Topics:
 
@@ -474,23 +495,21 @@ Topics:
 - Byte-identical calibration and evaluation preprocessing verification
 - Predeclared mAP50-95, mAP50, precision, and recall regression thresholds
 - Immutable reference bundles and candidate-only evaluation
-- TensorRT 8.6 Entropy and MinMax legacy calibrators
-- Calibration cache identity and persistent timing caches
-- Strict complete-detection-head FP16 precision constraints
+- Legacy Entropy and MinMax calibration as historical migration context
+- Calibration dataset identity and persistent TensorRT 10.14 timing caches
+- Strict mixed-precision constraints where explicit Q/DQ leaves sensitive operations in FP16
 - Engine Inspector validation of requested and actual precision
 - ModelOpt explicit `QuantizeLinear`/`DequantizeLinear` export
-- TensorRT 8.6 FP32-high-precision Q/DQ build
 - TensorRT 10.14 native-FP16 strongly typed Q/DQ build
 - Runtime-version evidence boundaries
 - Matched `trtexec` latency, GPU compute, and throughput measurements
 - Reformat and Q/DQ-boundary evidence for slower mixed-precision execution
 
-Recorded result:
+Recorded migration result to reproduce on the unified baseline:
 
 - Legacy Entropy: quality FAIL.
 - Legacy MinMax: quality FAIL because mAP50 misses the unchanged gate.
 - MinMax with the complete detection head in FP16: quality FAIL.
-- ModelOpt Q/DQ under TensorRT 8.6: quality PASS.
 - ModelOpt native-FP16 Q/DQ under TensorRT 10.14: quality PASS.
 - Matched TensorRT 10 throughput: FP16 `636.729 qps`; INT8+FP16 `522.188 qps`.
 - Deployment retains FP16 because the quality-passing INT8 candidate is slower.
@@ -500,8 +519,10 @@ Acceptance criteria:
 - The candidate-pool identity, selected calibration manifest, validation manifest, hashes, and selection method are saved.
 - Calibration and validation contain no duplicate image content across splits.
 - All 3,000 calibration images produce byte-identical tensors through both production preprocessing paths.
-- PyTorch, FP32, and FP16 references are computed once per runtime identity and reused for later candidates.
-- TensorRT 8.6 references are rejected for TensorRT 10 candidates.
+- PyTorch, FP32, and FP16 references are computed once per TensorRT 10.14 runtime identity and reused
+  for later candidates.
+- References, engines, timing caches, and benchmarks from other TensorRT versions are rejected as
+  TensorRT 10.14 acceptance evidence.
 - Each experiment changes one declared quantization variable and writes distinct artifacts.
 - Failed quality candidates are excluded from authoritative deployment performance comparisons.
 - Explicit Q/DQ candidates pass or fail the same thresholds used by legacy PTQ.
@@ -882,7 +903,8 @@ Topics:
 - Loading plugins from C++ runtime code
 - ONNX GraphSurgeon replacement with a plugin node
 - Polygraphy or ONNX Runtime reference comparison
-- A short TensorRT 8.x-to-current-plugin migration note for the pinned legacy course environment
+- A short TensorRT 8.x-to-10.14 plugin migration note that explains why legacy artifacts are not part
+  of the current course baseline
 
 Acceptance criteria:
 
