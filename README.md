@@ -1,19 +1,13 @@
-# Learn TensorRT
+# Learn TensorRT: Production-Grade C++ Inference & Optimization
 
-A focused ISO C++17 learning repository for TensorRT deployment and inference optimization.
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![TensorRT](https://img.shields.io/badge/TensorRT-10.14.1-green.svg)](https://developer.nvidia.com/tensorrt)
+[![CUDA](https://img.shields.io/badge/CUDA-13.0-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![Container](https://img.shields.io/badge/NGC_PyTorch-25.11-orange.svg)](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
 
-The course targets one reproducible development baseline:
+A practical, zero-fluff C++17 learning repository focused on **TensorRT 10.x High-Performance Deployment** and **Low-Latency Pipeline Engineering**. 
 
-- NVIDIA NGC image: `nvcr.io/nvidia/pytorch:25.11-py3`
-- TensorRT 10.14 (`10.14.1.48` in the pinned image)
-- CUDA Toolkit 13.0
-- ISO C++17 for both host C++ and CUDA C++ targets
-
-The image also provides the PyTorch and ModelOpt environment used by the export and explicit-Q/DQ
-quantization lessons.
-
-The main learning path uses YOLOv8n as the running model, because it is small enough for fast experiments and realistic enough to cover model export, TensorRT engine building, preprocessing, postprocessing, FP16, INT8, async inference, accuracy regression checks, and benchmark reporting.
-
+Built around an end-to-end YOLOv8 object detection pipeline, this project bridges the gap between basic model export and senior-level production deployment—covering explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling.  
 ## Learning Roadmap
 
 Read the full roadmap first:
@@ -28,16 +22,12 @@ For senior production deployment coverage, also read:
 docs/coverage_matrix.md
 ```
 
-For environment setup, Dev Containers usage, and GPU/TensorRT troubleshooting, use the agent-oriented guide in the first lesson:
-
-```bash
-00_environment_check/agent_env_setup.md
-```
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
 Shared images and other reusable resources live in the root `assets` folder.
 
 ## How To Use
+This course is developed and tested on Ubuntu. Windows or WSL setups may work, but they are not the reference environment and may require extra troubleshooting. 
 
 1. Clone this repository on an Ubuntu machine:
 
@@ -52,26 +42,9 @@ cd Learn-TensorRT
 00_environment_check/agent_env_setup.md
 ```
 
-This course is developed and tested on Ubuntu. Windows or WSL setups may work, but they are not the reference environment and may require extra troubleshooting.
+(option) 3. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
 
-3. Start the pinned development container and bind-mount this project directory into it. Keep the
-course image unchanged unless a lesson explicitly documents a portability experiment:
-
-```bash
-nvcr.io/nvidia/pytorch:25.11-py3
-```
-
-This is the single development environment for C++ TensorRT, CUDA, PyTorch export, and ModelOpt
-work. Install course-specific packages in a project-derived image or a documented container setup;
-do not replace the CUDA, TensorRT, or PyTorch stack supplied by the base image.
-
-Generate TensorRT engines, timing caches, reference outputs, profiler captures, and benchmark
-results inside the pinned development environment. Record the runtime, CUDA, GPU, driver, and
-container identity required to reproduce them.
-
-4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
-
-5. Complete the core lessons in order, writing a report at each checkpoint. Then choose electives
+4. Complete the core lessons in order, writing a report at each checkpoint. Then choose electives
 from the job descriptions you are targeting instead of completing every elective sequentially.
 
 ### Core Path
@@ -85,11 +58,6 @@ from the job descriptions you are targeting instead of completing every elective
 | Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
 | Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |
 
-Lesson 12 is an advanced quantization case study rather than a basic calibration demo. Its result is
-deliberately evidence-driven: explicit Q/DQ satisfies the INT8 quality gate, but matched TensorRT
-10.14 measurements show `522.188 qps` for INT8+FP16 versus `636.729 qps` for FP16, so deployment
-retains FP16. See
-[`12_yolov8_int8_quantization_engineering/README.md`](12_yolov8_int8_quantization_engineering/README.md).
 
 ### Elective Tracks
 
@@ -121,11 +89,3 @@ cmake --build build
 ## Requirements
 
 - Ubuntu host capable of running Docker and NVIDIA containers
-- NVIDIA GPU, compatible NVIDIA driver, Docker Engine, and NVIDIA Container Toolkit on the host
-- `nvcr.io/nvidia/pytorch:25.11-py3` as the development base image
-- TensorRT 10.14 and CUDA Toolkit 13.0 from the pinned image
-- ISO C++17 for C++ and CUDA C++ targets
-- CMake from the pinned image
-- OpenCV development files and course-specific Python packages installed in the derived development
-  environment
-- Python 3 from the pinned image for model export, ModelOpt, and validation

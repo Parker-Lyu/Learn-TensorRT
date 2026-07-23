@@ -29,7 +29,7 @@ beginning, not quick demo shortcuts.
 
 ## Lesson Modules
 
-- Keep lesson directories as complete runnable implementations in the normal course history.
+- Keep lesson directories as complete runnable implementations.
 - Design each lesson so a third party can reproduce it from scratch using only the repository at
   that revision and its documented external prerequisites. A lesson may depend on earlier lessons,
   but must not depend on files, generated artifacts, undocumented local state, or other resources
