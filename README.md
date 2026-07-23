@@ -84,9 +84,6 @@ from the job descriptions you are targeting instead of completing every elective
 | Ongoing interview practice | `23_cpp_interview_katas` |
 | Final synthesis | `24_final_portfolio_case_study` |
 
-The roadmap is the source of truth for planned lessons. A lesson directory is added only when its
-implementation begins; planned lessons do not use README-only placeholder directories.
-
 
 ## General Build Pattern
 
