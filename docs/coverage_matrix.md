@@ -10,8 +10,6 @@ Use it as a checklist when reading job descriptions or preparing interview talki
 
 All core-path coverage targets the single `nvcr.io/nvidia/pytorch:25.11-py3` development image,
 TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that same environment.
-TensorRT 8.6 results are retained only where they explain migration history and are not current
-acceptance evidence.
 
 | Requirement | Coverage | Repository targets |
 | --- | --- | --- |
@@ -25,7 +23,7 @@ acceptance evidence.
 | Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `12_yolov8_int8_quantization_engineering` |
 | Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
 | TensorRT custom plugin implementation | Covered as portfolio differentiator | `19a_custom_tensorrt_plugin` |
-| TensorRT 10.14 plugin API and legacy migration | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
+| TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
 | Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `11_nsight_performance_diagnosis` |
 | CUDA or NPP preprocessing optimization | Covered as advanced path | `17_cuda_preprocess_npp` |
 | Single-stream video pipeline | Covered as core path | `13_cpp_producer_consumer`, `15_async_video_pipeline` |

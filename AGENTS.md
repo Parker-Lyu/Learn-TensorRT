@@ -12,8 +12,8 @@ beginning, not quick demo shortcuts.
 - Compile host C++ and CUDA C++ as ISO C++17 without GNU language extensions.
 - Use the PyTorch and ModelOpt stack supplied by the development image for model export and
   explicit-Q/DQ workflows.
-- Treat artifacts and measurements from TensorRT 8.6 as historical migration evidence only. Rebuild
-  engines, timing caches, references, and benchmark evidence with TensorRT 10.14.
+- Build engines, timing caches, references, and benchmark evidence with TensorRT 10.14 in the pinned
+  development environment.
 
 ## Course Style
 
@@ -118,9 +118,8 @@ beginning, not quick demo shortcuts.
   is sufficient.
 - Treat serialized TensorRT engines as environment-specific generated artifacts; do not commit them
   unless explicitly requested.
-- Never reuse an engine, timing cache, golden output, or performance baseline from TensorRT 8.6 as
-  TensorRT 10.14 acceptance evidence. Regenerate it and record the runtime, CUDA, GPU, driver, and
-  container identity.
+- Generate engines, timing caches, golden outputs, and performance baselines in the pinned
+  development environment, and record the runtime, CUDA, GPU, driver, and container identity.
 
 ## Verification
 

@@ -17,9 +17,8 @@ PyTorch export and ModelOpt explicit-Q/DQ work run in the same environment as Te
 and validation. A derived development image may add OpenCV, ONNX Runtime, Ultralytics, and test
 tools without replacing the base CUDA, TensorRT, or PyTorch stack.
 
-Any TensorRT 8.6 engines, timing caches, reports, or recorded measurements in the repository are
-historical migration evidence. The target implementation and all new acceptance evidence must be
-rebuilt with the baseline above.
+Build all TensorRT engines, timing caches, reference outputs, reports, and benchmark evidence with
+the baseline above. Record enough environment metadata for a third party to reproduce each result.
 
 ## Target Outcome
 
@@ -473,7 +472,6 @@ Purpose:
 
 - Treat INT8 quantization as an advanced engineering case study rather than a one-command engine build.
 - Use ModelOpt explicit Q/DQ and TensorRT 10.14 strongly typed networks as the target PTQ path.
-- Preserve legacy TensorRT PTQ results only as migration context, not as current acceptance evidence.
 - Make the final deployment decision from fixed quality gates and version-matched performance evidence.
 
 Engineering sequence:
@@ -495,7 +493,6 @@ Topics:
 - Byte-identical calibration and evaluation preprocessing verification
 - Predeclared mAP50-95, mAP50, precision, and recall regression thresholds
 - Immutable reference bundles and candidate-only evaluation
-- Legacy Entropy and MinMax calibration as historical migration context
 - Calibration dataset identity and persistent TensorRT 10.14 timing caches
 - Strict mixed-precision constraints where explicit Q/DQ leaves sensitive operations in FP16
 - Engine Inspector validation of requested and actual precision
@@ -505,13 +502,10 @@ Topics:
 - Matched `trtexec` latency, GPU compute, and throughput measurements
 - Reformat and Q/DQ-boundary evidence for slower mixed-precision execution
 
-Recorded migration result to reproduce on the unified baseline:
+Target experiment result to reproduce on the course baseline:
 
-- Legacy Entropy: quality FAIL.
-- Legacy MinMax: quality FAIL because mAP50 misses the unchanged gate.
-- MinMax with the complete detection head in FP16: quality FAIL.
 - ModelOpt native-FP16 Q/DQ under TensorRT 10.14: quality PASS.
-- Matched TensorRT 10 throughput: FP16 `636.729 qps`; INT8+FP16 `522.188 qps`.
+- Matched TensorRT 10.14 throughput: FP16 `636.729 qps`; INT8+FP16 `522.188 qps`.
 - Deployment retains FP16 because the quality-passing INT8 candidate is slower.
 
 Acceptance criteria:
@@ -521,11 +515,10 @@ Acceptance criteria:
 - All 3,000 calibration images produce byte-identical tensors through both production preprocessing paths.
 - PyTorch, FP32, and FP16 references are computed once per TensorRT 10.14 runtime identity and reused
   for later candidates.
-- References, engines, timing caches, and benchmarks from other TensorRT versions are rejected as
-  TensorRT 10.14 acceptance evidence.
+- References, engines, timing caches, and benchmarks record and match the pinned environment identity.
 - Each experiment changes one declared quantization variable and writes distinct artifacts.
 - Failed quality candidates are excluded from authoritative deployment performance comparisons.
-- Explicit Q/DQ candidates pass or fail the same thresholds used by legacy PTQ.
+- Every explicit Q/DQ candidate passes or fails the same predeclared quality thresholds.
 - Matched performance uses the same TensorRT version, GPU, shapes, warmup, iterations, stream count, and transfer settings.
 - The final report explains why passing accuracy is necessary but insufficient for deploying INT8.
 - The generated case study and machine-readable summary agree with the raw ignored evidence.
@@ -861,7 +854,6 @@ Topics:
 - TensorRT plugin design
 - TensorRT `IPluginV3` capability interfaces and plugin creator responsibilities
 - Plugin serialization, deserialization, and resource ownership
-- Legacy `IPluginV2DynamicExt` concepts when maintaining TensorRT 8.x deployments
 
 Acceptance criteria:
 
@@ -869,8 +861,8 @@ Acceptance criteria:
 - You can edit a small ONNX graph with GraphSurgeon.
 - You can describe plugin registration, build-time shape/type negotiation, runtime `enqueue`,
   serialization, and engine deserialization.
-- You can explain why a current `IPluginV3` implementation and a legacy TensorRT 8.x plugin use
-  different interfaces.
+- You can explain how the `IPluginV3` capability interfaces separate build-time and runtime
+  responsibilities.
 
 ### `19a_custom_tensorrt_plugin`
 
@@ -903,8 +895,6 @@ Topics:
 - Loading plugins from C++ runtime code
 - ONNX GraphSurgeon replacement with a plugin node
 - Polygraphy or ONNX Runtime reference comparison
-- A short TensorRT 8.x-to-10.14 plugin migration note that explains why legacy artifacts are not part
-  of the current course baseline
 
 Acceptance criteria:
 

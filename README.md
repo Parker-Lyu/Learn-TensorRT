@@ -65,9 +65,9 @@ This is the single development environment for C++ TensorRT, CUDA, PyTorch expor
 work. Install course-specific packages in a project-derived image or a documented container setup;
 do not replace the CUDA, TensorRT, or PyTorch stack supplied by the base image.
 
-TensorRT engines, timing caches, profiler captures, and benchmark results created with the former
-TensorRT 8.6 environment are historical migration evidence. They are not valid TensorRT 10.14
-artifacts and must be regenerated before a lesson or report is accepted on the new baseline.
+Generate TensorRT engines, timing caches, reference outputs, profiler captures, and benchmark
+results inside the pinned development environment. Record the runtime, CUDA, GPU, driver, and
+container identity required to reproduce them.
 
 4. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
 
@@ -85,9 +85,9 @@ from the job descriptions you are targeting instead of completing every elective
 | Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
 | Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |
 
-Lesson 12 is an advanced quantization case study rather than a basic calibration demo. Its recorded
-result is deliberately evidence-driven: explicit Q/DQ restores INT8 quality, but matched TensorRT
-10 measurements show `522.188 qps` for INT8+FP16 versus `636.729 qps` for FP16, so deployment
+Lesson 12 is an advanced quantization case study rather than a basic calibration demo. Its result is
+deliberately evidence-driven: explicit Q/DQ satisfies the INT8 quality gate, but matched TensorRT
+10.14 measurements show `522.188 qps` for INT8+FP16 versus `636.729 qps` for FP16, so deployment
 retains FP16. See
 [`12_yolov8_int8_quantization_engineering/README.md`](12_yolov8_int8_quantization_engineering/README.md).
 
