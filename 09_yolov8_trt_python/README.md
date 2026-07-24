@@ -7,7 +7,8 @@ visualization can be debugged quickly before the C++ deployment version.
 
 Topics:
 
-- TensorRT Python runtime
+- TensorRT 10 name-based Python runtime APIs (`num_io_tensors`, `set_tensor_address`,
+  `execute_async_v3`)
 - CUDA buffers through `cuda-python` Runtime API
 - NumPy/OpenCV letterbox preprocessing
 - YOLOv8 output decode
@@ -41,11 +42,13 @@ python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 ```
 
+`cuda-python==13.0.3` is pinned by `docker/Dockerfile.dev` to match the CUDA 13.0 course baseline.
+
 The default command expects:
 
 ```text
 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
-assets/img2.jpeg
+assets/img.jpeg
 ```
 
 ## Run
@@ -61,7 +64,7 @@ Use a specific engine or image:
 ```bash
 python3 infer_yolov8_trt.py \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/dog.webp
+  --image ../assets/img.jpeg
 ```
 
 Run a dynamic engine by supplying runtime dimensions:
@@ -82,7 +85,7 @@ python3 infer_yolov8_trt.py --reference
 
 Generated files are written to `outputs/`:
 
-- `img2_yolov8_trt_python.jpg`: input image with detections drawn.
+- `img_yolov8_trt_python.jpg`: input image with detections drawn.
 - `detections.json`: tensor metadata, letterbox parameters, latency breakdown, detections, and
   optional Ultralytics top-detection reference.
 
@@ -107,8 +110,10 @@ Exact detections and latency depend on the engine precision, GPU, TensorRT versi
 
 Acceptance criteria:
 
-- The script runs inference on `assets/img2.jpeg` with a TensorRT engine.
+- The script runs inference on `assets/img.jpeg` with a TensorRT engine.
 - It saves an annotated detection image and JSON report.
 - YOLOv8 decode, NMS, and coordinate scaling are implemented in local Python code.
+- Tensor addresses are bound by name and inference runs through `execute_async_v3`; deprecated
+  binding-index APIs are not used.
 - Device-to-host copies are synchronized before host output buffers are read.
 - Optional Ultralytics reference output can be recorded for debugging.

@@ -29,11 +29,13 @@ RUN apt-get update \
 # replace the NVIDIA-provided PyTorch build; the assertion makes that contract
 # fail visibly during the image build if dependency resolution ever changes.
 ARG OPENCV_PYTHON_VERSION=4.12.0.88
+ARG CUDA_PYTHON_VERSION=13.0.3
 RUN python3 -m pip install --no-cache-dir \
         "ultralytics==${ULTRALYTICS_VERSION}" \
         "onnx==${ONNX_VERSION}" \
         "onnxruntime==${ONNXRUNTIME_VERSION}" \
         "opencv-python==${OPENCV_PYTHON_VERSION}" \
+        "cuda-python==${CUDA_PYTHON_VERSION}" \
     && python3 -c 'import torch; assert ".nv25.11" in torch.__version__, torch.__version__'
 
 ARG ONNXSLIM_VERSION=0.1.94
