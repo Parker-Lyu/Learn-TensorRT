@@ -32,18 +32,22 @@ engine/context/stream initialization
 ```
 
 The automatic diagnosis is deliberately a heuristic. The Nsight timeline remains the final source
-of truth for CPU gaps, CUDA API blocking, memory copies, and kernel placement.
+of truth for CPU gaps, CUDA API blocking, memory copies, and kernel placement. The capture does not
+enable Nsight's optional `--cuda-memory-usage` mode: with the pinned CUDA 13.0/Nsight 2025.5 stack
+that mode crashes during TensorRT execution-context teardown, while ordinary CUDA tracing records
+the allocation APIs needed by this lesson without changing application behavior.
 
 ## Runnable Artifact
 
 - `profile_yolov8_cpp.py`: builds lesson 10, runs an in-process steady-state benchmark, loads the
-  matching lesson 06 `trtexec` timing JSON when available, captures Nsight Systems, and writes JSON
+  matching lesson 06 `trtexec` timing JSON when available, captures Nsight Systems with the image-specific HPC-X preload removed, and writes JSON
   and Markdown reports.
 - `tests/test_profile_yolov8_cpp.py`: focused tests for percentile, schema-validation, composition,
   and diagnosis behavior.
 
 Generated files go to `outputs/`, which is ignored by git.
-`diagnosis_summary.json` records the profiled engine and image SHA-256 values so later checkpoints
+`diagnosis_summary.json` records the TensorRT/CUDA/GPU/driver/container identity plus the profiled
+engine and image SHA-256 values so later checkpoints
 can reject diagnosis evidence collected from a different engine.
 
 ## Prerequisites
@@ -104,7 +108,8 @@ python3 profile_yolov8_cpp.py --skip-build
 ## Outputs
 
 - `outputs/baseline_run/detections.json`: lesson 10 warmup and measured samples.
-- `outputs/diagnosis_summary.json`: machine-readable application, `trtexec`, and Nsight metadata.
+- `outputs/diagnosis_summary.json`: machine-readable runtime identity, application, `trtexec`, and
+  Nsight metadata.
 - `outputs/diagnosis_report.md`: steady-state tables and diagnosis notes.
 - `outputs/nsys/yolov8_trt_cpp.nsys-rep`: Nsight Systems timeline.
 - `outputs/nsys/yolov8_trt_cpp.sqlite`: exported trace database.
@@ -167,12 +172,15 @@ Acceptance criteria:
 - Nsight captures contain named NVTX iteration and pipeline ranges.
 - The report compares the application with a model-only reference when timing JSON is available.
 - Any bottleneck claim is presented as a heuristic and checked against timeline evidence.
+- The default command fails if capture, SQLite export, or text-statistics generation fails;
+  `--skip-nsys` is the explicit CPU/report-only smoke path.
 
 ## Appendix: Commands Executed By The Default Run
 
 The following commands are the important subprocesses used by the default run. Run them from
 `11_nsight_performance_diagnosis/` so the relative paths resolve as shown. The script locates
-`nsys` through `PATH`; in the pinned development container it resolved to
+`nsys` through `PATH` and removes the development image's `LD_PRELOAD` only from Nsight
+subprocesses because that HPC-X preload conflicts with Nsight library injection; in the pinned development container it resolved to
 `/usr/local/cuda/bin/nsys`.
 
 Start the complete workflow:
@@ -195,7 +203,7 @@ Collect the steady-state baseline with 5 warmup iterations and 50 measured itera
 ```bash
 ../10_yolov8_trt_cpp/build/yolov8_trt_cpp \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image ../assets/dog.webp \
+  --image ../assets/img.jpeg \
   --output-dir outputs/baseline_run \
   --confidence 0.25 \
   --iou 0.45 \
@@ -209,12 +217,11 @@ Capture a shorter Nsight Systems trace with 2 warmup iterations and 5 measured i
 ```bash
 nsys profile \
   --trace=cuda,nvtx,osrt \
-  --cuda-memory-usage=true \
   --force-overwrite=true \
   --output outputs/nsys/yolov8_trt_cpp \
   ../10_yolov8_trt_cpp/build/yolov8_trt_cpp \
   --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image ../assets/dog.webp \
+  --image ../assets/img.jpeg \
   --output-dir outputs/nsys/target_run \
   --confidence 0.25 \
   --iou 0.45 \
