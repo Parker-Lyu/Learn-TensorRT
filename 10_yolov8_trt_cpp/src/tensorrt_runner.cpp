@@ -118,6 +118,33 @@ private:
     std::size_t byte_count_ = 0;
 };
 
+class PinnedHostBuffer {
+public:
+    explicit PinnedHostBuffer(std::size_t byte_count) : byte_count_(byte_count) {
+        if (byte_count == 0) {
+            throw std::runtime_error("PinnedHostBuffer cannot allocate zero bytes.");
+        }
+        check_cuda(cudaMallocHost(&ptr_, byte_count), "cudaMallocHost");
+    }
+
+    ~PinnedHostBuffer() {
+        if (ptr_ != nullptr) {
+            (void)cudaFreeHost(ptr_);
+        }
+    }
+
+    PinnedHostBuffer(const PinnedHostBuffer&) = delete;
+    PinnedHostBuffer& operator=(const PinnedHostBuffer&) = delete;
+
+    float* data() const {
+        return static_cast<float*>(ptr_);
+    }
+
+private:
+    void* ptr_ = nullptr;
+    std::size_t byte_count_ = 0;
+};
+
 std::vector<char> read_binary_file(const std::string& path) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) {
@@ -133,23 +160,6 @@ std::vector<char> read_binary_file(const std::string& path) {
         throw std::runtime_error("Failed to read engine file: " + path);
     }
     return data;
-}
-
-std::size_t data_type_size(nvinfer1::DataType type) {
-    switch (type) {
-        case nvinfer1::DataType::kFLOAT:
-            return 4;
-        case nvinfer1::DataType::kHALF:
-            return 2;
-        case nvinfer1::DataType::kINT8:
-        case nvinfer1::DataType::kBOOL:
-        case nvinfer1::DataType::kUINT8:
-        case nvinfer1::DataType::kFP8:
-            return 1;
-        case nvinfer1::DataType::kINT32:
-            return 4;
-    }
-    throw std::runtime_error("Unsupported TensorRT tensor data type.");
 }
 
 std::vector<int64_t> dims_to_vector(const nvinfer1::Dims& dims) {
@@ -203,34 +213,52 @@ struct TensorRtRunner::Impl {
             throw std::runtime_error("Failed to create TensorRT execution context.");
         }
 
+        int input_count = 0;
+        int output_count = 0;
         for (int i = 0; i < engine->getNbIOTensors(); ++i) {
             const char* tensor_name = engine->getIOTensorName(i);
             if (tensor_name == nullptr) {
                 throw std::runtime_error("TensorRT returned a null IO tensor name.");
             }
-            const std::string name = tensor_name;
+            if (engine->getTensorLocation(tensor_name) != nvinfer1::TensorLocation::kDEVICE ||
+                engine->getTensorVectorizedDim(tensor_name) != -1) {
+                throw std::runtime_error(
+                    "Lesson 10 supports only linear device IO tensors: " +
+                    std::string(tensor_name));
+            }
+            if (engine->getTensorDataType(tensor_name) != nvinfer1::DataType::kFLOAT) {
+                throw std::runtime_error("Lesson 10 expects float32 IO tensor: " +
+                                         std::string(tensor_name));
+            }
+
             const std::vector<int64_t> shape =
                 dims_to_vector(context->getTensorShape(tensor_name));
-            const std::size_t bytes_per_tensor =
-                volume(shape) * data_type_size(engine->getTensorDataType(tensor_name));
-            if (engine->getTensorIOMode(tensor_name) == nvinfer1::TensorIOMode::kINPUT) {
-                input.name = name;
-                input.shape = shape;
-                input.byte_count = bytes_per_tensor;
-            } else if (engine->getTensorIOMode(tensor_name) == nvinfer1::TensorIOMode::kOUTPUT) {
-                output.name = name;
-                output.shape = shape;
-                output.byte_count = bytes_per_tensor;
+            const std::size_t element_count = volume(shape);
+            if (element_count > std::numeric_limits<std::size_t>::max() / sizeof(float)) {
+                throw std::runtime_error("Tensor byte count overflowed: " +
+                                         std::string(tensor_name));
             }
+            TensorInfo* target = nullptr;
+            const auto mode = engine->getTensorIOMode(tensor_name);
+            if (mode == nvinfer1::TensorIOMode::kINPUT) {
+                target = &input;
+                ++input_count;
+            } else if (mode == nvinfer1::TensorIOMode::kOUTPUT) {
+                target = &output;
+                ++output_count;
+            } else {
+                throw std::runtime_error("TensorRT returned an invalid IO mode.");
+            }
+            target->name = tensor_name;
+            target->shape = shape;
+            target->byte_count = element_count * sizeof(float);
         }
-        if (input.name.empty() || output.name.empty()) {
-            throw std::runtime_error("Lesson 10 expects one input tensor and one output tensor.");
-        }
-        if (engine->getTensorDataType(input.name.c_str()) != nvinfer1::DataType::kFLOAT ||
-            engine->getTensorDataType(output.name.c_str()) != nvinfer1::DataType::kFLOAT) {
-            throw std::runtime_error("Lesson 10 expects float32 input and output tensors.");
+        if (input_count != 1 || output_count != 1) {
+            throw std::runtime_error("Lesson 10 expects exactly one input and one output tensor.");
         }
 
+        input_host = std::make_unique<PinnedHostBuffer>(input.byte_count);
+        output_host = std::make_unique<PinnedHostBuffer>(output.byte_count);
         input_device = std::make_unique<DeviceBuffer>(input.byte_count);
         output_device = std::make_unique<DeviceBuffer>(output.byte_count);
         if (!context->setTensorAddress(input.name.c_str(), input_device->get()) ||
@@ -245,6 +273,8 @@ struct TensorRtRunner::Impl {
     TensorRtPtr<nvinfer1::IExecutionContext> context{nullptr};
     TensorInfo input;
     TensorInfo output;
+    std::unique_ptr<PinnedHostBuffer> input_host;
+    std::unique_ptr<PinnedHostBuffer> output_host;
     std::unique_ptr<DeviceBuffer> input_device;
     std::unique_ptr<DeviceBuffer> output_device;
     CudaStream stream;
@@ -278,11 +308,12 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         throw std::runtime_error("Input tensor size does not match TensorRT engine input.");
     }
 
+    std::copy(input_tensor.begin(), input_tensor.end(), impl_->input_host->data());
     {
         NvtxRange range("h2d_submit");
         check_cuda(cudaEventRecord(impl_->h2d_start.get(), impl_->stream.get()),
                    "cudaEventRecord(h2d_start)");
-        check_cuda(cudaMemcpyAsync(impl_->input_device->get(), input_tensor.data(),
+        check_cuda(cudaMemcpyAsync(impl_->input_device->get(), impl_->input_host->data(),
                                    impl_->input.byte_count, cudaMemcpyHostToDevice,
                                    impl_->stream.get()),
                    "cudaMemcpyAsync(input)");
@@ -311,7 +342,7 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         NvtxRange range("d2h_submit_and_wait");
         check_cuda(cudaEventRecord(impl_->d2h_start.get(), impl_->stream.get()),
                    "cudaEventRecord(d2h_start)");
-        check_cuda(cudaMemcpyAsync(output.values.data(), impl_->output_device->get(),
+        check_cuda(cudaMemcpyAsync(impl_->output_host->data(), impl_->output_device->get(),
                                    impl_->output.byte_count, cudaMemcpyDeviceToHost,
                                    impl_->stream.get()),
                    "cudaMemcpyAsync(output)");
@@ -320,6 +351,7 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         check_cuda(cudaEventSynchronize(impl_->d2h_stop.get()),
                    "cudaEventSynchronize(d2h_stop)");
     }
+    std::copy_n(impl_->output_host->data(), output.values.size(), output.values.data());
 
     output.h2d_ms = elapsed_ms(impl_->h2d_start, impl_->h2d_stop);
     output.enqueue_host_ms =

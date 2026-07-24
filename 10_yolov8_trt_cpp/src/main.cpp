@@ -21,7 +21,7 @@ namespace {
 
 struct CliOptions {
     std::string engine_path = "../06_trtexec_engine/outputs/yolov8n_static_fp32.engine";
-    std::string image_path = "../assets/img2.jpeg";
+    std::string image_path = "../assets/img.jpeg";
     std::string output_dir = "outputs";
     float confidence = 0.25F;
     float iou = 0.45F;
