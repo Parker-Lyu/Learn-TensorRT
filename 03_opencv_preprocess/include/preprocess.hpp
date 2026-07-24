@@ -40,6 +40,8 @@ struct BatchPreprocessResult {
     int width = 0;
 };
 
+// The image contract is deliberately explicit: uint8 BGR HWC in, as returned by
+// cv::imread(..., cv::IMREAD_COLOR).
 cv::Mat letterbox_image(const cv::Mat& bgr_image, cv::Size input_size, LetterboxInfo& info);
 
 BatchPreprocessResult preprocess_batch_to_nchw(const std::vector<cv::Mat>& bgr_images,

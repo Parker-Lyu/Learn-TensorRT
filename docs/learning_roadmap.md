@@ -179,6 +179,7 @@ Topics:
 - HWC to CHW
 - `float32` host buffer
 - Batch buffer layout
+- TensorRT 10 explicit batch and model-specific input tensor contracts
 
 Acceptance criteria:
 
