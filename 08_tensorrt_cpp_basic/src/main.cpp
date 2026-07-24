@@ -14,17 +14,17 @@ void print_usage(const char* executable_name) {
     std::cout
         << "Usage:\n"
         << "  " << executable_name << " [--onnx PATH] [--engine PATH] [--load-engine]\n"
-        << "       [--timing-cache PATH] [--fp16] [--workspace-mib N]\n"
+        << "       [--timing-cache PATH] [--allow-tf32] [--workspace-mib N]\n"
         << "       [--input-shape NAME:D0xD1x...]\n"
         << "       [--warmup N] [--iterations N]\n\n"
         << "Defaults:\n"
         << "  --onnx          ../05_torch_to_onnx/outputs/yolov8n.onnx\n"
         << "  --engine        outputs/yolov8n_cpp_basic.engine\n"
         << "  --timing-cache  outputs/tensorrt_timing_fp32.cache, or\n"
-        << "                  outputs/tensorrt_timing_fp16.cache with --fp16\n\n"
+        << "                  outputs/tensorrt_timing_tf32.cache with --allow-tf32\n\n"
         << "Examples:\n"
         << "  " << executable_name << '\n'
-        << "  " << executable_name << " --fp16 --engine outputs/yolov8n_cpp_basic_fp16.engine\n"
+        << "  " << executable_name << " --allow-tf32 --engine outputs/yolov8n_cpp_basic_tf32.engine\n"
         << "  " << executable_name << " --load-engine --engine outputs/yolov8n_cpp_basic.engine\n"
         << "  " << executable_name
         << " --onnx ../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \\\n"
@@ -122,8 +122,8 @@ int main(int argc, char* argv[]) {
                 config.timing_cache_path = std::string(require_value("--timing-cache"));
             } else if (arg == "--load-engine") {
                 config.load_engine_only = true;
-            } else if (arg == "--fp16") {
-                config.enable_fp16 = true;
+            } else if (arg == "--allow-tf32") {
+                config.allow_tf32 = true;
             } else if (arg == "--workspace-mib") {
                 config.workspace_mib = parse_positive_size(require_value("--workspace-mib"),
                                                            "workspace-mib");
@@ -153,8 +153,13 @@ int main(int argc, char* argv[]) {
                       << (report.timing_cache_written ? "written" : "not written")
                       << ", bytes=" << report.timing_cache_bytes << ")\n";
         }
-        std::cout << "FP16 requested and enabled: " << (report.fp16_enabled ? "yes" : "no")
-                  << '\n';
+        if (report.engine_built) {
+            std::cout << "Strongly typed network: "
+                      << (report.strongly_typed ? "yes" : "no") << '\n';
+            std::cout << "TF32 allowed: " << (report.tf32_allowed ? "yes" : "no") << '\n';
+        } else {
+            std::cout << "Build typing and TF32 policy: not available from load-only mode\n";
+        }
         std::cout << "Tensor buffers:\n";
         for (const lesson08::TensorSummary& tensor : report.tensors) {
             std::cout << "  - " << tensor.name << " [" << tensor.mode << ", "
