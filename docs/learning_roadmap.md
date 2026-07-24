@@ -152,15 +152,15 @@ Acceptance criteria:
 - You can configure, build, and run a small C++ executable.
 - You understand `CMakeLists.txt`, target creation, and C++ standard settings.
 
-### `02_opencv_read_show_image`
+### `02_opencv_read_image_info`
 
 Purpose:
 
-- Learn image loading and basic OpenCV project setup.
+- Learn image loading, `cv::Mat` metadata, and basic OpenCV project setup.
 
 Acceptance criteria:
 
-- You can load an image, check dimensions, and display or save output.
+- You can load an image and explain its dimensions, channel count, and OpenCV data type.
 - You can link OpenCV with CMake.
 
 ### `03_opencv_preprocess`
