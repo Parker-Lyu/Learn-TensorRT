@@ -42,7 +42,7 @@ fails halfway through.
 - `CMakeLists.txt`: target-based C++17 build file that links TensorRT and CUDA Runtime.
 - `include/tensorrt_raii.hpp`: small public API for configuring and running the smoke inference.
 - `src/tensorrt_raii.cpp`: TensorRT logger, smart-pointer deleter, CUDA RAII wrappers, tensor buffer
-  allocation, address binding, and enqueue timing.
+  allocation with TensorRT 10 data-type and vectorization checks, address binding, and enqueue timing.
 - `src/main.cpp`: command-line parsing and concise reporting.
 - `tests/config_tests.cpp`: focused validation of failure-stage configuration.
 
@@ -193,7 +193,8 @@ Acceptance criteria:
 - A C++ executable loads a serialized TensorRT engine from lesson 06.
 - TensorRT runtime, engine, and context are managed by smart pointers.
 - CUDA stream, event, device buffer, and pinned host buffer ownership is managed by RAII classes.
-- The program allocates one buffer per TensorRT IO tensor and binds addresses by tensor name.
+- The program allocates one buffer per TensorRT IO tensor, including TensorRT 10 data types, rejects
+  unsupported vectorized IO formats explicitly, and binds addresses by tensor name.
 - Initialization remains exception-safe if file IO, deserialization, CUDA allocation, or enqueue
   fails.
 - Injected setup failures release resources acquired at earlier stages.

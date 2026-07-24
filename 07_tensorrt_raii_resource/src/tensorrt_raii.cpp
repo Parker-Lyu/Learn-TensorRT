@@ -274,6 +274,16 @@ std::string to_string(nvinfer1::DataType data_type) {
             return "uint8";
         case nvinfer1::DataType::kFP8:
             return "fp8";
+        case nvinfer1::DataType::kBF16:
+            return "bfloat16";
+        case nvinfer1::DataType::kINT64:
+            return "int64";
+        case nvinfer1::DataType::kINT4:
+            return "int4";
+        case nvinfer1::DataType::kFP4:
+            return "fp4";
+        case nvinfer1::DataType::kE8M0:
+            return "e8m0";
     }
     return "unknown";
 }
@@ -300,22 +310,25 @@ std::string to_string(nvinfer1::TensorLocation location) {
     return "unknown";
 }
 
-std::size_t byte_size(nvinfer1::DataType data_type) {
+std::size_t bit_size(nvinfer1::DataType data_type) {
     switch (data_type) {
         case nvinfer1::DataType::kFLOAT:
-            return 4;
-        case nvinfer1::DataType::kHALF:
-            return 2;
-        case nvinfer1::DataType::kINT8:
-            return 1;
         case nvinfer1::DataType::kINT32:
-            return 4;
+            return 32;
+        case nvinfer1::DataType::kHALF:
+        case nvinfer1::DataType::kBF16:
+            return 16;
+        case nvinfer1::DataType::kINT64:
+            return 64;
+        case nvinfer1::DataType::kINT8:
         case nvinfer1::DataType::kBOOL:
-            return 1;
         case nvinfer1::DataType::kUINT8:
-            return 1;
         case nvinfer1::DataType::kFP8:
-            return 1;
+        case nvinfer1::DataType::kE8M0:
+            return 8;
+        case nvinfer1::DataType::kINT4:
+        case nvinfer1::DataType::kFP4:
+            return 4;
     }
     throw std::runtime_error("Unsupported TensorRT data type.");
 }
@@ -374,12 +387,16 @@ std::size_t checked_byte_count(const nvinfer1::ICudaEngine& engine,
                                const std::string& tensor_name,
                                const nvinfer1::Dims& dims) {
     const std::size_t volume = checked_volume(dims, tensor_name);
-    const std::size_t bytes = byte_size(engine.getTensorDataType(tensor_name.c_str()));
+    if (engine.getTensorVectorizedDim(tensor_name.c_str()) != -1) {
+        throw std::runtime_error("Tensor " + tensor_name +
+                                 " uses a vectorized IO format that this lesson does not support.");
+    }
 
-    if (volume > std::numeric_limits<std::size_t>::max() / bytes) {
+    const std::size_t bits = bit_size(engine.getTensorDataType(tensor_name.c_str()));
+    if (volume > (std::numeric_limits<std::size_t>::max() - 7U) / bits) {
         throw std::runtime_error("Tensor " + tensor_name + " byte count overflowed.");
     }
-    return volume * bytes;
+    return (volume * bits + 7U) / 8U;
 }
 
 void apply_input_shapes(nvinfer1::IExecutionContext& context,
