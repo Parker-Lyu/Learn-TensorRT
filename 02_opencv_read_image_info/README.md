@@ -65,7 +65,7 @@ be reported as `CV_8UC3`, meaning three channels whose elements are unsigned 8-b
 The program returns a nonzero exit status for an unreadable image or invalid command-line
 arguments.
 
-Acceptance criteria:
+## Acceptance criteria:
 
 - You can load an image and explain its dimensions, channel count, and OpenCV data type.
 - You can link OpenCV with CMake.
