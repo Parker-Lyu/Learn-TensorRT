@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import json
 import math
+import os
+import platform
 import shutil
 import subprocess
 import time
@@ -37,7 +39,12 @@ class CommandResult:
     stderr: str
 
 
-def run_command(command: list[str], cwd: Path | None = None, check: bool = True) -> CommandResult:
+def run_command(
+    command: list[str],
+    cwd: Path | None = None,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> CommandResult:
     start = time.perf_counter()
     completed = subprocess.run(
         command,
@@ -46,6 +53,7 @@ def run_command(command: list[str], cwd: Path | None = None, check: bool = True)
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        env=env,
     )
     elapsed = time.perf_counter() - start
     result = CommandResult(command, completed.returncode, elapsed, completed.stdout, completed.stderr)
@@ -56,6 +64,28 @@ def run_command(command: list[str], cwd: Path | None = None, check: bool = True)
             f"stderr:\n{completed.stderr}"
         )
     return result
+
+
+def runtime_environment() -> dict[str, str]:
+    import tensorrt as trt
+
+    gpu = run_command(
+        [
+            "nvidia-smi",
+            "--query-gpu=name,driver_version,compute_cap",
+            "--format=csv,noheader",
+        ],
+        check=False,
+    )
+    return {
+        "course_image": "nvcr.io/nvidia/pytorch:25.11-py3",
+        "nvidia_container_release": os.environ.get("NVIDIA_PYTORCH_VERSION", "unknown"),
+        "nvidia_build_id": os.environ.get("NVIDIA_BUILD_ID", "unknown"),
+        "python": platform.python_version(),
+        "tensorrt": trt.__version__,
+        "cuda_toolkit": os.environ.get("CUDA_VERSION", "unknown"),
+        "gpu_and_driver": (gpu.stdout + gpu.stderr).strip(),
+    }
 
 
 def percentile(values: list[float], pct: float) -> float:
@@ -259,6 +289,11 @@ def run_nsys(args: argparse.Namespace, executable: Path, output_dir: Path) -> di
     if nsys is None:
         return {"available": False, "reason": "nsys not found on PATH"}
 
+    nsys_env = os.environ.copy()
+    # The course image preloads HPC-X UCX for PyTorch/OpenCV ABI compatibility.
+    # Nsight injects its own collection libraries and fails process probing with that preload.
+    nsys_env.pop("LD_PRELOAD", None)
+
     nsys_dir = output_dir / "nsys"
     nsys_dir.mkdir(parents=True, exist_ok=True)
     target_output_dir = nsys_dir / "target_run"
@@ -271,13 +306,12 @@ def run_nsys(args: argparse.Namespace, executable: Path, output_dir: Path) -> di
         nsys,
         "profile",
         "--trace=cuda,nvtx,osrt",
-        "--cuda-memory-usage=true",
         "--force-overwrite=true",
         "--output",
         str(report_base),
         *target_command,
     ]
-    result = run_command(command, check=False)
+    result = run_command(command, check=False, env=nsys_env)
     report_path = report_base.with_suffix(".nsys-rep")
     sqlite_path = report_base.with_suffix(".sqlite")
     export_result: dict[str, Any] | None = None
@@ -294,7 +328,7 @@ def run_nsys(args: argparse.Namespace, executable: Path, output_dir: Path) -> di
             str(sqlite_path),
             str(report_path),
         ]
-        sqlite_export = run_command(export_command, check=False)
+        sqlite_export = run_command(export_command, check=False, env=nsys_env)
         export_result = command_result_dict(sqlite_export)
 
         stats_command = [
@@ -309,7 +343,7 @@ def run_nsys(args: argparse.Namespace, executable: Path, output_dir: Path) -> di
             "cuda_gpu_sum",
             str(report_path),
         ]
-        stats = run_command(stats_command, check=False)
+        stats = run_command(stats_command, check=False, env=nsys_env)
         stats_path.write_text(stats.stdout + stats.stderr, encoding="utf-8")
         stats_result = {
             "command": stats.command,
@@ -319,7 +353,7 @@ def run_nsys(args: argparse.Namespace, executable: Path, output_dir: Path) -> di
             "path": str(stats_path),
         }
 
-    version = run_command([nsys, "--version"], check=False)
+    version = run_command([nsys, "--version"], check=False, env=nsys_env)
     return {
         "available": True,
         "version": (version.stdout + version.stderr).strip(),
@@ -359,6 +393,7 @@ def markdown_latency_table(summary: dict[str, dict[str, float]], keys: list[str]
 def write_markdown(
     path: Path,
     args: argparse.Namespace,
+    environment: dict[str, str],
     baseline_summary: dict[str, Any],
     trtexec: dict[str, Any],
     nsys_report: dict[str, Any],
@@ -374,6 +409,16 @@ def write_markdown(
         f"- Measured iterations: `{args.iterations}`",
         f"- Heuristic diagnosis: {diagnosis['diagnosis']}",
         f"- Method: {diagnosis['method']}",
+        "",
+        "## Runtime Environment",
+        "",
+        f"- Course image: `{environment['course_image']}`",
+        f"- NVIDIA release/build: `{environment['nvidia_container_release']}` / "
+        f"`{environment['nvidia_build_id']}`",
+        f"- TensorRT: `{environment['tensorrt']}`",
+        f"- CUDA Toolkit: `{environment['cuda_toolkit']}`",
+        f"- GPU and driver: `{environment['gpu_and_driver']}`",
+        f"- Python: `{environment['python']}`",
     ]
     if baseline_summary["percentile_warning"]:
         lines.append(f"- Warning: {baseline_summary['percentile_warning']}")
@@ -464,7 +509,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lesson10-dir", type=Path, default=Path("../10_yolov8_trt_cpp"))
     parser.add_argument("--engine", type=Path, default=Path("../06_trtexec_engine/outputs/yolov8n_static_fp32.engine"))
-    parser.add_argument("--image", type=Path, default=Path("../assets/dog.webp"))
+    parser.add_argument("--image", type=Path, default=Path("../assets/img.jpeg"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--warmup-iterations", type=int, default=5)
     parser.add_argument("--iterations", type=int, default=50)
@@ -508,9 +553,20 @@ def main() -> int:
     nsys_report: dict[str, Any] = {"available": False, "reason": "skipped by --skip-nsys"}
     if not args.skip_nsys:
         nsys_report = run_nsys(args, executable, args.output_dir)
+        if not nsys_report.get("available"):
+            raise RuntimeError(f"Nsight Systems is unavailable: {nsys_report.get('reason')}")
+        if nsys_report.get("returncode") != 0:
+            details = (nsys_report.get("stdout", "") + nsys_report.get("stderr", "")).strip()
+            raise RuntimeError(f"Nsight Systems capture failed:\n{details}")
+        if (nsys_report.get("sqlite_export") or {}).get("returncode") != 0:
+            raise RuntimeError("Nsight Systems SQLite export failed")
+        if (nsys_report.get("stats") or {}).get("returncode") != 0:
+            raise RuntimeError("Nsight Systems statistics generation failed")
 
+    environment = runtime_environment()
     result = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "runtime_environment": environment,
         "artifacts": {
             "engine": {
                 "path": str(args.engine),
@@ -530,7 +586,7 @@ def main() -> int:
     summary_json = args.output_dir / "diagnosis_summary.json"
     summary_json.write_text(json.dumps(result, indent=2), encoding="utf-8")
     summary_md = args.output_dir / "diagnosis_report.md"
-    write_markdown(summary_md, args, baseline["summary"], trtexec, nsys_report)
+    write_markdown(summary_md, args, environment, baseline["summary"], trtexec, nsys_report)
 
     diagnosis = baseline["summary"]["heuristic_diagnosis"]
     print(f"Warmup iterations: {args.warmup_iterations}")
