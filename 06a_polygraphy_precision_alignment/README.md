@@ -60,6 +60,7 @@ both this precision-alignment note and later accuracy-regression evidence.
   NumPy 2.x environment without changing system packages.
 - `outputs/`: generated runner outputs, logs, JSON reports, and Markdown notes. This folder is
   ignored by git.
+- `../assets/img.jpeg`: canonical image used to generate the controlled lesson 05 input tensor.
 - `../05_torch_to_onnx/outputs/yolov8n.onnx`: validated ONNX model from lesson 05.
 - `../06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: default serialized TensorRT engine
   from lesson 06.
@@ -84,7 +85,7 @@ development container used in lesson 00.
 
 ## Input Tensor
 
-This lesson directly reuses the controlled input tensor saved by lesson 05:
+This lesson directly reuses the controlled input tensor saved by lesson 05 from `assets/img.jpeg`:
 
 ```text
 05_torch_to_onnx/outputs/input_nchw_float32.npy
