@@ -35,11 +35,117 @@ If these pass, do not reinstall host components. Classify failures before changi
 - Missing Docker `nvidia` runtime: NVIDIA Container Toolkit layer.
 - GPU container test failure only: Docker GPU runtime or driver compatibility layer.
 
+The remediation commands below target supported Ubuntu hosts. Run only the section for the missing
+layer. Privileged commands require user authorization, and a driver change may require a reboot.
+
+### Install Or Repair The NVIDIA Driver
+
+Skip this section when host `nvidia-smi` already works and reports driver 580.95.05 or newer. Do not
+install a host CUDA Toolkit: the course toolkit comes from the container image.
+
+Use Ubuntu's driver selection instead of hard-coding a driver branch that will become stale:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ubuntu-drivers-common
+ubuntu-drivers devices
+sudo ubuntu-drivers install
+sudo reboot
+```
+
+After the host restarts:
+
+```bash
+nvidia-smi
+```
+
+Do not mix Ubuntu apt-managed drivers with NVIDIA `.run` installers. If another installation method
+is already present, inspect it and report the conflict before changing the driver.
+
+### Install Docker Engine
+
+Skip this section when `docker version` already succeeds. Use Docker's official Ubuntu repository,
+not the Ubuntu `docker.io` package:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+sudo apt-get update
+sudo apt-get install -y \
+  docker-ce \
+  docker-ce-cli \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin
+
+sudo usermod -aG docker "$USER"
+```
+
+Log out and back in to apply Docker group membership, or start a temporary shell with:
+
+```bash
+newgrp docker
+```
+
+Then verify:
+
+```bash
+docker version
+docker run --rm hello-world
+```
+
+If apt reports a conflict with an existing Docker or containerd package, inspect the installed
+packages and active containers before removing anything. Do not automatically delete another
+working container stack.
+
+### Install NVIDIA Container Toolkit
+
+Run this section only when the host driver and Docker work but Docker has no usable NVIDIA runtime:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y curl gpg
+
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor --yes \
+  -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -sL \
+  https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed \
+    's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Verify the complete host-to-container GPU path before building the course image:
+
+```bash
+docker info --format '{{json .Runtimes}}' | grep nvidia
+docker run --rm --gpus all nvcr.io/nvidia/pytorch:25.11-py3 nvidia-smi
+```
+
 ## Build The Image
 
 From the repository root:
 
 ```bash
+docker pull nvcr.io/nvidia/pytorch:25.11-py3
 docker build \
   --build-arg USER_UID="$(id -u)" \
   --build-arg USER_GID="$(id -g)" \
