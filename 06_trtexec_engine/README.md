@@ -91,7 +91,7 @@ Each build also writes:
 - `*_layers.json`: TensorRT layer information.
 - `*_profile.json`: per-layer profiling output.
 - `*.log`: full `trtexec` console output.
-- `build_manifest.json`: paths and settings used by this run.
+- `build_manifest.json`: paths, settings, and the TensorRT/CUDA/GPU/driver/container identity used by this run.
 
 Preview the exact `trtexec` commands without building engines:
 
@@ -172,7 +172,7 @@ The report is written to:
 ```
 
 The summary table includes engine size, throughput, end-to-end latency, GPU compute time, H2D/D2H
-transfer time, and build status parsed from the logs.
+transfer time, build status, and runtime identity parsed from the generated evidence.
 
 ## Checkpoints
 
@@ -188,6 +188,7 @@ Acceptance criteria:
 - Static FP32 and FP16 `.engine` files are generated from the simplified static ONNX under
   `outputs/`.
 - Full `trtexec` logs and JSON timing/layer/profile artifacts are recorded.
+- The manifest records TensorRT, CUDA Toolkit, GPU, driver, and pinned container identity.
 - `outputs/benchmark_summary.md` records latency, throughput, GPU compute time, transfer time, and
   engine size.
 - You can compare FP32 and FP16 results using measured evidence.
