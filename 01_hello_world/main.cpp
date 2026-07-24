@@ -2,9 +2,9 @@
 
 int main() {
     // std::cout writes text to the terminal.
-    // std::endl adds a new line and flushes the output buffer.
-    std::cout << "Hello World" << std::endl;
-    std::cout << "Congratualtions! You have successfully compiled and run your first C++ program." << std::endl;
+    // A newline is sufficient here; unlike std::endl, it does not force an unnecessary flush.
+    std::cout << "Hello World\n";
+    std::cout << "Congratulations! You have successfully compiled and run your first C++ program.\n";
 
     // Returning 0 tells the operating system that the program finished successfully.
     return 0;
