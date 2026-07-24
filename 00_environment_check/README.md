@@ -1,80 +1,48 @@
 # 00 - Environment Check
 
-Goal: build a reproducible GPU development container and record its driver, CUDA, TensorRT,
-compiler, Python, and OpenCV environment before running deployment experiments.
+Goal: confirm that the GPU, CUDA, TensorRT, C++, and Python environment required by later lessons
+is working.
 
-The host remains minimal: NVIDIA driver, Docker Engine, NVIDIA Container Toolkit, and the source
-repository. CUDA, cuDNN, TensorRT, compilers, OpenCV, and Python course dependencies live in the
-container derived from:
+The course uses a development container derived from:
 
 ```text
 nvcr.io/nvidia/pytorch:25.11-py3
 ```
 
-This pins the course to CUDA Toolkit 13.0 and TensorRT 10.14.1.48. The repository's development
-Dockerfile is `docker/Dockerfile.dev`; complete host checks, build instructions, persistent
-container commands, attach instructions, and troubleshooting rules are in
-[`agent_env_setup.md`](agent_env_setup.md).
+Build and container-creation commands are documented in
+[`agent_env_setup.md`](agent_env_setup.md). If a course maintainer or coding agent has already
+created the environment, do not reinstall its dependencies.
 
-## Build And Start
+## Enter The Container
 
-Run from the repository root:
-
-```bash
-docker build \
-  --build-arg USER_UID="$(id -u)" \
-  --build-arg USER_GID="$(id -g)" \
-  -f docker/Dockerfile.dev \
-  -t learn-tensorrt:25.11 .
-
-docker run -dit \
-  --name learn-tensorrt \
-  --gpus all \
-  --ipc=host \
-  --ulimit memlock=-1 \
-  --ulimit stack=67108864 \
-  --mount type=bind,source="$(pwd)",target=/workspace/Learn-TensorRT \
-  --workdir /workspace/Learn-TensorRT \
-  learn-tensorrt:25.11
-```
-
-Open additional shells at any time with:
+Open an independent shell with:
 
 ```bash
 docker exec -it learn-tensorrt bash
 ```
 
-`docker attach learn-tensorrt` is also supported. Use `Ctrl-p`, `Ctrl-q` to detach without stopping
-the container. VS Code users can instead attach through `Dev Containers: Attach to Running
-Container...`.
+The interactive main shell is also attachable:
 
-## Run The Check
+```bash
+docker attach learn-tensorrt
+```
 
-Inside the container:
+When using `docker attach`, press `Ctrl-p`, then `Ctrl-q` to detach without stopping the container.
+
+## Check The Environment
+
+Inside the container, run:
 
 ```bash
 cd /workspace/Learn-TensorRT
 bash 00_environment_check/check_env.sh
 ```
 
-The script prints a concise report to the terminal. Save reproducibility evidence when needed:
+The base development environment is ready when the script ends with:
 
-```bash
-bash 00_environment_check/check_env.sh |& tee 00_environment_check/env_report.md
+```text
+[PASS] Environment checks passed.
 ```
 
-`env_report.md` is machine-specific evidence; refresh it only when intentionally recording the
-environment used for a lesson report.
-
-## Acceptance Criteria
-
-- The persistent `learn-tensorrt` container is running with GPU access.
-- The bind-mounted project is writable without creating root-owned host files.
-- `nvidia-smi`, CUDA 13.0 `nvcc`, and TensorRT 10.14 `trtexec` work.
-- TensorRT C++ libraries and the TensorRT Python package are visible.
-- NVIDIA PyTorch 25.11 and ModelOpt remain available.
-- CMake, the C++17 compiler, and OpenCV C++ development files are installed.
-- Python imports Ultralytics, ONNX, and ONNX Runtime.
-
-Do not install or upgrade CUDA, TensorRT, PyTorch, or ModelOpt independently: those components come
-from the pinned NVIDIA image and form one compatibility-tested stack.
+The script checks the GPU, CUDA 13.0, TensorRT 10.14, CMake, the C++ compiler, OpenCV, PyTorch,
+ModelOpt, Ultralytics, ONNX, ONNX Runtime, and the ONNX simplification tools used by the course.

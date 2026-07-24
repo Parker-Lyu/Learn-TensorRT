@@ -81,7 +81,15 @@ run_check "python3 --version" python3 --version
 run_check "Required Python package imports" python3 - <<'PY'
 import importlib
 
-required = ["torch", "modelopt", "ultralytics", "onnx", "onnxruntime"]
+required = [
+    "torch",
+    "modelopt",
+    "ultralytics",
+    "onnx",
+    "onnxruntime",
+    "onnxslim",
+    "onnxsim",
+]
 
 failures = []
 for package in required:

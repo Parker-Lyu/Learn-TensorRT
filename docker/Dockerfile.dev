@@ -36,6 +36,13 @@ RUN python3 -m pip install --no-cache-dir \
         "opencv-python==${OPENCV_PYTHON_VERSION}" \
     && python3 -c 'import torch; assert ".nv25.11" in torch.__version__, torch.__version__'
 
+ARG ONNXSLIM_VERSION=0.1.94
+ARG ONNXSIM_VERSION=0.6.5
+RUN python3 -m pip install --no-cache-dir \
+        "onnxslim==${ONNXSLIM_VERSION}" \
+        "onnxsim==${ONNXSIM_VERSION}" \
+    && python3 -c 'import onnxsim, onnxslim'
+
 # Match the common host UID/GID so files created in the bind-mounted repository
 # remain editable on the host.  Override USER_UID and USER_GID at build time on
 # hosts where the developer account does not use 1000:1000.
