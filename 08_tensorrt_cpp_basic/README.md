@@ -11,7 +11,8 @@ Topics:
 - TensorRT logger
 - Builder, network definition, builder config, and workspace memory pool
 - ONNX parser through `nvonnxparser`
-- FP32 and optional FP16 engine builds
+- TensorRT 10 strongly typed network creation
+- Strict FP32 builds by default, with optional TF32 kernel math
 - TensorRT timing cache reuse for tactic selection
 - Runtime creation and engine deserialization
 - Execution context creation
@@ -82,22 +83,26 @@ it, and run one smoke inference:
 ./build/tensorrt_cpp_basic
 ```
 
-Build an FP16 engine when the GPU supports fast FP16:
+Allow TF32 kernel math while keeping the ONNX and engine tensor types FP32:
 
 ```bash
 ./build/tensorrt_cpp_basic \
-  --fp16 \
-  --engine outputs/yolov8n_cpp_basic_fp16.engine
+  --allow-tf32 \
+  --engine outputs/yolov8n_cpp_basic_tf32.engine
 ```
 
+TensorRT 10.12 deprecated `BuilderFlag::kFP16` in favor of strong typing. This lesson therefore does
+not offer a builder-level `--fp16` switch. Precision-changing workflows should encode types in the
+model, for example with the ModelOpt explicit-Q/DQ path introduced in lesson 12.
+
 First-time TensorRT builds can take several minutes because tactic selection happens inside the
-C++ builder, just like it did through `trtexec`. By default, FP32 builds use
-`outputs/tensorrt_timing_fp32.cache` and FP16 builds use
-`outputs/tensorrt_timing_fp16.cache`, so tactics measured for different floating-point precision
-modes do not share one cache file. The builder reads the selected cache before tactic selection and
-writes it after a successful engine build. Re-run a build with the same ONNX, shape, precision mode,
-GPU, driver, CUDA, and TensorRT stack to reuse measured tactic timings. Re-run with `--load-engine`
-when you want a quick runtime smoke test after the engine already exists.
+C++ builder, just like it did through `trtexec`. Strict FP32 builds use
+`outputs/tensorrt_timing_fp32.cache`; builds with `--allow-tf32` use
+`outputs/tensorrt_timing_tf32.cache`. The builder performs strict timing-cache header verification,
+reads the selected cache before tactic selection, and writes it after a successful engine build.
+Re-run a build with the same ONNX, shape, math policy, GPU, driver, CUDA, and TensorRT stack to reuse
+measured tactic timings. Re-run with `--load-engine` when you want a quick runtime smoke test after
+the engine already exists.
 
 Load an engine that this lesson already built, skipping ONNX parsing and build time:
 
@@ -131,7 +136,7 @@ The program prints:
 - engine path and serialized engine size
 - timing cache path, whether it was loaded or created, and serialized cache size when building
 - whether the engine was built in this run
-- whether FP16 was both requested and enabled
+- whether the network was strongly typed and whether TF32 math was allowed (build mode only)
 - every IO tensor name, mode, memory location, type, shape, and byte count
 - output tensor checksum after device-to-host copy
 - total device and pinned host memory owned by the lesson buffers
@@ -145,7 +150,8 @@ Engine: outputs/yolov8n_cpp_basic.engine
 Engine source: built from ONNX
 Engine bytes: 13215908
 Timing cache: outputs/tensorrt_timing_fp32.cache (created, written, bytes=8123456)
-FP16 requested and enabled: no
+Strongly typed network: yes
+TF32 allowed: no
 Tensor buffers:
   - images [input, device, float32] shape=1x3x640x640 bytes=4915200
   - output0 [output, device, float32] shape=1x84x8400 bytes=2822400 checksum=12735248971051671350
@@ -182,17 +188,20 @@ That keeps the runtime flow identical to later applications that load a prebuilt
 
 Dynamic ONNX inputs need an optimization profile before building and runtime dimensions before
 buffer allocation. This lesson uses one supplied shape as min/opt/max to keep the API visible
-without introducing profile tuning yet.
+without introducing profile tuning yet. The builder owns the profile returned by
+`createOptimizationProfile`, so the code keeps that ownership boundary explicit.
 
-TensorRT 8.x documents that the builder retains ownership of `IOptimizationProfile`, so this lesson
-does not wrap that one object in the same smart-pointer deleter used for other TensorRT interfaces.
+TensorRT 10 networks are always explicit-batch. The deprecated `kEXPLICIT_BATCH` flag is not used;
+the network is created with `kSTRONGLY_TYPED`. The default build also clears `BuilderFlag::kTF32` so
+the FP32 reference does not silently use TensorFloat-32 math.
 
 ## Checkpoints
 
 - Run the default FP32 build, then run `--load-engine` and compare startup time.
 - Delete only `outputs/tensorrt_timing_fp32.cache`, rebuild, and compare build time against a
   rebuild that keeps the cache file.
-- Build with `--fp16` and compare engine size and average enqueue time against FP32.
+- Build with `--allow-tf32` and compare build time and average enqueue time against strict FP32.
+  Explain why both engines still expose FP32 tensors.
 - Delete `outputs/yolov8n_cpp_basic.engine` and explain why a fresh build takes longer than loading.
 - Run the dynamic ONNX command without `--input-shape`, then add it back and explain the error.
 - In `src/tensorrt_basic.cpp`, trace the order in which builder/parser objects, runtime objects, and
@@ -200,11 +209,13 @@ does not wrap that one object in the same smart-pointer deleter used for other T
 
 Acceptance criteria:
 
-- A C++ executable builds a TensorRT engine from ONNX using the ONNX parser.
+- A C++ executable builds a strongly typed TensorRT 10 engine from ONNX using the ONNX parser.
 - The serialized engine is written to `outputs/`.
-- A TensorRT timing cache is read before engine build and written after successful engine build.
+- A TensorRT timing cache is strictly validated, read before engine build, and written after a
+  successful engine build.
 - The engine is deserialized through `IRuntime`.
-- The program creates an execution context, allocates IO buffers, binds tensor addresses by name,
+- The program creates an execution context, validates TensorRT 10 IO types/formats, allocates IO
+  buffers, binds tensor addresses by name,
   copies input data to the device, enqueues inference, copies outputs back, and reports a checksum.
 - Builder, parser, runtime, engine, context, buffer, event, and stream lifetimes are explicit and
   exception-safe.

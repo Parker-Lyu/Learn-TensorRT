@@ -18,7 +18,7 @@ struct AppConfig {
     std::string timing_cache_path;
     std::vector<InputShape> input_shapes;
     bool load_engine_only = false;
-    bool enable_fp16 = false;
+    bool allow_tf32 = false;
     std::size_t workspace_mib = 2048;
     int warmup_iterations = 1;
     int measured_iterations = 3;
@@ -39,7 +39,8 @@ struct AppReport {
     std::string engine_path;
     std::string timing_cache_path;
     bool engine_built = false;
-    bool fp16_enabled = false;
+    bool strongly_typed = true;
+    bool tf32_allowed = false;
     bool timing_cache_loaded = false;
     bool timing_cache_written = false;
     std::vector<TensorSummary> tensors;

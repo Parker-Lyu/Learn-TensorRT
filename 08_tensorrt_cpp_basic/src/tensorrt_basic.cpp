@@ -247,16 +247,16 @@ std::vector<char> read_optional_binary_file(const std::string& path) {
     return read_binary_file(path);
 }
 
-std::string default_timing_cache_path(bool enable_fp16) {
-    return enable_fp16 ? "outputs/tensorrt_timing_fp16.cache"
-                       : "outputs/tensorrt_timing_fp32.cache";
+std::string default_timing_cache_path(bool allow_tf32) {
+    return allow_tf32 ? "outputs/tensorrt_timing_tf32.cache"
+                      : "outputs/tensorrt_timing_fp32.cache";
 }
 
 std::string resolve_timing_cache_path(const AppConfig& config) {
     if (!config.timing_cache_path.empty()) {
         return config.timing_cache_path;
     }
-    return default_timing_cache_path(config.enable_fp16);
+    return default_timing_cache_path(config.allow_tf32);
 }
 
 void make_directory(const std::string& path) {
@@ -316,6 +316,16 @@ std::string to_string(nvinfer1::DataType data_type) {
             return "uint8";
         case nvinfer1::DataType::kFP8:
             return "fp8";
+        case nvinfer1::DataType::kBF16:
+            return "bfloat16";
+        case nvinfer1::DataType::kINT64:
+            return "int64";
+        case nvinfer1::DataType::kINT4:
+            return "int4";
+        case nvinfer1::DataType::kFP4:
+            return "fp4";
+        case nvinfer1::DataType::kE8M0:
+            return "e8m0";
     }
     return "unknown";
 }
@@ -342,22 +352,25 @@ std::string to_string(nvinfer1::TensorLocation location) {
     return "unknown";
 }
 
-std::size_t byte_size(nvinfer1::DataType data_type) {
+std::size_t bit_size(nvinfer1::DataType data_type) {
     switch (data_type) {
         case nvinfer1::DataType::kFLOAT:
-            return 4;
-        case nvinfer1::DataType::kHALF:
-            return 2;
-        case nvinfer1::DataType::kINT8:
-            return 1;
         case nvinfer1::DataType::kINT32:
-            return 4;
+            return 32;
+        case nvinfer1::DataType::kHALF:
+        case nvinfer1::DataType::kBF16:
+            return 16;
+        case nvinfer1::DataType::kINT64:
+            return 64;
+        case nvinfer1::DataType::kINT8:
         case nvinfer1::DataType::kBOOL:
-            return 1;
         case nvinfer1::DataType::kUINT8:
-            return 1;
         case nvinfer1::DataType::kFP8:
-            return 1;
+        case nvinfer1::DataType::kE8M0:
+            return 8;
+        case nvinfer1::DataType::kINT4:
+        case nvinfer1::DataType::kFP4:
+            return 4;
     }
     throw std::runtime_error("Unsupported TensorRT data type.");
 }
@@ -424,11 +437,15 @@ std::size_t checked_byte_count(const nvinfer1::ICudaEngine& engine,
                                const std::string& tensor_name,
                                const nvinfer1::Dims& dims) {
     const std::size_t volume = checked_volume(dims, tensor_name);
-    const std::size_t bytes = byte_size(engine.getTensorDataType(tensor_name.c_str()));
-    if (volume > std::numeric_limits<std::size_t>::max() / bytes) {
+    if (engine.getTensorVectorizedDim(tensor_name.c_str()) != -1) {
+        throw std::runtime_error("Tensor " + tensor_name +
+                                 " uses a vectorized IO format that this lesson does not support.");
+    }
+    const std::size_t bits = bit_size(engine.getTensorDataType(tensor_name.c_str()));
+    if (volume > (std::numeric_limits<std::size_t>::max() - 7U) / bits) {
         throw std::runtime_error("Tensor " + tensor_name + " byte count overflowed.");
     }
-    return volume * bytes;
+    return (volume * bits + 7U) / 8U;
 }
 
 void print_parser_errors(const nvonnxparser::IParser& parser) {
@@ -458,7 +475,7 @@ void add_single_shape_profile(nvinfer1::IBuilder& builder,
         return;
     }
 
-    // TensorRT 8.x documents that the builder retains ownership of optimization profiles.
+    // The builder owns profiles created with createOptimizationProfile().
     nvinfer1::IOptimizationProfile* profile = builder.createOptimizationProfile();
     if (profile == nullptr) {
         throw std::runtime_error("Failed to create TensorRT optimization profile.");
@@ -521,7 +538,7 @@ TensorRtPtr<nvinfer1::ITimingCache> create_timing_cache(
         throw std::runtime_error("Failed to create TensorRT timing cache.");
     }
 
-    if (!builder_config.setTimingCache(*timing_cache, true)) {
+    if (!builder_config.setTimingCache(*timing_cache, false)) {
         throw std::runtime_error("Failed to attach TensorRT timing cache.");
     }
 
@@ -552,17 +569,17 @@ struct EngineBuildResult {
 
 EngineBuildResult build_serialized_engine_from_onnx(const AppConfig& config,
                                                     TensorRtLogger& logger,
-                                                    bool* fp16_enabled) {
+                                                    bool* tf32_allowed) {
     TensorRtPtr<nvinfer1::IBuilder> builder{nvinfer1::createInferBuilder(logger)};
     if (!builder) {
         throw std::runtime_error("Failed to create TensorRT builder.");
     }
 
-    const auto explicit_batch =
-        1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+    const auto strongly_typed =
+        1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kSTRONGLY_TYPED);
     TensorRtPtr<nvinfer1::INetworkDefinition> network{
         builder->createNetworkV2(static_cast<nvinfer1::NetworkDefinitionCreationFlags>(
-            explicit_batch))};
+            strongly_typed))};
     if (!network) {
         throw std::runtime_error("Failed to create TensorRT network definition.");
     }
@@ -585,14 +602,9 @@ EngineBuildResult build_serialized_engine_from_onnx(const AppConfig& config,
     builder_config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE,
                                        workspace_bytes(config.workspace_mib));
 
-    *fp16_enabled = false;
-    if (config.enable_fp16) {
-        if (builder->platformHasFastFp16()) {
-            builder_config->setFlag(nvinfer1::BuilderFlag::kFP16);
-            *fp16_enabled = true;
-        } else {
-            std::cerr << "FP16 requested, but this platform does not report fast FP16 support.\n";
-        }
+    *tf32_allowed = config.allow_tf32;
+    if (!config.allow_tf32) {
+        builder_config->clearFlag(nvinfer1::BuilderFlag::kTF32);
     }
 
     add_single_shape_profile(*builder, *builder_config, *network, config.input_shapes);
@@ -707,7 +719,7 @@ AppReport run_tensorrt_cpp_basic(const AppConfig& config) {
     }
 
     TensorRtLogger logger;
-    bool fp16_enabled = false;
+    bool tf32_allowed = false;
     TimingCacheResult timing_cache_result;
     std::vector<char> engine_bytes;
 
@@ -715,7 +727,7 @@ AppReport run_tensorrt_cpp_basic(const AppConfig& config) {
         engine_bytes = read_binary_file(config.engine_path);
     } else {
         EngineBuildResult build_result =
-            build_serialized_engine_from_onnx(config, logger, &fp16_enabled);
+            build_serialized_engine_from_onnx(config, logger, &tf32_allowed);
         engine_bytes = std::move(build_result.engine_bytes);
         timing_cache_result = build_result.timing_cache;
         write_binary_file(config.engine_path, engine_bytes.data(), engine_bytes.size());
@@ -746,7 +758,7 @@ AppReport run_tensorrt_cpp_basic(const AppConfig& config) {
     report.engine_path = config.engine_path;
     report.timing_cache_path = config.load_engine_only ? "" : resolve_timing_cache_path(config);
     report.engine_built = !config.load_engine_only;
-    report.fp16_enabled = fp16_enabled;
+    report.tf32_allowed = tf32_allowed;
     report.timing_cache_loaded = timing_cache_result.loaded;
     report.timing_cache_written = timing_cache_result.written;
     report.engine_bytes = engine_bytes.size();
