@@ -17,7 +17,7 @@ from ultralytics import YOLO
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_IMAGE = REPO_ROOT / "assets" / "dog.webp"
+DEFAULT_IMAGE = REPO_ROOT / "assets" / "img.jpeg"
 DEFAULT_WEIGHTS = REPO_ROOT / "assets" / "yolov8n.pt"
 DEFAULT_ONNX = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n.onnx"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "05_torch_to_onnx" / "outputs"
