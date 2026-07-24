@@ -246,7 +246,8 @@ Purpose:
 Topics:
 
 - `trtexec --onnx`
-- FP32 and FP16 engines
+- Strict FP32 reference with TF32 disabled, plus an FP16 comparison engine
+- Runtime/CUDA/GPU/driver/container metadata for benchmark evidence
 - Static shape
 - Dynamic shape profiles
 - Workspace memory
@@ -258,6 +259,7 @@ Acceptance criteria:
 - You can build `.engine` files from ONNX.
 - You can run `trtexec` benchmark and read latency, throughput, and memory output.
 - You can compare FP32 and FP16 results.
+- You can explain why TF32 must be disabled for a strict FP32 numerical-alignment baseline.
 
 ### `06a_polygraphy_precision_alignment`
 
@@ -345,20 +347,21 @@ Purpose:
 Topics:
 
 - Logger
-- Builder
-- ONNX parser
-- Runtime creation
-- Engine building
-- Engine deserialization
+- Builder and ONNX parser
+- TensorRT 10 strongly typed network creation
+- Strict FP32 by default and optional TF32 kernel math
+- Strictly verified timing-cache reuse
+- Runtime creation and engine deserialization
 - Execution context
-- Tensor names and shapes
-- Device buffer allocation
-- Inference enqueue
+- Name-based tensor metadata and address binding
+- TensorRT 10 IO data-type and format validation
+- Device buffer allocation and `enqueueV3`
 
 Acceptance criteria:
 
 - A C++ program loads a TensorRT engine and runs one inference with dummy or real input.
 - Builder, parser, engine, runtime, context, buffer, and stream lifetimes are clear.
+- Deprecated `kEXPLICIT_BATCH` and builder-level `kFP16` paths are not used.
 
 ### `09_yolov8_trt_python`
 
@@ -368,7 +371,7 @@ Purpose:
 
 Topics:
 
-- Python TensorRT runtime
+- TensorRT 10 name-based Python runtime and `execute_async_v3`
 - NumPy preprocessing
 - Output decoding
 - NMS
@@ -390,7 +393,9 @@ Topics:
 
 - OpenCV preprocessing
 - TensorRT runtime
-- CUDA buffers
+- Reusable pinned-host and device CUDA buffers
+- TensorRT 10 name-based IO APIs and `enqueueV3`
+- Header-only NVTX3 integration for CUDA 13
 - YOLO decode
 - NMS
 - Coordinate scaling
@@ -449,6 +454,8 @@ Topics:
 
 - `trtexec` baseline
 - Nsight Systems command-line capture with `nsys`
+- TensorRT/CUDA/GPU/driver/container identity in profiling evidence
+- Strict capture, SQLite export, and statistics-generation gates
 - Timeline reading
 - CPU preprocessing bottleneck
 - H2D and D2H copy gaps
