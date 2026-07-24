@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -242,8 +244,36 @@ def run_build(build: EngineBuild, args: argparse.Namespace) -> None:
     print(f"log: {build.log_path}")
 
 
+def command_output(command: list[str]) -> str:
+    completed = subprocess.run(
+        command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False
+    )
+    return completed.stdout.strip()
+
+
+def runtime_environment() -> dict[str, str]:
+    import tensorrt as trt
+
+    return {
+        "course_image": "nvcr.io/nvidia/pytorch:25.11-py3",
+        "nvidia_container_release": os.environ.get("NVIDIA_PYTORCH_VERSION", "unknown"),
+        "nvidia_build_id": os.environ.get("NVIDIA_BUILD_ID", "unknown"),
+        "python": platform.python_version(),
+        "tensorrt": trt.__version__,
+        "cuda_toolkit": os.environ.get("CUDA_VERSION", command_output(["nvcc", "--version"])),
+        "gpu_and_driver": command_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,driver_version,compute_cap",
+                "--format=csv,noheader",
+            ]
+        ),
+    }
+
+
 def write_manifest(builds: list[EngineBuild], args: argparse.Namespace) -> None:
     manifest = {
+        "runtime_environment": runtime_environment(),
         "static_onnx": str(args.onnx.resolve()),
         "dynamic_onnx": str(args.dynamic_onnx.resolve()),
         "workspace_mib": args.workspace_mib,
