@@ -24,6 +24,7 @@ beginning, not quick demo shortcuts.
 - Lesson code should be easy to read, but still structured like code that can evolve.
 - Prefer small, focused files over one large file when a lesson has multiple concepts.
 - Shared images, models, and reusable resources belong in the root `assets/` directory.
+- When a lesson needs an input image, use `assets/img.jpeg` by default.
 - Do not display images in GUI windows (for example, with `cv::imshow`); save images learners need
   to inspect in the lesson's `output/` directory instead.
 - Transient build products, TensorRT engines, profiling captures, generated images, and local
