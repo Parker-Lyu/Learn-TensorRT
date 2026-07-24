@@ -1,61 +1,67 @@
-# Agent Guide - TensorRT Dev Container Environment
+# Agent Guide - Course Development Container
 
-This document is written for an AI coding agent preparing or verifying the development environment for this repository.
+This document is the reproducible setup procedure for an AI coding agent preparing or verifying
+this repository's development environment. The project uses a persistent GPU-enabled Docker
+container. Do not install CUDA, cuDNN, TensorRT, OpenCV, or compiler toolchains directly on the
+host.
 
-The user develops with VS Code Dev Containers attached to a running Docker container. The container is the development environment. Do not assume CUDA, cuDNN, TensorRT, OpenCV, or compiler tools should be installed on the host.
+## Pinned Baseline
 
-## Non-Negotiable Image
+The single upstream image is:
 
-Use this image:
-
-```bash
-nvcr.io/nvidia/tensorrt:23.10-py3
+```text
+nvcr.io/nvidia/pytorch:25.11-py3
 ```
 
-Do not replace it with another TensorRT, CUDA, Ubuntu, or PyTorch image. This course is pinned to this image because it provides a stable TensorRT C++ learning environment:
+The image supplies the course's CUDA, TensorRT, PyTorch, and ModelOpt stack. Do not replace or
+upgrade those components in the course image:
 
-- Ubuntu 22.04 base
-- CUDA 12.2 era toolchain
-- cuDNN 8.9 era runtime
-- TensorRT 8.6.1 era runtime and development files
+- Ubuntu 24.04
+- CUDA Toolkit 13.0
+- TensorRT 10.14.1.48
+- NVIDIA PyTorch 25.11 build
+- NVIDIA ModelOpt 0.37.0
 
-## Intended Workflow
+The repository Dockerfile adds C++ development tools, OpenCV C++ development files, Ultralytics,
+ONNX, and ONNX Runtime. TensorRT engines and performance evidence remain specific to this pinned
+environment and must be regenerated here.
 
-1. The host machine runs Ubuntu.
-2. The host machine has the NVIDIA driver installed.
-3. The host machine has Docker Engine installed from Docker's official apt repository.
-4. The host machine has NVIDIA Container Toolkit installed and configured for Docker.
-5. The repository is bind-mounted into the container.
-6. VS Code connects to the container through Dev Containers.
-7. All build, test, CMake, CUDA, TensorRT, and Python commands are run inside the container.
+Ubuntu's complete OpenCV development package transitively installs its UCX runtime through
+VTK/OpenMPI, while NVIDIA PyTorch is linked to the newer HPC-X UCX bundled in the upstream image.
+The Dockerfile sets `LD_PRELOAD` to the matching HPC-X `libucs`, `libucm`, and `libucp` libraries so
+the two UCX ABIs are not mixed during `import torch`. Do not remove that setting without rerunning
+the PyTorch import and CUDA checks.
 
 ## Host Responsibilities
 
-The host should provide only the minimum base needed for GPU containers:
+The host needs only:
 
-- NVIDIA driver
-- Docker Engine
-- Docker Buildx and Compose plugins
-- NVIDIA Container Toolkit
-- A persistent repository directory mounted into the container
+- a compatible NVIDIA driver (the CUDA 13.0 image requires driver 580.95.05 or newer on x86_64);
+- Docker Engine with the Buildx and Compose plugins;
+- NVIDIA Container Toolkit configured for Docker;
+- this repository as a persistent bind mount.
 
-Avoid installing a full CUDA Toolkit or TensorRT stack directly on the host unless the user explicitly asks for host-native development.
-
-## Host Setup Reference
-
-These commands are for the user or a privileged automation step on the host. Do not run them from inside the container.
-
-Verify the host driver first:
+Verify an already configured host before changing it:
 
 ```bash
 nvidia-smi
+docker version
+docker info --format '{{json .Runtimes}}' | grep nvidia
+docker run --rm --gpus all nvcr.io/nvidia/pytorch:25.11-py3 nvidia-smi
 ```
 
-Install Docker Engine from Docker's official repository, not `apt install docker.io`:
+If all four commands pass, do not reinstall the driver, Docker, or NVIDIA Container Toolkit.
+
+### Host installation reference
+
+Run this section only when the corresponding host component is missing. These commands must not be
+run inside a container.
+
+Install Docker Engine from Docker's official Ubuntu repository:
 
 ```bash
 for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
-  sudo apt-get remove "$pkg"
+  sudo apt-get remove -y "$pkg"
 done
 
 sudo apt-get update
@@ -64,29 +70,23 @@ sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo usermod -aG docker "$USER"
 ```
 
-After changing Docker group membership, the user should log out and back in, or run:
-
-```bash
-newgrp docker
-```
-
-Install NVIDIA Container Toolkit:
+Log out and back in after changing Docker group membership (or use `newgrp docker`). Then install
+and configure NVIDIA Container Toolkit if the `nvidia` runtime is missing:
 
 ```bash
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
   sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+curl -sL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
   sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
   sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
@@ -96,125 +96,95 @@ sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 
-Pull the TensorRT image:
+## Build The Course Image
+
+Run from the repository root. The UID/GID arguments ensure files written through the bind mount are
+owned by the host user:
 
 ```bash
-docker pull nvcr.io/nvidia/tensorrt:23.10-py3
+docker pull nvcr.io/nvidia/pytorch:25.11-py3
+docker build \
+  --build-arg USER_UID="$(id -u)" \
+  --build-arg USER_GID="$(id -g)" \
+  -f docker/Dockerfile.dev \
+  -t learn-tensorrt:25.11 .
 ```
 
-## Container Launch Pattern
+The build intentionally fails if Python dependency resolution replaces NVIDIA's PyTorch 25.11
+build. Optional tools such as `onnxslim` and `onnxsim` are not part of the baseline; install them
+only for a documented simplification experiment.
 
-For a persistent container that VS Code Dev Containers can attach to:
+## Create The Persistent Container
+
+From the repository root:
 
 ```bash
-docker run -d \
+docker run -dit \
   --name learn-tensorrt \
   --gpus all \
   --ipc=host \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
-  -v /workspace/Projects/Learn-TensorRT:/workspace/Projects/Learn-TensorRT \
-  -w /workspace/Projects/Learn-TensorRT \
-  nvcr.io/nvidia/tensorrt:23.10-py3 \
-  sleep infinity
+  --mount type=bind,source="$(pwd)",target=/workspace/Learn-TensorRT \
+  --workdir /workspace/Learn-TensorRT \
+  learn-tensorrt:25.11
 ```
 
-If the repository is stored elsewhere on the host, keep the same container image and adjust only the bind mount path.
-
-Then attach VS Code to the running container with Dev Containers:
-
-```text
-Dev Containers: Attach to Running Container...
-```
-
-Choose `learn-tensorrt`.
-
-## In-Container Verification
-
-Inside the Dev Container, install the Python dependencies required by the early lessons:
+The container is deliberately persistent and interactive. It can be reused after a reboot:
 
 ```bash
-python3 -m pip install --no-cache-dir \
-  ultralytics \
-  onnx==1.21.0 \
-  onnxruntime==1.23.2
+docker start learn-tensorrt
+docker exec -it learn-tensorrt bash
 ```
 
-If the network is slow or unstable, especially in mainland China, use a domestic PyPI mirror such as Aliyun:
+Direct Docker attach is also supported because the container's main process is an interactive Bash
+shell:
 
 ```bash
-python3 -m pip install \
-  --no-cache-dir \
-  --default-timeout 120 \
-  --retries 10 \
-  -i https://mirrors.aliyun.com/pypi/simple/ \
-  --trusted-host mirrors.aliyun.com \
-  ultralytics \
-  onnx==1.21.0 \
-  onnxruntime==1.23.2
+docker attach learn-tensorrt
 ```
 
-Install optional ONNX graph simplifiers here too if later export experiments need graph
-simplification:
+Detach without stopping it by pressing `Ctrl-p`, then `Ctrl-q`. Typing `exit` or pressing `Ctrl-d`
+in that attached main shell stops the container; use `docker start learn-tensorrt` to start it again.
+For independent terminal sessions, prefer `docker exec -it learn-tensorrt bash`.
+
+VS Code users can run `Dev Containers: Attach to Running Container...` and select
+`learn-tensorrt`.
+
+To recreate the container after changing the Dockerfile (the bind-mounted source is not deleted):
 
 ```bash
-python3 -m pip install --no-cache-dir onnxslim onnxsim
+docker rm -f learn-tensorrt
+# Re-run docker build and docker run above.
 ```
 
-Then run the environment check:
+## Verify Inside The Container
+
+Run:
 
 ```bash
+cd /workspace/Learn-TensorRT
 bash 00_environment_check/check_env.sh
 ```
 
 Minimum pass conditions:
 
-- `nvidia-smi` prints the RTX 2060 or another NVIDIA GPU.
-- `nvcc --version` prints a CUDA compiler version.
-- `trtexec --help` runs and reports TensorRT.
-- `libnvinfer.so*` exists under a standard library path.
-- `cmake`, `g++`, and `python3` are available.
-- Python can import `ultralytics`, `onnx`, and `onnxruntime`.
-- The repository path is writable.
+- the GPU and driver are visible through `nvidia-smi`;
+- `nvcc` reports CUDA 13.0;
+- `trtexec` and the TensorRT C++ and Python APIs report TensorRT 10.14.1.48;
+- CMake, an ISO C++17 compiler, and OpenCV C++ development files are available;
+- NVIDIA's PyTorch 25.11 and ModelOpt packages remain installed;
+- Ultralytics, ONNX, and ONNX Runtime import successfully;
+- the bind-mounted repository is writable by the non-root development user.
+
+If a check fails, preserve the exact command output and classify the failure before making changes:
+host driver, Docker daemon/runtime, upstream image, derived-image build, or project dependency.
 
 ## Agent Rules
 
-- Do not install Docker, drivers, or NVIDIA Container Toolkit from inside the container.
-- Do not change the base image unless the user explicitly asks.
-- Do not store source code only inside an ephemeral container filesystem.
-- Prefer adding reproducible scripts and documentation to this repository over changing the host manually.
-- If a check fails, report the failing command and likely layer: host driver, Docker GPU runtime, container image, or project dependency.
-
-## Python Dependencies
-
-The base TensorRT image already contains many packages, but this course requires ONNX export and validation tools as part of the environment baseline.
-
-Install them inside the Dev Container:
-
-```bash
-python3 -m pip install --no-cache-dir \
-  ultralytics \
-  onnx==1.21.0 \
-  onnxruntime==1.23.2
-```
-
-If the network is slow or unstable, especially in mainland China, use a domestic mirror:
-
-```bash
-python3 -m pip install \
-  --no-cache-dir \
-  --default-timeout 120 \
-  --retries 10 \
-  -i https://mirrors.aliyun.com/pypi/simple/ \
-  --trusted-host mirrors.aliyun.com \
-  ultralytics \
-  onnx==1.21.0 \
-  onnxruntime==1.23.2
-```
-
-Optional graph simplification packages belong in this baseline setup when needed, not in individual
-lesson READMEs:
-
-```bash
-python3 -m pip install --no-cache-dir onnxslim onnxsim
-```
+- Do not install host components from inside the container.
+- Do not change the pinned upstream image or replace its CUDA, TensorRT, PyTorch, or ModelOpt stack.
+- Do not keep source or required artifacts only in the container's writable layer.
+- Prefer Dockerfile and documentation changes over undocumented manual container mutation.
+- Build engines, timing caches, golden outputs, and benchmarks only in this pinned environment, and
+  record the GPU, driver, container image, CUDA, and TensorRT versions with the result.

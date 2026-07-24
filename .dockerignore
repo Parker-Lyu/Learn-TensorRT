@@ -1,0 +1,16 @@
+.git
+.gitignore
+.vscode
+.idea
+**/build
+**/build/**
+**/build_check
+**/build_check/**
+**/cmake-build-*
+**/outputs
+**/outputs/**
+**/__pycache__
+**/*.pyc
+**/*.engine
+**/*.plan
+**/*.timing-cache

@@ -46,6 +46,7 @@ section "System"
 run_optional "OS release" sh -c 'cat /etc/os-release'
 run_optional "Kernel" uname -a
 run_optional "Working directory" pwd
+run_optional "NVIDIA PyTorch container release" sh -c 'printf "NVIDIA_PYTORCH_VERSION=%s\nCUDA_VERSION=%s\n" "${NVIDIA_PYTORCH_VERSION:-unknown}" "${CUDA_VERSION:-unknown}"'
 
 section "Required commands"
 for cmd in nvidia-smi nvcc trtexec cmake g++ python3; do
@@ -59,12 +60,14 @@ section "CUDA"
 run_check "nvcc --version" nvcc --version
 
 section "TensorRT"
-run_optional "trtexec help/version output" sh -c 'trtexec --help 2>&1 | head -n 20'
+run_check "trtexec version" sh -c 'trtexec --version 2>&1 | head -n 20'
 run_check "TensorRT C++ libraries" sh -c 'ldconfig -p 2>/dev/null | grep -q libnvinfer || ls /usr/lib/x86_64-linux-gnu/libnvinfer.so* >/dev/null 2>&1'
-run_optional "TensorRT Python import" python3 - <<'PY'
+run_check "TensorRT Python import and baseline version" python3 - <<'PY'
 try:
     import tensorrt as trt
     print("tensorrt:", trt.__version__)
+    if not trt.__version__.startswith("10.14."):
+        raise SystemExit(f"expected TensorRT 10.14.x, found {trt.__version__}")
 except Exception as exc:
     raise SystemExit(exc)
 PY
@@ -76,23 +79,26 @@ run_check "g++ --version" g++ --version
 section "Python"
 run_check "python3 --version" python3 --version
 run_check "Required Python package imports" python3 - <<'PY'
-import importlib.util
+import importlib
 
-required = [
-    "ultralytics",
-    "onnx",
-    "onnxruntime",
-]
+required = ["torch", "modelopt", "ultralytics", "onnx", "onnxruntime"]
 
-missing = []
+failures = []
 for package in required:
-    spec = importlib.util.find_spec(package)
-    print(f"{package}: {'installed' if spec else 'missing'}")
-    if spec is None:
-        missing.append(package)
+    try:
+        module = importlib.import_module(package)
+        version = getattr(module, "__version__", "version unavailable")
+        print(f"{package}: {version}")
+    except Exception as exc:
+        print(f"{package}: import failed: {exc}")
+        failures.append(package)
 
-if missing:
-    raise SystemExit("missing required package(s): " + ", ".join(missing))
+if failures:
+    raise SystemExit("failed required import(s): " + ", ".join(failures))
+
+import torch
+if ".nv25.11" not in torch.__version__:
+    raise SystemExit(f"expected NVIDIA PyTorch 25.11 build, found {torch.__version__}")
 PY
 
 run_optional "Optional Python package availability" python3 - <<'PY'
@@ -101,7 +107,6 @@ import importlib.util
 packages = [
     "cv2",
     "numpy",
-    "torch",
     "tensorrt",
 ]
 
@@ -111,7 +116,7 @@ for package in packages:
 PY
 
 section "OpenCV"
-run_optional "pkg-config opencv4" sh -c 'pkg-config --modversion opencv4'
+run_check "pkg-config opencv4" sh -c 'pkg-config --modversion opencv4'
 run_optional "Python OpenCV import" python3 - <<'PY'
 try:
     import cv2

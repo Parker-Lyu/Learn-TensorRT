@@ -29,6 +29,30 @@ void check_cuda(cudaError_t status, const char* operation) {
     }
 }
 
+cudaError_t prefetch_to_device_async(const void* pointer,
+                                     std::size_t byte_count,
+                                     int device_id,
+                                     cudaStream_t stream) {
+#if CUDART_VERSION >= 13000
+    // CUDA 13 replaced the integer destination with an explicit location and flags.
+    const cudaMemLocation location{cudaMemLocationTypeDevice, device_id};
+    return cudaMemPrefetchAsync(pointer, byte_count, location, 0U, stream);
+#else
+    return cudaMemPrefetchAsync(pointer, byte_count, device_id, stream);
+#endif
+}
+
+cudaError_t prefetch_to_host_async(const void* pointer,
+                                   std::size_t byte_count,
+                                   cudaStream_t stream) {
+#if CUDART_VERSION >= 13000
+    const cudaMemLocation location{cudaMemLocationTypeHost, 0};
+    return cudaMemPrefetchAsync(pointer, byte_count, location, 0U, stream);
+#else
+    return cudaMemPrefetchAsync(pointer, byte_count, cudaCpuDeviceId, stream);
+#endif
+}
+
 std::size_t byte_count_for_float_count(std::size_t element_count) {
     if (element_count > std::numeric_limits<std::size_t>::max() / sizeof(float)) {
         throw std::runtime_error("Requested buffer is too large.");
@@ -379,15 +403,15 @@ Measurement measure_managed_flow(float* managed_input,
     CudaEvent stop;
 
     // Prefetch makes page migration explicit instead of hiding it inside the first kernel launch.
-    check_cuda(cudaMemPrefetchAsync(managed_input,
-                                    byte_count_for_float_count(element_count),
-                                    device_id,
-                                    stream.get()),
+    check_cuda(prefetch_to_device_async(managed_input,
+                                        byte_count_for_float_count(element_count),
+                                        device_id,
+                                        stream.get()),
                "cudaMemPrefetchAsync(input to device)");
-    check_cuda(cudaMemPrefetchAsync(managed_output,
-                                    byte_count_for_float_count(element_count),
-                                    device_id,
-                                    stream.get()),
+    check_cuda(prefetch_to_device_async(managed_output,
+                                        byte_count_for_float_count(element_count),
+                                        device_id,
+                                        stream.get()),
                "cudaMemPrefetchAsync(output to device)");
 
     check_cuda(cudaEventRecord(start.get(), stream.get()), "cudaEventRecord(start)");
@@ -396,10 +420,9 @@ Measurement measure_managed_flow(float* managed_input,
     }
     check_cuda(cudaEventRecord(stop.get(), stream.get()), "cudaEventRecord(stop)");
 
-    check_cuda(cudaMemPrefetchAsync(managed_output,
-                                    byte_count_for_float_count(element_count),
-                                    cudaCpuDeviceId,
-                                    stream.get()),
+    check_cuda(prefetch_to_host_async(managed_output,
+                                      byte_count_for_float_count(element_count),
+                                      stream.get()),
                "cudaMemPrefetchAsync(output to host)");
     stream.synchronize();
 

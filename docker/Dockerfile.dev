@@ -1,0 +1,70 @@
+FROM nvcr.io/nvidia/pytorch:25.11-py3
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG ULTRALYTICS_VERSION=8.3.225
+ARG ONNX_VERSION=1.21.0
+ARG ONNXRUNTIME_VERSION=1.23.2
+
+# Keep CUDA, TensorRT, PyTorch, and ModelOpt from the NVIDIA image.  This layer
+# adds only the host-side C++ tools and OpenCV development package used by the
+# course lessons.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        gdb \
+        git \
+        less \
+        libopencv-dev \
+        ninja-build \
+        pkg-config \
+        sudo \
+        vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin the course-level export and CPU validation dependencies.  pip must not
+# replace the NVIDIA-provided PyTorch build; the assertion makes that contract
+# fail visibly during the image build if dependency resolution ever changes.
+ARG OPENCV_PYTHON_VERSION=4.12.0.88
+RUN python3 -m pip install --no-cache-dir \
+        "ultralytics==${ULTRALYTICS_VERSION}" \
+        "onnx==${ONNX_VERSION}" \
+        "onnxruntime==${ONNXRUNTIME_VERSION}" \
+        "opencv-python==${OPENCV_PYTHON_VERSION}" \
+    && python3 -c 'import torch; assert ".nv25.11" in torch.__version__, torch.__version__'
+
+# Match the common host UID/GID so files created in the bind-mounted repository
+# remain editable on the host.  Override USER_UID and USER_GID at build time on
+# hosts where the developer account does not use 1000:1000.
+RUN if getent group "${USER_GID}" >/dev/null; then \
+        existing_group="$(getent group "${USER_GID}" | cut -d: -f1)"; \
+    else \
+        groupadd --gid "${USER_GID}" "${USERNAME}"; \
+        existing_group="${USERNAME}"; \
+    fi \
+    && if getent passwd "${USER_UID}" >/dev/null; then \
+        existing_user="$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
+    else \
+        useradd --uid "${USER_UID}" --gid "${existing_group}" --create-home --shell /bin/bash "${USERNAME}"; \
+        existing_user="${USERNAME}"; \
+    fi \
+    && user_home="$(getent passwd "${existing_user}" | cut -d: -f6)" \
+    && install -d -o "${USER_UID}" -g "${USER_GID}" "${user_home}/.config" \
+    && printf '%s ALL=(ALL) NOPASSWD:ALL\n' "${existing_user}" > "/etc/sudoers.d/${existing_user}" \
+    && chmod 0440 "/etc/sudoers.d/${existing_user}"
+
+# Ubuntu's full OpenCV development package brings the distribution UCX runtime
+# in through VTK/OpenMPI.  NVIDIA PyTorch is built against the newer HPC-X UCX
+# bundled under /opt/hpcx.  Preloading that coherent library set prevents the
+# two UCX ABIs from being mixed when torch is imported in a GPU container.
+ENV LD_PRELOAD=/opt/hpcx/ucx/lib/libucs.so.0:/opt/hpcx/ucx/lib/libucm.so.0:/opt/hpcx/ucx/lib/libucp.so.0 \
+    PYTHONUNBUFFERED=1
+WORKDIR /workspace/Learn-TensorRT
+USER ${USER_UID}:${USER_GID}
+
+# docker run -dit keeps this interactive shell alive.  It supports both VS
+# Code's "Attach to Running Container" and `docker attach learn-tensorrt`.
+CMD ["/bin/bash"]

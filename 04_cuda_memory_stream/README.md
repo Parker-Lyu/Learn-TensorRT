@@ -48,6 +48,10 @@ It then compares four paths:
   a device pointer.
 - Unified Memory: `cudaMallocManaged` with explicit prefetch before the measured kernel loop.
 
+CUDA 13 changed `cudaMemPrefetchAsync` from an integer destination to an explicit
+`cudaMemLocation` plus flags. The lesson keeps the compatibility detail in two small helpers so the
+data-flow example remains readable while still compiling against the pinned CUDA 13.0 toolkit.
+
 Each path runs:
 
 ```text
