@@ -77,7 +77,7 @@ python3 06_trtexec_engine/build_and_benchmark.py
 
 The default command builds:
 
-- `outputs/yolov8n_static_fp32.engine`
+- `outputs/yolov8n_static_fp32.engine` (strict FP32 reference with TF32 disabled)
 - `outputs/yolov8n_static_fp16.engine`
 - `outputs/yolov8n_dynamic_fp16.engine`, only when the simplified dynamic ONNX file exists
 
@@ -219,6 +219,7 @@ profile.
 | `--duration=<sec>` | Sets benchmark measurement time. | Longer runs give more stable latency and throughput numbers. Short runs are useful for smoke tests. |
 | `--avgRuns=<n>` | Averages timing over groups of inference runs. | Smooths short-run jitter before reporting each timing sample. |
 | `--percentile=50,90,95,99` | Reports selected latency percentiles. | Shows both typical latency and tail latency instead of only an average. |
+| `--noTF32` | Disables TF32 for the strict FP32 reference engine. | TensorRT 10 enables TF32 by default; disabling it prevents a supposedly FP32 alignment baseline from silently using TF32 math. |
 | `--fp16` | Allows FP16 tactics and FP16 engine layers where supported. | Builds the FP16 comparison engine and usually improves throughput on modern NVIDIA GPUs. |
 | `--minShapes=<name:shape>` | Minimum shape allowed by a dynamic optimization profile. | Defines the smallest input shape the dynamic engine must support. |
 | `--optShapes=<name:shape>` | Shape TensorRT optimizes most heavily for a dynamic profile. | Tells TensorRT the expected/common shape, usually the main benchmark shape. |
@@ -254,7 +255,8 @@ trtexec \
   --warmUp=500 \
   --duration=5 \
   --avgRuns=10 \
-  --percentile=50,90,95,99
+  --percentile=50,90,95,99 \
+  --noTF32
 ```
 
 Static FP16 engine:
@@ -322,6 +324,7 @@ trtexec \
 - `--duration`: benchmark 采样持续时间，时间越长通常统计越稳定。
 - `--avgRuns`: 每个 timing sample 内平均的 inference 次数，用于平滑短时抖动。
 - `--percentile=50,90,95,99`: 输出 P50、P90、P95、P99 延迟，便于同时观察典型延迟和尾延迟。
+- `--noTF32`: 为严格 FP32 对齐基线关闭 TensorRT 默认启用的 TF32。
 - `--fp16`: 允许 TensorRT 使用 FP16 tactics 和 FP16 layer，前提是硬件和 layer 支持。
 - `--minShapes` / `--optShapes` / `--maxShapes`: 动态 shape engine 的最小、最优、最大输入范围。
 - `--shapes`: 本次 benchmark 实际运行的输入 shape，必须落在 profile 范围内。
