@@ -196,54 +196,52 @@ def load_engine(path: Path) -> trt.ICudaEngine:
 
 
 def tensor_names(engine: trt.ICudaEngine) -> Iterable[str]:
-    if hasattr(engine, "num_io_tensors"):
-        for index in range(engine.num_io_tensors):
-            yield engine.get_tensor_name(index)
-    else:
-        for index in range(engine.num_bindings):
-            yield engine.get_binding_name(index)
+    for index in range(engine.num_io_tensors):
+        yield engine.get_tensor_name(index)
 
 
 def tensor_mode(engine: trt.ICudaEngine, name: str) -> str:
-    if hasattr(engine, "get_tensor_mode"):
-        return "input" if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT else "output"
-    return "input" if engine.binding_is_input(engine.get_binding_index(name)) else "output"
+    mode = engine.get_tensor_mode(name)
+    if mode == trt.TensorIOMode.INPUT:
+        return "input"
+    if mode == trt.TensorIOMode.OUTPUT:
+        return "output"
+    raise RuntimeError(f"tensor {name} is not an input or output")
 
 
 def tensor_dtype(engine: trt.ICudaEngine, name: str) -> np.dtype:
-    if hasattr(engine, "get_tensor_dtype"):
-        return trt.nptype(engine.get_tensor_dtype(name))
-    return trt.nptype(engine.get_binding_dtype(engine.get_binding_index(name)))
+    try:
+        return np.dtype(trt.nptype(engine.get_tensor_dtype(name)))
+    except TypeError as exc:
+        raise TypeError(f"tensor {name} uses a data type without NumPy support") from exc
 
 
 def tensor_shape(engine: trt.ICudaEngine, context: trt.IExecutionContext, name: str) -> tuple[int, ...]:
-    if hasattr(context, "get_tensor_shape"):
-        shape = tuple(int(dim) for dim in context.get_tensor_shape(name))
-    else:
-        shape = tuple(int(dim) for dim in context.get_binding_shape(engine.get_binding_index(name)))
+    del engine
+    shape = tuple(int(dim) for dim in context.get_tensor_shape(name))
     if any(dim <= 0 for dim in shape):
         raise ValueError(f"tensor {name} has unresolved shape {shape}; pass --input-shape")
     return shape
 
 
 def set_input_shape(context: trt.IExecutionContext, name: str, shape: tuple[int, ...]) -> None:
-    if hasattr(context, "set_input_shape"):
-        ok = context.set_input_shape(name, shape)
-    else:
-        ok = context.set_binding_shape(context.engine.get_binding_index(name), shape)
-    if not ok:
+    if not context.set_input_shape(name, shape):
         raise RuntimeError(f"failed to set input shape for {name}: {shape}")
 
 
-def allocate_bindings(engine: trt.ICudaEngine,
-                      context: trt.IExecutionContext) -> tuple[list[TensorBinding], list[int], list[DeviceAllocation]]:
+def allocate_bindings(
+    engine: trt.ICudaEngine, context: trt.IExecutionContext
+) -> tuple[list[TensorBinding], list[DeviceAllocation]]:
     bindings: list[TensorBinding] = []
-    pointer_table: list[int] = []
     allocations: list[DeviceAllocation] = []
     for name in tensor_names(engine):
+        if engine.get_tensor_location(name) != trt.TensorLocation.DEVICE:
+            raise RuntimeError(f"tensor {name} is not a device IO tensor")
+        if engine.get_tensor_format(name) != trt.TensorFormat.LINEAR:
+            raise RuntimeError(f"tensor {name} uses an unsupported vectorized IO format")
         shape = tensor_shape(engine, context, name)
         dtype = tensor_dtype(engine, name)
-        host = np.empty(int(np.prod(shape)), dtype)
+        host = np.empty(int(np.prod(shape)), dtype=dtype)
         allocation = DeviceAllocation(host.nbytes)
         binding = TensorBinding(
             name=name,
@@ -255,16 +253,13 @@ def allocate_bindings(engine: trt.ICudaEngine,
         )
         bindings.append(binding)
         allocations.append(allocation)
-        pointer_table.append(int(allocation.ptr))
-        if hasattr(context, "set_tensor_address"):
-            if not context.set_tensor_address(name, int(allocation.ptr)):
-                raise RuntimeError(f"failed to bind tensor address for {name}")
-    return bindings, pointer_table, allocations
+        if not context.set_tensor_address(name, int(allocation.ptr)):
+            raise RuntimeError(f"failed to bind tensor address for {name}")
+    return bindings, allocations
 
 
 def execute(context: trt.IExecutionContext,
             bindings: list[TensorBinding],
-            pointer_table: list[int],
             input_tensor: np.ndarray) -> dict[str, np.ndarray]:
     with CudaStream() as stream:
         for binding in bindings:
@@ -284,12 +279,8 @@ def execute(context: trt.IExecutionContext,
                 "cudaMemcpyAsync(host-to-device)",
             )
 
-        if hasattr(context, "execute_async_v3"):
-            ok = context.execute_async_v3(stream_handle=stream.handle)
-        else:
-            ok = context.execute_async_v2(bindings=pointer_table, stream_handle=stream.handle)
-        if not ok:
-            raise RuntimeError("TensorRT execute_async failed")
+        if not context.execute_async_v3(stream_handle=stream.handle):
+            raise RuntimeError("TensorRT execute_async_v3 failed")
 
         output_bindings: list[TensorBinding] = []
         for binding in bindings:
@@ -464,7 +455,7 @@ def run_ultralytics_reference(weights: Path,
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, default=Path("../06_trtexec_engine/outputs/yolov8n_static_fp32.engine"))
-    parser.add_argument("--image", type=Path, default=Path("../assets/img2.jpeg"))
+    parser.add_argument("--image", type=Path, default=Path("../assets/img.jpeg"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--input-shape", action="append", type=parse_shape, default=[])
     parser.add_argument("--confidence", type=float, default=0.25)
@@ -504,9 +495,9 @@ def main() -> int:
     t0 = time.perf_counter()
     input_tensor, letterbox_info = preprocess(image, input_shape)
     t1 = time.perf_counter()
-    bindings, pointer_table, allocations = allocate_bindings(engine, context)
+    bindings, allocations = allocate_bindings(engine, context)
     try:
-        outputs = execute(context, bindings, pointer_table, input_tensor)
+        outputs = execute(context, bindings, input_tensor)
     finally:
         for allocation in allocations:
             allocation.close()
