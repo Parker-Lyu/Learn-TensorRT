@@ -45,7 +45,7 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 - `outputs/`: generated simplified ONNX models, optional raw ONNX comparisons, tensor dumps, and
   validation reports. This folder is ignored by git.
 - `../assets/yolov8n.pt`: shared YOLOv8n weights used by later lessons.
-- `../assets/dog.webp`: shared sample image.
+- `../assets/img.jpeg`: shared sample image.
 
 ## Prerequisites
 
