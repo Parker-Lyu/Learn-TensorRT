@@ -14,6 +14,8 @@ target_compile_features(cuda_memory_stream PRIVATE cxx_std_17 cuda_std_17)
 
 set_target_properties(cuda_memory_stream PROPERTIES
     CXX_EXTENSIONS OFF
+    CUDA_STANDARD 17
+    CUDA_STANDARD_REQUIRED ON
     CUDA_EXTENSIONS OFF
     CUDA_SEPARABLE_COMPILATION OFF
 )
