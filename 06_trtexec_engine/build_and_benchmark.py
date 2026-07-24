@@ -200,6 +200,9 @@ def trtexec_command(build: EngineBuild, args: argparse.Namespace) -> list[str]:
 
     if build.fp16:
         command.append("--fp16")
+    else:
+        # TensorRT enables TF32 by default. Disable it for the course's strict FP32 reference.
+        command.append("--noTF32")
     if build.dynamic:
         command.extend(
             [
