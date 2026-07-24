@@ -6,17 +6,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # This lesson shows how to read and display an image with OpenCV.
 project(opencv_read_show_image LANGUAGES CXX)
 
-# Find the OpenCV package installed on the system.
-find_package(OpenCV REQUIRED)
+# This lesson only needs OpenCV's matrix, image codec, and GUI modules. Listing
+# the components keeps the dependency boundary visible to learners.
+find_package(OpenCV REQUIRED COMPONENTS core imgcodecs highgui)
 
 # Build the lesson executable from main.cpp.
 add_executable(opencv_read_show_image main.cpp)
 
-# Ask CMake to use the C++17 standard for this target.
+# Ask CMake to use the C++17 standard for this target. The explicit standard
+# properties ensure GCC uses -std=c++17 rather than its GNU-extension default.
 target_compile_features(opencv_read_show_image PRIVATE cxx_std_17)
 
 # Disable compiler-specific language extensions, so the code stays closer to standard C++17.
 set_target_properties(opencv_read_show_image PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
 
