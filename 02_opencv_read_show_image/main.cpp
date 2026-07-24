@@ -7,7 +7,7 @@
 
 namespace {
 
-constexpr const char* kDefaultImagePath = "../assets/dog.webp";
+constexpr const char* kDefaultImagePath = "../assets/img.jpeg";
 
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [--no-display] [image_path]\n";
