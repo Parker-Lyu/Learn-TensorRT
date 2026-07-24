@@ -10,7 +10,7 @@ pipeline stability. Those are later lessons.
 ## Evidence Flow
 
 ```text
-assets/img2.jpeg
+assets/img.jpeg
   -> lesson 05: PyTorch vs ONNX Runtime raw output
   -> lesson 06a: ONNX Runtime vs TensorRT raw output using lesson 05's saved tensor
   -> lesson 10: C++ end-to-end image, JSON result, and focused tests
@@ -20,7 +20,7 @@ assets/img2.jpeg
 ## Prerequisites
 
 Run inside the pinned TensorRT development container from lesson 00. The commands below use the
-same image (`assets/img2.jpeg`), static FP32 ONNX model/engine pair, and default detection thresholds.
+same image (`assets/img.jpeg`), static FP32 ONNX model/engine pair, and default detection thresholds.
 
 Run every command from the repository root:
 
@@ -30,7 +30,7 @@ bash 00_environment_check/check_env.sh \
   > 10a_end_to_end_validation_report/outputs/environment_check.log 2>&1
 
 python3 05_torch_to_onnx/validate_onnx_runtime.py \
-  --image assets/img2.jpeg
+  --image assets/img.jpeg
 
 python3 06a_polygraphy_precision_alignment/align_precision.py \
   --input-npy 05_torch_to_onnx/outputs/input_nchw_float32.npy \
@@ -43,7 +43,7 @@ cmake --build 10_yolov8_trt_cpp/build
 
 ./10_yolov8_trt_cpp/build/yolov8_trt_cpp \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image assets/img2.jpeg \
+  --image assets/img.jpeg \
   --warmup-iterations 10 \
   --iterations 100 \
   --output-dir 10a_end_to_end_validation_report/outputs/cpp

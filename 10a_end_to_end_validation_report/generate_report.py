@@ -87,7 +87,7 @@ def validate(
     if image != cpp_image:
         raise ValueError(
             "controlled-input mismatch: lesson 05 used "
-            f"{image}, but lesson 10 used {cpp_image}. Re-run both with --image assets/img2.jpeg."
+            f"{image}, but lesson 10 used {cpp_image}. Re-run both with --image assets/img.jpeg."
         )
 
     onnx = required_path(pytorch_onnx, "onnx", "PyTorch/ONNX report")
@@ -170,6 +170,7 @@ def metrics_rows(metrics: dict[str, Any], include_shape: bool) -> list[str]:
 
 def render(evidence: dict[str, Any], environment_log: Path) -> str:
     environment = environment_log.read_text(encoding="utf-8", errors="replace").strip()
+    environment = "\n".join(line.rstrip() for line in environment.splitlines())
     if len(environment) > 6000:
         environment = environment[:6000] + "\n... (truncated; see saved log)"
     latency_rows = "\n".join(
@@ -242,15 +243,15 @@ cv::Mat image
   -> preprocess_image (letterbox, BGR->RGB, NCHW float32)
   -> TensorRtRunner
        owns runtime -> engine -> execution context
-       owns input/output device buffers
+       owns input/output pinned-host and device buffers
        owns a reusable CUDA stream and timing events
   -> decode_yolov8_output (decode, class-aware NMS, coordinate mapping)
   -> draw_detections and JSON/image reporting
 ```
 
 `main` owns orchestration and `TensorRtRunner`. The runner uses a private implementation and RAII
-wrappers for CUDA allocations, a reusable stream, and reusable events. It synchronizes the D2H
-completion event before decoding host output. Lesson 10 supports one static float32 input and one
+wrappers for pinned-host/device CUDA allocations, a reusable stream, and reusable events. It
+synchronizes the D2H completion event before decoding host output. Lesson 10 supports one static float32 input and one
 float32 output.
 
 ## Mean Per-stage Latency Baseline

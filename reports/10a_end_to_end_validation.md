@@ -21,27 +21,33 @@ does not establish dataset-level detection accuracy, optimized performance, or s
 ========== System ==========
 
 -- OS release --
-PRETTY_NAME="Ubuntu 22.04.3 LTS"
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
 NAME="Ubuntu"
-VERSION_ID="22.04"
-VERSION="22.04.3 LTS (Jammy Jellyfish)"
-VERSION_CODENAME=jammy
+VERSION_ID="24.04"
+VERSION="24.04.3 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
 ID=ubuntu
 ID_LIKE=debian
 HOME_URL="https://www.ubuntu.com/"
 SUPPORT_URL="https://help.ubuntu.com/"
 BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
 PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
-UBUNTU_CODENAME=jammy
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
 [OK] OS release
 
 -- Kernel --
-Linux parker-ASUS 6.8.0-124-generic #124~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 21:05:19 UTC  x86_64 x86_64 x86_64 GNU/Linux
+Linux 12d253bce62b 7.0.0-28-generic #28~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 15:50:57 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
 [OK] Kernel
 
 -- Working directory --
-/workspace/Projects/Learn-TensorRT
+/workspace/Learn-TensorRT
 [OK] Working directory
+
+-- NVIDIA PyTorch container release --
+NVIDIA_PYTORCH_VERSION=25.11
+CUDA_VERSION=13.0.2.006
+[OK] NVIDIA PyTorch container release
 
 ========== Required commands ==========
 [OK] nvidia-smi: /usr/bin/nvidia-smi
@@ -54,16 +60,16 @@ Linux parker-ASUS 6.8.0-124-generic #124~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue 
 ========== GPU ==========
 
 -- nvidia-smi --
-Tue Jul 14 09:22:33 2026       
+Fri Jul 24 10:46:51 2026
 +-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
 +-----------------------------------------+------------------------+----------------------+
 | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
 | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
-|   0  NVIDIA GeForce RTX 2060        On  |   00000000:01:00.0 Off |                  N/A |
-| N/A   48C    P8              1W /   90W |       6MiB /   6144MiB |      0%      Default |
+|   0  NVIDIA GeForce RTX 4090        Off |   00000000:01:00.0  On |                  Off |
+|  0%   42C    P8             12W /  500W |    1069MiB /  24564MiB |     19%      Default |
 |                                         |                        |                  N/A |
 +-----------------------------------------+------------------------+----------------------+
 
@@ -80,28 +86,21 @@ Tue Jul 14 09:22:33 2026
 
 -- nvcc --version --
 nvcc: NVIDIA (R) Cuda compiler driver
-Copyright (c) 2005-2023 NVIDIA Corporation
-Built on Tue_Aug_15_22:02:13_PDT_2023
-Cuda compilation tools, release 12.2, V12.2.140
-Build cuda_12.2.r12.2/compiler.33191640_0
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Wed_Aug_20_01:58:59_PM_PDT_2025
+Cuda compilation tools, release 13.0, V13.0.88
+Build cuda_13.0.r13.0/compiler.36424714_0
 [OK] nvcc --version
 
 ========== TensorRT ==========
 
--- trtexec help/version output --
-&&&& RUNNING TensorRT.trtexec [TensorRT v8601] # trtexec --help
+-- trtexec version --
+&&&& RUNNING TensorRT.trtexec [TensorRT v101401] [b48] # trtexec --version
+[07/24/2026-10:46:52] [I] TF32 is enabled by default. Add --noTF32 flag to further improve accuracy with some performance cost.
 === Model Options ===
-  --uff=<file>                UFF model
   --onnx=<file>               ONNX model
-  --model=<file>              Caffe model (default = no model, random weights used)
-  --deploy=<file>             Caffe prototxt file
-  --output=<name>[,<name>]*   Output names (it can be specified multiple times); at least one output is required for UFF and Caffe
-  --uffInput=<name>,X,Y,Z     Input blob name and its dimensions (X,Y,Z=C,H,W), it can be specified multiple times; at least one is required for UFF models
-  --uffNHWC                   Set if inputs are in the NHWC layout instead of NCHW (use X,Y,Z=H,W,C order in --uffInput)
 
 === Build Options ===
-  --maxBatch                         Set max batch size and build an implicit batch engine (default = same size as --batch)
-                                     This option should not be used when the input model is ONNX or when dynamic shapes are provided.
   --minShapes=spec                   Build with dynamic shapes using a profile with the min shapes provided
   --optShapes=spec                   Build with dynamic shapes using a profile with the opt shapes provided
   --maxShapes=spec                   Build with dynamic shapes using a profile with the max shapes provided
@@ -109,26 +108,33 @@ Build cuda_12.2.r12.2/compiler.33191640_0
   --optShapesCalib=spec              Calibrate with dynamic shapes using a profile with the opt shapes provided
   --maxShapesCalib=spec              Calibrate with dynamic shapes using a profile with the max shapes provided
                                      Note: All three of min, opt and max shapes must be supplied.
-[OK] trtexec help/version output
+                                           However, if only opt shapes is supplied then it will be expanded so
+                                           that min shapes and max shapes are set to the same values as opt shapes.
+                                           Input names can be wrapped with escaped single quotes (ex: 'Input:0').
+                                     Example input shapes spec: input0:1x3x256x256,input1:1x3x128x128
+                                     For scalars (0-D shapes), use input0:scalar or simply input0: with nothing after the colon.
+                                     Each input shape is supplied as a key-value pair where key is the input name and
+                                     value is the dimensions (including the batch dimension) to be used for that input.
+[OK] trtexec version
 
 -- TensorRT C++ libraries --
 [OK] TensorRT C++ libraries
 
--- TensorRT Python import --
-tensorrt: 8.6.1
-[OK] TensorRT Python import
+-- TensorRT Python import and baseline version --
+tensorrt: 10.14.1.48
+[OK] TensorRT Python import and baseline version
 
 ========== C++ build tools ==========
 
 -- cmake --version --
-cmake version 3.24.0
+cmake version 3.31.6
 
 CMake suite maintained and supported by Kitware (kitware.com/cmake).
 [OK] cmake --version
 
 -- g++ --version --
-g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
-Copyright (C) 2021 Free Software Foundation, Inc.
+g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
@@ -137,35 +143,15 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 ========== Python ==========
 
 -- python3 --version --
-Python 3.10.12
+Python 3.12.3
 [OK] python3 --version
 
 -- Required Python package imports --
-ultralytics: installed
-onnx: installed
-onnxruntime: installed
-[OK] Required Python package imports
-
--- Optional Python package availability --
-cv2: installed
-numpy: installed
-torch: installed
-tensorrt: installed
-[OK] Optional Python package availability
-
-========== OpenCV ==========
-
--- pkg-config opencv4 --
-4.5.4
-[OK] pkg-config opencv4
-
--- Python OpenCV import --
-cv2: 4.13.0
-[OK] Python OpenCV import
-
-========== Project mount ==========
-
--- Repository is writable 
+torch: 2.10.0a0+b558c986e8.nv25.11
+modelopt: 0.37.0
+Creating new Ultralytics Settings v0.0.6 file ✅
+View Ultralytics Settings with 'yolo settings' or at '/home/ubuntu/.config/Ultralytics/settings.json'
+Update
 ... (truncated; see saved log)
 ```
 
@@ -175,7 +161,7 @@ cv2: 4.13.0
 
 | Artifact | Path |
 | --- | --- |
-| Image | `assets/img2.jpeg` |
+| Image | `assets/img.jpeg` |
 | ONNX model | `05_torch_to_onnx/outputs/yolov8n.onnx` |
 | TensorRT engine | `06_trtexec_engine/outputs/yolov8n_static_fp32.engine` |
 | NCHW float32 input | `05_torch_to_onnx/outputs/input_nchw_float32.npy` |
@@ -190,8 +176,8 @@ same source image and serialized engine.
 | Metric | Value |
 | --- | ---: |
 | Shape | [1, 84, 8400] |
-| Max absolute error | 0.0016174316 |
-| Mean absolute error | 1.4336949e-06 |
+| Max absolute error | 0.0015563965 |
+| Mean absolute error | 1.4327373e-06 |
 | P99 absolute error | 4.5776367e-05 |
 | Tolerance | rtol=0.001, atol=0.001 |
 | Allclose | pass |
@@ -201,8 +187,8 @@ same source image and serialized engine.
 | Metric | Value |
 | --- | ---: |
 | Shape match | pass |
-| Max absolute error | 0.0015258789 |
-| Mean absolute error | 1.0054538e-06 |
+| Max absolute error | 0.0012512207 |
+| Mean absolute error | 1.0139775e-06 |
 | P99 absolute error | 3.0517578e-05 |
 | Tolerance | rtol=0.001, atol=0.001 |
 | Allclose | pass |
@@ -220,28 +206,28 @@ cv::Mat image
   -> preprocess_image (letterbox, BGR->RGB, NCHW float32)
   -> TensorRtRunner
        owns runtime -> engine -> execution context
-       owns input/output device buffers
+       owns input/output pinned-host and device buffers
        owns a reusable CUDA stream and timing events
   -> decode_yolov8_output (decode, class-aware NMS, coordinate mapping)
   -> draw_detections and JSON/image reporting
 ```
 
 `main` owns orchestration and `TensorRtRunner`. The runner uses a private implementation and RAII
-wrappers for CUDA allocations, a reusable stream, and reusable events. It synchronizes the D2H
-completion event before decoding host output. Lesson 10 supports one static float32 input and one
+wrappers for pinned-host/device CUDA allocations, a reusable stream, and reusable events. It
+synchronizes the D2H completion event before decoding host output. Lesson 10 supports one static float32 input and one
 float32 output.
 
 ## Mean Per-stage Latency Baseline
 
 | Stage | Milliseconds |
 | --- | ---: |
-| preprocess | 8.0078945 |
-| h2d | 0.9746704 |
-| enqueue_host | 0.84166693 |
-| gpu_compute | 4.6162 |
-| d2h | 0.60826944 |
-| postprocess | 3.6708306 |
-| total | 17.924775 |
+| preprocess | 3.2532172 |
+| h2d | 0.24603776 |
+| enqueue_host | 0.31356042 |
+| gpu_compute | 0.86496096 |
+| d2h | 0.14237664 |
+| postprocess | 1.0284803 |
+| total | 5.9272434 |
 
 Each value is the arithmetic mean of 100 measured samples after
 10 warmup iteration(s). The raw samples remain in the C++ JSON result.
