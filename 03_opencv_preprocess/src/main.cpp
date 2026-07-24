@@ -21,7 +21,7 @@ void print_usage(const char* executable_name) {
               << "  " << executable_name
               << " [image_path] [input_width] [input_height] [output_dir]\n\n"
               << "Defaults:\n"
-              << "  image_path: ../assets/dog.webp\n"
+              << "  image_path: ../assets/img.jpeg\n"
               << "  input size: 640 x 640\n"
               << "  output_dir: outputs\n";
 }
@@ -101,12 +101,16 @@ void print_letterbox_info(const LetterboxInfo& info) {
 
 int main(int argc, char* argv[]) {
     try {
+        if (argc > 5) {
+            print_usage(argv[0]);
+            throw std::invalid_argument("Too many command-line arguments.");
+        }
         if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
             print_usage(argv[0]);
             return 0;
         }
 
-        const std::string image_path = argc > 1 ? argv[1] : "../assets/dog.webp";
+        const std::string image_path = argc > 1 ? argv[1] : "../assets/img.jpeg";
         const int input_width = argc > 2 ? parse_positive_int(argv[2], "input_width") : 640;
         const int input_height = argc > 3 ? parse_positive_int(argv[3], "input_height") : 640;
         const std::filesystem::path output_dir = argc > 4 ? argv[4] : "outputs";
@@ -147,8 +151,12 @@ int main(int argc, char* argv[]) {
         std::cout << "Tensor binary:  " << tensor_bin_path.string() << '\n';
         std::cout << "Tensor preview: " << tensor_preview_path.string() << '\n';
 
-        // A fixed sample box demonstrates how model outputs are recovered after letterbox.
-        const cv::Rect2f sample_box(220.0F, 180.0F, 160.0F, 120.0F);
+        // A proportional sample box remains inside any valid input shape and demonstrates how
+        // model outputs are recovered after letterbox.
+        const cv::Rect2f sample_box(0.25F * static_cast<float>(input_width),
+                                    0.25F * static_cast<float>(input_height),
+                                    0.50F * static_cast<float>(input_width),
+                                    0.50F * static_cast<float>(input_height));
         const cv::Rect2f original_box = map_box_to_original_image(sample_box, info);
         std::cout << "Sample box in network input: x=" << sample_box.x << ", y=" << sample_box.y
                   << ", w=" << sample_box.width << ", h=" << sample_box.height << '\n';

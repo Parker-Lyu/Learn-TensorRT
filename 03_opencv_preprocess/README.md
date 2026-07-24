@@ -4,6 +4,11 @@ This lesson implements YOLO-style image preprocessing in C++ with OpenCV.
 
 Goal: understand exactly what happens before an image tensor is passed into a TensorRT engine.
 
+This lesson does not call the TensorRT API, so it contains no TensorRT 8 API that needs mechanical
+replacement. It does establish the input contract used by later TensorRT 10.14 lessons: batch is an
+explicit tensor dimension, the host buffer is contiguous, and the engine's input tensor metadata—not
+TensorRT itself—determines the required shape, data type, layout, color order, and normalization.
+
 Topics:
 
 - Resize
@@ -13,6 +18,17 @@ Topics:
 - HWC to CHW
 - Batch input buffer layout
 - Coordinate mapping from network input space back to the original image
+
+The runnable example deliberately uses the common YOLO contract `float32` RGB NCHW in `[0, 1]`.
+Do not assume that contract for an arbitrary engine; inspect the exported model and TensorRT 10.14
+engine I/O tensor metadata first.
+
+## Prerequisites
+
+Use the repository development image derived from `nvcr.io/nvidia/pytorch:25.11-py3`. It pins the
+course environment to TensorRT `10.14.1.48`, CUDA Toolkit 13.0, and ISO C++17, and adds the OpenCV
+C++ development package used here. This CPU-only lesson does not require a GPU at run time, but it
+should still be built in that image for reproducibility.
 
 ## Why This Matters
 
@@ -71,7 +87,9 @@ The code clamps mapped boxes to the original image boundary.
 - `include/preprocess.hpp`: small data structures and preprocessing function declarations.
 - `src/main.cpp`: command-line entry point, image loading, output writing, and printed diagnostics.
 - `src/preprocess.cpp`: letterbox, normalization, HWC-to-CHW conversion, and coordinate mapping.
-- `../assets/dog.webp`: shared sample image stored at the repository root.
+- `tests/preprocess_tests.cpp`: focused checks for layout, mapping, invalid inputs, odd padding, and
+  extreme aspect ratios.
+- `../assets/img.jpeg`: shared sample image stored at the repository root.
 
 The lesson keeps preprocessing declarations, implementation, and command-line wiring separate so
 each part can evolve without turning the example into one large source file.
@@ -80,7 +98,8 @@ each part can evolve without turning the example into one large source file.
 
 ```bash
 cmake -S . -B build
-cmake --build build
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
 ## Run
@@ -100,7 +119,7 @@ Use your own image:
 Choose a different input size and output folder:
 
 ```bash
-./build/opencv_preprocess ../assets/dog.webp 640 384 outputs_640x384
+./build/opencv_preprocess ../assets/img.jpeg 640 384 outputs_640x384
 ```
 
 ## Outputs
@@ -125,3 +144,4 @@ Acceptance criteria:
 
 - The program reads an image and writes a debug image or tensor dump.
 - The scale and padding values are printed for later box coordinate recovery.
+- The focused preprocessing tests pass from a clean build directory.
