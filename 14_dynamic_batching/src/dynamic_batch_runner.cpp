@@ -3,6 +3,7 @@
 #include "batch_layout.hpp"
 
 #include <NvInferRuntime.h>
+#include <NvInferVersion.h>
 #include <cuda_runtime_api.h>
 
 #include <fstream>
@@ -177,5 +178,19 @@ InferenceTiming DynamicBatchRunner::infer(const std::vector<float>& input,
 
 std::string DynamicBatchRunner::input_name() const { return impl_->input; }
 std::string DynamicBatchRunner::output_name() const { return impl_->output; }
+
+RuntimeIdentity DynamicBatchRunner::runtime_identity() const {
+    int device = 0;
+    int runtime_version = 0;
+    int driver_version = 0;
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, device), "cudaGetDeviceProperties");
+    check_cuda(cudaRuntimeGetVersion(&runtime_version), "cudaRuntimeGetVersion");
+    check_cuda(cudaDriverGetVersion(&driver_version), "cudaDriverGetVersion");
+    return RuntimeIdentity{properties.name, properties.major, properties.minor,
+                           NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR, NV_TENSORRT_PATCH,
+                           runtime_version, driver_version};
+}
 
 }  // namespace lesson14

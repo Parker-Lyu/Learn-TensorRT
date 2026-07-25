@@ -8,7 +8,7 @@ OUTPUT_PATH=${2:-"${SCRIPT_DIR}/outputs/yolov8n_batch1_4_fp16.engine"}
 TRTEXEC=${TRTEXEC:-/opt/tensorrt/bin/trtexec}
 TIMING_CACHE=${TIMING_CACHE:-"${ROOT_DIR}/06_trtexec_engine/outputs/trtexec_timing.cache"}
 
-mkdir -p "$(dirname -- "${OUTPUT_PATH}")"
+mkdir -p "$(dirname -- "${OUTPUT_PATH}")" "$(dirname -- "${TIMING_CACHE}")"
 "${TRTEXEC}" \
   --onnx="${ONNX_PATH}" \
   --saveEngine="${OUTPUT_PATH}" \
@@ -17,7 +17,5 @@ mkdir -p "$(dirname -- "${OUTPUT_PATH}")"
   --optShapes=images:2x3x640x640 \
   --maxShapes=images:4x3x640x640 \
   --timingCacheFile="${TIMING_CACHE}" \
-  --minTiming=1 \
-  --avgTiming=1 \
   --builderOptimizationLevel=0 \
   --memPoolSize=workspace:2048
