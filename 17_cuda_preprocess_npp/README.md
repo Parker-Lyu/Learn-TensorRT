@@ -15,7 +15,10 @@ ctest --test-dir build --output-on-failure
 ./build/cuda_preprocess_npp --iterations 50
 ```
 
-Results are written to `outputs/preprocess_benchmark.csv`. CPU preprocessing, host staging, H2D,
+The default input is `../assets/img.jpeg`. Results are written to
+`outputs/preprocess_benchmark.csv`. The adjacent `preprocess_benchmark_environment.json` records
+the GPU, compute capability, and CUDA runtime/driver versions for the measured data. CPU
+preprocessing, host staging, H2D,
 NPP+CUDA preprocessing, and D2H are separate columns. The exact-size unit test requires the fused
 conversion to match within `1e-6`. For resized images, the executable uses mean absolute error
 `<=0.02` and maximum error `<=0.30`, because NPP and OpenCV use different bilinear sampling
@@ -37,7 +40,9 @@ desktop discrete GPU.
 
 ## Why NPP Plus a Custom Kernel
 
-NPP supplies optimized resize primitives and stream-context APIs. The custom kernel fuses three
+NPP supplies optimized resize primitives and application-managed stream-context APIs. The lesson
+fills the CUDA 13 `NppStreamContext` fields once and passes that context explicitly; it does not
+change NPP process-global stream state. The custom kernel fuses three
 simple per-pixel transformations that would otherwise require intermediate tensors. This division
 keeps the lesson readable while demonstrating when a library primitive and a small fused kernel
 fit together.

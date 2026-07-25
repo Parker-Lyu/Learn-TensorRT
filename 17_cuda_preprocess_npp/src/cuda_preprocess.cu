@@ -49,6 +49,23 @@ float elapsed(const Event& first, const Event& second) {
     return value;
 }
 
+NppStreamContext make_npp_stream_context(cudaStream_t stream) {
+    NppStreamContext context{};
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&context.nCudaDeviceId), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, context.nCudaDeviceId),
+               "cudaGetDeviceProperties");
+    context.hStream = stream;
+    context.nMultiProcessorCount = properties.multiProcessorCount;
+    context.nMaxThreadsPerMultiProcessor = properties.maxThreadsPerMultiProcessor;
+    context.nMaxThreadsPerBlock = properties.maxThreadsPerBlock;
+    context.nSharedMemPerBlock = properties.sharedMemPerBlock;
+    context.nCudaDevAttrComputeCapabilityMajor = properties.major;
+    context.nCudaDevAttrComputeCapabilityMinor = properties.minor;
+    check_cuda(cudaStreamGetFlags(stream, &context.nStreamFlags), "cudaStreamGetFlags");
+    return context;
+}
+
 }  // namespace
 
 struct GpuPreprocessor::Impl {
@@ -79,8 +96,9 @@ struct GpuPreprocessor::Impl {
                 check_cuda(cudaMallocHost(&host_output, output_bytes), "cudaMallocHost output");
             }
         }
-        check_npp(nppGetStreamContext(&npp_context), "nppGetStreamContext");
-        npp_context.hStream = stream;
+        // CUDA 13 makes NPP stream contexts application-managed. Fill every documented field
+        // once and pass it explicitly so this object never changes NPP global stream state.
+        npp_context = make_npp_stream_context(stream);
     }
 
     ~Impl() {
