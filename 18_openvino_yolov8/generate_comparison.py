@@ -28,12 +28,19 @@ def main() -> int:
     for precision in ("fp32", "fp16", "int8"):
         backend = trt["backends"][precision]
         rows.append((f"TensorRT GPU {precision.upper()}", backend["latency_ms"],
-                     backend["throughput_images_per_second"]))
+                     backend["throughput_qps"]))
     table = "\n".join(
         f"| {name} | {latency['mean']:.3f} | {latency['p50']:.3f} | "
         f"{latency['p90']:.3f} | {latency['p99']:.3f} | {throughput:.1f} |"
         for name, latency, throughput in rows)
     text = f"""# OpenVINO CPU vs TensorRT GPU
+
+## Measurement Environments
+
+- OpenVINO CPU: `{ov['hardware']['cpu_model']}`, {ov['hardware']['logical_cpu_count']} logical CPUs, OpenVINO `{ov['software']['openvino']}`
+- TensorRT GPU: `{trt['environment']['gpu']}`, TensorRT `{trt['environment']['trtexec']}`
+
+## Results
 
 | Backend | Mean ms | P50 ms | P90 ms | P99 ms | Requests/s |
 | --- | ---: | ---: | ---: | ---: | ---: |
