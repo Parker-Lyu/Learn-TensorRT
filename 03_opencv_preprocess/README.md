@@ -4,8 +4,7 @@ This lesson implements YOLO-style image preprocessing in C++ with OpenCV.
 
 Goal: understand exactly what happens before an image tensor is passed into a TensorRT engine.
 
-This lesson does not call the TensorRT API, so it contains no TensorRT 8 API that needs mechanical
-replacement. It does establish the input contract used by later TensorRT 10.14 lessons: batch is an
+This lesson establish the input contract used by later TensorRT 10.14 lessons: batch is an
 explicit tensor dimension, the host buffer is contiguous, and the engine's input tensor metadata—not
 TensorRT itself—determines the required shape, data type, layout, color order, and normalization.
 
