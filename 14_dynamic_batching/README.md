@@ -14,8 +14,9 @@ build a lesson-local engine with a fixed 640x640 spatial shape and dynamic batch
 
 The profile is `min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. Engines are generated,
 environment-specific artifacts and remain ignored. The script reuses lesson 06's timing cache and
-uses a low builder optimization level so the classroom build remains reasonably short; production
-release builds should benchmark higher optimization levels separately.
+uses builder optimization level 0 so the classroom build remains reasonably short; production
+release builds should benchmark higher optimization levels separately. TensorRT 10.14 removed the
+old `--minTiming` and `--avgTiming` builder flags, so the script does not use them.
 
 ## Build and Run
 
@@ -36,7 +37,9 @@ lesson-local engine with:
 ```
 
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
-allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`.
+allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It also writes
+`outputs/batch_benchmark_environment.json` with the GPU, compute capability, TensorRT version, and
+CUDA runtime/driver versions so the measurements are not separated from their execution platform.
 
 ## Layout
 

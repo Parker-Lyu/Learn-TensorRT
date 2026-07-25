@@ -59,6 +59,26 @@ int main(int argc, char** argv) {
         if (!csv) throw std::runtime_error("failed to create benchmark CSV");
         csv << "batch,mean_compute_ms,images_per_second,mean_h2d_ms,mean_d2h_ms\n";
 
+        const auto identity = runner.runtime_identity();
+        auto metadata_path = options.output;
+        metadata_path.replace_filename(options.output.stem().string() + "_environment.json");
+        std::ofstream metadata(metadata_path);
+        if (!metadata) throw std::runtime_error("failed to create benchmark environment JSON");
+        metadata << "{\n"
+                 << "  \"gpu\": \"" << identity.gpu_name << "\",\n"
+                 << "  \"compute_capability\": \"" << identity.compute_capability_major << '.'
+                 << identity.compute_capability_minor << "\",\n"
+                 << "  \"tensorrt\": \"" << identity.tensorrt_major << '.'
+                 << identity.tensorrt_minor << '.' << identity.tensorrt_patch << "\",\n"
+                 << "  \"cuda_runtime_version\": " << identity.cuda_runtime_version << ",\n"
+                 << "  \"cuda_driver_version\": " << identity.cuda_driver_version << "\n}\n";
+        if (!metadata) throw std::runtime_error("failed to write benchmark environment JSON");
+
+        std::cout << "GPU=" << identity.gpu_name << " compute_capability="
+                  << identity.compute_capability_major << '.' << identity.compute_capability_minor
+                  << " TensorRT=" << identity.tensorrt_major << '.' << identity.tensorrt_minor << '.'
+                  << identity.tensorrt_patch << " CUDA_runtime=" << identity.cuda_runtime_version
+                  << " CUDA_driver=" << identity.cuda_driver_version << '\n';
         std::cout << "input=" << runner.input_name() << " output=" << runner.output_name() << '\n';
         for (const std::size_t batch : {1U, 2U, 4U}) {
             const auto input = lesson14::make_batched_input(batch, 3, 640, 640);
@@ -83,7 +103,7 @@ int main(int argc, char** argv) {
                       << (batch > 1 ? lesson14::output_batch_offset(1, samples.back().output_shape) : 0)
                       << '\n';
         }
-        std::cout << "saved " << options.output << '\n';
+        std::cout << "saved " << options.output << " and " << metadata_path << '\n';
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << "error: " << error.what() << '\n';
