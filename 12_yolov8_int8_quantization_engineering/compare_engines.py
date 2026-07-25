@@ -63,15 +63,13 @@ class TensorRtRunner:
         if len(input_names) != 1:
             raise RuntimeError(f"expected one input tensor in {engine_path}, got {input_names}")
         self.input_shape = yolo_ref.tensor_shape(self.engine, self.context, input_names[0])
-        self.bindings, self.pointer_table, self.allocations = yolo_ref.allocate_bindings(
-            self.engine, self.context
-        )
+        self.bindings, self.allocations = yolo_ref.allocate_bindings(self.engine, self.context)
 
     def run(self, image_path: Path, confidence: float, iou: float, max_detections: int) -> dict:
         image = yolo_ref.read_image(image_path)
         input_tensor, letterbox_info = yolo_ref.preprocess(image, self.input_shape)
         started = time.perf_counter()
-        outputs = yolo_ref.execute(self.context, self.bindings, self.pointer_table, input_tensor)
+        outputs = yolo_ref.execute(self.context, self.bindings, input_tensor)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         output_name, output = next(iter(outputs.items()))
         detections = yolo_ref.decode_yolov8(
