@@ -79,7 +79,10 @@ private:
 
 struct VideoSource::Impl {
     explicit Impl(const std::string& uri) {
-        bool numeric = !uri.empty() && std::all_of(uri.begin(), uri.end(), ::isdigit);
+        const bool numeric = !uri.empty() &&
+            std::all_of(uri.begin(), uri.end(), [](unsigned char value) {
+                return std::isdigit(value) != 0;
+            });
         if (numeric) capture.open(std::stoi(uri)); else capture.open(uri);
         if (!capture.isOpened()) throw std::runtime_error("failed to open video or camera: " + uri);
     }
