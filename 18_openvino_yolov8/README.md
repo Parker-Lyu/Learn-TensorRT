@@ -39,9 +39,8 @@ PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps python3 -c \
 ```
 
 The version must start with `2025.4.1`, and the path must be under
-`18_openvino_yolov8/.deps/`. If a future base image includes `python3-venv`, a conventional `.venv`
-is also acceptable, but record its locked versions and do not mix `.venv` and `.deps` commands in
-one benchmark report.
+`18_openvino_yolov8/.deps/`. Use this lesson-local directory for every command in this lesson so
+the benchmark cannot silently import a different user or system package.
 
 Clean the lesson environment with:
 
@@ -51,6 +50,10 @@ rm -rf 18_openvino_yolov8/.deps 18_openvino_yolov8/outputs
 
 ## Run and Compare
 
+Complete the lesson 05 export and validation first. The comparison step also requires the generated
+`12a_precision_performance_report/outputs/performance.json` from checkpoint 12a; run that
+checkpoint's documented collection command on the same platform before comparing results.
+
 ```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
   python3 18_openvino_yolov8/run_openvino.py
@@ -58,7 +61,8 @@ PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
   python3 18_openvino_yolov8/generate_comparison.py
 ```
 
-`run_openvino.py` performs ten warmups and at least 100 measured requests, reports P50/P90/P99,
+`run_openvino.py` performs ten warmups and at least 100 measured requests, records the CPU model,
+logical CPU count, and OpenVINO device name, and reports P50/P90/P99,
 compiles a `LATENCY` model for synchronous requests, compiles a separate `THROUGHPUT` model for
 `AsyncInferQueue`, and checks raw output against lesson 05's ONNX Runtime reference.
 `generate_comparison.py` reads the machine-readable TensorRT evidence from checkpoint 12a instead

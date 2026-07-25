@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import platform
 import statistics
 import time
@@ -95,10 +96,23 @@ def main() -> int:
     async_elapsed = time.perf_counter() - async_started
 
     error = np.abs(np.asarray(output, dtype=np.float32) - reference)
+    cpu_model = "unknown"
+    cpuinfo = Path("/proc/cpuinfo")
+    if cpuinfo.is_file():
+        for line in cpuinfo.read_text(encoding="utf-8").splitlines():
+            if line.startswith("model name"):
+                cpu_model = line.split(":", 1)[1].strip()
+                break
+
     evidence = {
         "model": str(args.onnx.relative_to(ROOT)),
         "input": str(args.input_npy.relative_to(ROOT)),
         "device": "CPU",
+        "hardware": {
+            "cpu_model": cpu_model,
+            "logical_cpu_count": os.cpu_count(),
+            "openvino_full_device_name": core.get_property("CPU", "FULL_DEVICE_NAME"),
+        },
         "software": {"openvino": ov.__version__, "python": platform.python_version(),
                      "numpy": np.__version__},
         "compiled_properties": {
