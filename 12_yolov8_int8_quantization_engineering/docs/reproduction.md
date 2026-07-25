@@ -27,9 +27,9 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/export_qdq.py \
 python3 12_yolov8_int8_quantization_engineering/modelopt/build_engines.py
 python3 12_yolov8_int8_quantization_engineering/compare_engines.py \
   --experiment-id modelopt_qdq_int8 \
-  --fp32-engine outputs/tensorrt10/references/yolov8n_trt10_fp32.engine \
-  --fp16-engine outputs/tensorrt10/references/yolov8n_trt10_fp16.engine \
-  --int8-engine outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine
+  --fp32-engine 12_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp32.engine \
+  --fp16-engine 12_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp16.engine \
+  --int8-engine 12_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine
 python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_precision.py
 python3 12_yolov8_int8_quantization_engineering/modelopt/validate_outputs.py
 ```
@@ -43,7 +43,7 @@ Only a candidate with `release_gate.passed=true` is eligible for matched `trtexe
 python3 12_yolov8_int8_quantization_engineering/reference_legacy_calibrator/build_entropy_engine.py \
   --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
   --manifest 12_yolov8_int8_quantization_engineering/data/dataset_manifest.json \
-  --output outputs/legacy_entropy/yolov8n_entropy_int8.engine
+  --output 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine
 ```
 
 This is an isolated API example. Evaluate it with the same quality contract if you want a numerical

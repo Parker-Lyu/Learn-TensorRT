@@ -43,7 +43,8 @@ from quality_contract import (
 )
 from reference_bundle import assert_compatible, load_bundle
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+LESSON_DIR = Path(__file__).resolve().parent
+REPO_ROOT = LESSON_DIR.parent
 LESSON09 = REPO_ROOT / "09_yolov8_trt_python"
 sys.path.insert(0, str(LESSON09))
 import infer_yolov8_trt as yolo_ref  # noqa: E402
@@ -652,21 +653,24 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_COCO_MANIFEST)
-    parser.add_argument("--onnx", type=Path, default=Path("../05_torch_to_onnx/outputs/yolov8n.onnx"))
-    parser.add_argument("--weights", type=Path, default=Path("../assets/yolov8n.pt"))
+    parser.add_argument(
+        "--onnx", type=Path,
+        default=REPO_ROOT / "05_torch_to_onnx/outputs/yolov8n.onnx",
+    )
+    parser.add_argument("--weights", type=Path, default=REPO_ROOT / "assets/yolov8n.pt")
     parser.add_argument(
         "--fp32-engine", type=Path,
-        default=Path("outputs/tensorrt10/references/yolov8n_trt10_fp32.engine")
+        default=LESSON_DIR / "outputs/tensorrt10/references/yolov8n_trt10_fp32.engine"
     )
     parser.add_argument(
         "--fp16-engine", type=Path,
-        default=Path("outputs/tensorrt10/references/yolov8n_trt10_fp16.engine")
+        default=LESSON_DIR / "outputs/tensorrt10/references/yolov8n_trt10_fp16.engine"
     )
     parser.add_argument(
         "--int8-engine", type=Path,
-        default=Path("outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine")
+        default=LESSON_DIR / "outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine"
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument("--output-dir", type=Path, default=LESSON_DIR / "outputs/evaluation")
     parser.add_argument("--quality-contract", type=Path, default=DEFAULT_QUALITY_CONTRACT)
     parser.add_argument("--experiments", type=Path, default=DEFAULT_EXPERIMENTS)
     parser.add_argument("--environments", type=Path, default=DEFAULT_ENVIRONMENTS)
