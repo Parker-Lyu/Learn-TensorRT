@@ -35,6 +35,7 @@ beginning, not quick demo shortcuts.
 ## Lesson Modules
 
 - Keep lesson directories as complete runnable implementations.
+- Course 00 documents the shared runtime environment; do not repeat it in every later lesson.
 - Design each lesson so a third party can reproduce it from scratch using only the repository at
   that revision and its documented external prerequisites. A lesson may depend on earlier lessons,
   but must not depend on files, generated artifacts, undocumented local state, or other resources
