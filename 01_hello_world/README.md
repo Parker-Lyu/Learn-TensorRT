@@ -2,10 +2,6 @@
 
 Goal: build confidence with a minimal C++17 and CMake project.
 
-This lesson does not call CUDA or TensorRT yet. Build it in the course development container so the
-compiler and build workflow match the environment used by later lessons: the image derived from
-`nvcr.io/nvidia/pytorch:25.11-py3` (TensorRT 10.14 and CUDA Toolkit 13.0).
-
 Topics:
 
 - C++17 executable
@@ -16,8 +12,8 @@ Topics:
 
 ## Build and run
 
-Start in the repository root inside the development container. Remove the ignored build directory
-first when you want a clean, from-scratch build:
+Start in the repository root. Remove the ignored build directory first when you want a clean,
+from-scratch build:
 
 ```bash
 rm -rf 01_hello_world/build

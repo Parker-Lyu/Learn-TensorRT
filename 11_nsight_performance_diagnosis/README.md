@@ -52,7 +52,7 @@ can reject diagnosis evidence collected from a different engine.
 
 ## Prerequisites
 
-Complete lessons 06 and 10 in the pinned TensorRT development container:
+Complete lessons 06 and 10 first:
 
 ```bash
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32

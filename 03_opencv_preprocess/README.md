@@ -23,13 +23,6 @@ The runnable example deliberately uses the common YOLO contract `float32` RGB NC
 Do not assume that contract for an arbitrary engine; inspect the exported model and TensorRT 10.14
 engine I/O tensor metadata first.
 
-## Prerequisites
-
-Use the repository development image derived from `nvcr.io/nvidia/pytorch:25.11-py3`. It pins the
-course environment to TensorRT `10.14.1.48`, CUDA Toolkit 13.0, and ISO C++17, and adds the OpenCV
-C++ development package used here. This CPU-only lesson does not require a GPU at run time, but it
-should still be built in that image for reproducibility.
-
 ## Why This Matters
 
 TensorRT engines do not know how your input image was resized or padded. If preprocessing is wrong,

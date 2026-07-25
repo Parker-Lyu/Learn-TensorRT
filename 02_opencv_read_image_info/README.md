@@ -12,18 +12,6 @@ Topics:
 - OpenCV data type and per-channel element type
 - OpenCV linking with CMake
 
-This lesson does not call TensorRT or CUDA, so it has no TensorRT API compatibility surface. It
-should still be built in the course development image so the compiler and dependency environment
-remain reproducible.
-
-## Prerequisites
-
-Use the repository development image derived from `nvcr.io/nvidia/pytorch:25.11-py3`. Its
-`libopencv-dev` package provides the OpenCV C++ headers, core library, and image codecs used by this
-lesson. See the root `README.md` and `00_environment_check/agent_env_setup.md` for the container
-setup. The program only writes to the terminal, so it runs unchanged in desktop and headless
-containers.
-
 ## Build
 
 ```bash

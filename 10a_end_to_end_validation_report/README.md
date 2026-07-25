@@ -19,8 +19,8 @@ assets/img.jpeg
 
 ## Prerequisites
 
-Run inside the pinned TensorRT development container from lesson 00. The commands below use the
-same image (`assets/img.jpeg`), static FP32 ONNX model/engine pair, and default detection thresholds.
+The commands below use the same image (`assets/img.jpeg`), static FP32 ONNX model/engine pair, and
+default detection thresholds.
 
 Run every command from the repository root:
 
@@ -78,7 +78,7 @@ passing C++ test log. That prevents a report from combining artifacts from diffe
 
 Acceptance criteria:
 
-- Another engineer can repeat the documented commands in the course container.
+- Another engineer can repeat the documented commands.
 - The report uses one controlled input and one ONNX/engine pair for its numerical evidence.
 - The report distinguishes single-input correctness evidence from accuracy and performance claims.
 - All reported numerical values are rendered from saved JSON artifacts, not copied by hand.

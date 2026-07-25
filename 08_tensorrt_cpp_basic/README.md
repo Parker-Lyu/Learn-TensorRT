@@ -53,7 +53,7 @@ The reusable logic is built as `tensorrt_cpp_basic_lib`; the runnable artifact i
 
 ## Prerequisites
 
-Use the TensorRT development container from lesson 00. Generate the static ONNX model from lesson 05:
+Generate the static ONNX model from lesson 05:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py

@@ -44,10 +44,9 @@ This lesson also creates engine files that later lessons can load with TensorRT 
 
 ## Prerequisites
 
-Complete lesson 00 and lesson 05 first:
+Complete lesson 05 first:
 
 ```bash
-bash 00_environment_check/check_env.sh
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/inspect_onnx.py

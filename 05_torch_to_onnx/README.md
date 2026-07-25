@@ -47,12 +47,6 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 - `../assets/yolov8n.pt`: shared YOLOv8n weights used by later lessons.
 - `../assets/img.jpeg`: shared sample image.
 
-## Prerequisites
-
-Complete `../00_environment_check` before running this lesson. Environment setup, including Python
-packages for Ultralytics export, ONNX inspection, ONNX Runtime validation, and graph
-simplification, is documented there so this lesson can focus on export and validation behavior.
-
 ## Export
 
 Export a simplified static-shape ONNX model:

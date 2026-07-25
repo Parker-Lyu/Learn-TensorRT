@@ -80,9 +80,6 @@ Build at least one TensorRT engine with lesson 06:
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 ```
 
-Polygraphy, ONNX Runtime, TensorRT Python, and `trtexec` should come from the pinned TensorRT
-development container used in lesson 00.
-
 ## Input Tensor
 
 This lesson directly reuses the controlled input tensor saved by lesson 05 from `assets/img.jpeg`:

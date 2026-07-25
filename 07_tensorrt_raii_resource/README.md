@@ -51,7 +51,7 @@ The reusable logic is built as `tensorrt_raii_lib`, with a thin executable named
 
 ## Prerequisites
 
-Use the TensorRT development container from lesson 00. Generate at least one engine with lesson 06:
+Generate at least one engine with lesson 06:
 
 ```bash
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
