@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and identity-record the matched TensorRT 10 Step 06 engines."""
+"""Build and identity-record the matched TensorRT 10.14 reference and Q/DQ engines."""
 
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ import tensorrt as trt
 
 LESSON_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = LESSON_DIR.parent
-OUTPUT_DIR = LESSON_DIR / "outputs/04_modelopt_qdq/trt10"
+OUTPUT_DIR = LESSON_DIR / "outputs/tensorrt10"
 FP32_ONNX = REPO_ROOT / "05_torch_to_onnx/outputs/yolov8n.onnx"
 QDQ_ONNX = (
     LESSON_DIR
-    / "outputs/04_modelopt_qdq/export/"
-    "yolov8n_modelopt_qdq_native_fp16_calibration_v4.onnx"
+    / "outputs/qdq/"
+    "yolov8n_qdq_fp16.onnx"
 )
 EXPECTED_TRT_VERSION = "10.14.1.48"
 EXPECTED_IO = [
@@ -110,11 +110,11 @@ def build_specs(output_dir: Path) -> list[BuildSpec]:
             "tensorrt_int8",
             "strongly-typed-native-fp16-qdq-int8",
             QDQ_ONNX,
-            candidate / "yolov8n_modelopt_hp_fp16_trt10.engine",
-            candidate / "yolov8n_modelopt_hp_fp16_trt10.layers.json",
-            candidate / "yolov8n_modelopt_hp_fp16_trt10.build.log",
-            candidate / "trt10_qdq.timing.cache",
-            candidate / "yolov8n_modelopt_hp_fp16_trt10.engine.json",
+            candidate / "yolov8n_qdq_int8.engine",
+            candidate / "yolov8n_qdq_int8.layers.json",
+            candidate / "yolov8n_qdq_int8.build.log",
+            candidate / "qdq_int8.timing.cache",
+            candidate / "yolov8n_qdq_int8.engine.json",
             ("--stronglyTyped",),
         ),
     ]
@@ -206,7 +206,7 @@ def main() -> int:
     args = parse_args()
     if trt.__version__ != EXPECTED_TRT_VERSION:
         raise RuntimeError(
-            f"Step 06 requires TensorRT {EXPECTED_TRT_VERSION}, found {trt.__version__}"
+            f"Engine build requires TensorRT {EXPECTED_TRT_VERSION}, found {trt.__version__}"
         )
     for path in (FP32_ONNX, QDQ_ONNX):
         if not path.is_file():

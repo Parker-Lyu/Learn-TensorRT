@@ -11,11 +11,11 @@ from typing import Any
 
 
 LESSON_DIR = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = LESSON_DIR / "outputs/04_modelopt_qdq/trt10"
+OUTPUT_DIR = LESSON_DIR / "outputs/tensorrt10"
 DEFAULT_LAYERS = {
     "tensorrt_fp32": OUTPUT_DIR / "references/yolov8n_trt10_fp32.layers.json",
     "tensorrt_fp16": OUTPUT_DIR / "references/yolov8n_trt10_fp16.layers.json",
-    "tensorrt_int8": OUTPUT_DIR / "candidate/yolov8n_modelopt_hp_fp16_trt10.layers.json",
+    "tensorrt_int8": OUTPUT_DIR / "candidate/yolov8n_qdq_int8.layers.json",
 }
 INFRASTRUCTURE_TYPES = {
     "constant", "copy", "identity", "noop", "reformat", "shape", "shuffle",

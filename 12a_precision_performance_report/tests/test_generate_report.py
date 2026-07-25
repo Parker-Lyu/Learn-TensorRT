@@ -31,7 +31,7 @@ def fixtures():
             "iterations": 120,
             "synchronization": "synchronized",
         },
-        "environment": {"gpu": "test-gpu", "trtexec": "8.6.1"},
+        "environment": {"gpu": "test-gpu", "trtexec": "10.14.1"},
         "backends": {},
     }
     for index, key in enumerate(("fp32", "fp16", "int8"), start=1):
@@ -56,7 +56,7 @@ def fixtures():
             "metric_implementation": "course-v2",
             "latency_scope": "matched transfers",
         },
-        "software": {"tensorrt": "8.6.1"},
+        "software": {"tensorrt": "10.14.1"},
         "regression_thresholds": {
             "max_map50_95_drop": 0.02,
             "max_map50_drop": 0.02,
@@ -131,11 +131,11 @@ class GenerateReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid trtexec throughput"):
             MODULE.render(*evidence)
 
-    def test_profiler_engine_may_be_contextual_across_runtime_versions(self):
+    def test_profiler_engine_is_contextual_without_matched_identity(self):
         evidence = list(fixtures())
         evidence[2]["artifacts"]["engine"]["sha256"] = "f" * 64
         text = MODULE.render(*evidence)
-        self.assertIn("historical Nsight baseline", text)
+        self.assertIn("Lesson 11 Nsight baseline", text)
 
 
 if __name__ == "__main__":

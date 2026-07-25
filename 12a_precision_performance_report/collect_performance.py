@@ -15,12 +15,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENGINES = {
-    "fp32": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
-    "trt10/references/yolov8n_trt10_fp32.engine",
-    "fp16": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
-    "trt10/references/yolov8n_trt10_fp16.engine",
-    "int8": ROOT / "12_yolov8_int8_quantization_engineering/outputs/04_modelopt_qdq/"
-    "trt10/candidate/yolov8n_modelopt_hp_fp16_trt10.engine",
+    "fp32": ROOT / "12_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp32.engine",
+    "fp16": ROOT / "12_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp16.engine",
+    "int8": ROOT / "12_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine",
 }
 THROUGHPUT_PATTERN = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps")
 

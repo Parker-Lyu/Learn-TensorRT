@@ -1,15 +1,8 @@
 {
   "schema_version": 1,
   "environments": {
-    "tensorrt_8_6": {
-      "container": "trt_dev",
-      "image": "nvcr.io/nvidia/tensorrt:23.10-py3",
-      "workspace": "/workspace/Projects/Learn-TensorRT",
-      "tensorrt": "8.6.1",
-      "cuda_toolkit": "12.2"
-    },
     "tensorrt_10_14": {
-      "container": "learn-tensorrt-modelopt",
+      "container": "trt_dev",
       "image": "nvcr.io/nvidia/pytorch:25.11-py3",
       "workspace": "/workspace/Learn-TensorRT",
       "tensorrt": "10.14.1.48",
@@ -20,4 +13,3 @@
     }
   }
 }
-

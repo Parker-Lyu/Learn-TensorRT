@@ -11,9 +11,9 @@ from unittest import mock
 import numpy as np
 
 
-SCRIPT = Path(__file__).resolve().parent / "validate_trt10_outputs.py"
+SCRIPT = Path(__file__).resolve().parent / "validate_outputs.py"
 with mock.patch.dict("sys.modules", {"compare_engines": mock.MagicMock()}):
-    SPEC = importlib.util.spec_from_file_location("validate_trt10_outputs", SCRIPT)
+    SPEC = importlib.util.spec_from_file_location("validate_outputs", SCRIPT)
     assert SPEC is not None and SPEC.loader is not None
     VALIDATE = importlib.util.module_from_spec(SPEC)
     SPEC.loader.exec_module(VALIDATE)

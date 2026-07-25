@@ -34,14 +34,6 @@ class PerformanceSummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid throughput"):
             MODULE.parse_trtexec_throughput("[I] Throughput: 0 qps")
 
-    def test_trtexec_version_parser_uses_banner(self):
-        original = MODULE.command_output
-        MODULE.command_output = lambda command: "RUNNING [TensorRT v8601]\nerror after banner"
-        try:
-            self.assertEqual(MODULE.trtexec_version("trtexec"), "8.6.1")
-        finally:
-            MODULE.command_output = original
-
     def test_trtexec_version_parser_supports_tensorrt_10(self):
         original = MODULE.command_output
         MODULE.command_output = lambda command: "RUNNING [TensorRT v101401]"

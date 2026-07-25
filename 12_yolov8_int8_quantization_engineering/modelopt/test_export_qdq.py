@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 
-SCRIPT = Path(__file__).resolve().parent / "modelopt_ptq.py"
-SPEC = importlib.util.spec_from_file_location("modelopt_ptq", SCRIPT)
+SCRIPT = Path(__file__).resolve().parent / "export_qdq.py"
+SPEC = importlib.util.spec_from_file_location("export_qdq", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 PTQ = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PTQ)

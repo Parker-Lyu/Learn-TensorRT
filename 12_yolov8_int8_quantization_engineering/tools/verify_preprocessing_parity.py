@@ -18,7 +18,7 @@ LESSON09 = REPO_ROOT / "09_yolov8_trt_python"
 sys.path.insert(0, str(LESSON12))
 sys.path.insert(0, str(LESSON09))
 
-import build_int8_engine as calibration  # noqa: E402
+import calibration_preprocessing as calibration  # noqa: E402
 import infer_yolov8_trt as evaluation  # noqa: E402
 from dataset_manifest import DEFAULT_COCO_MANIFEST, load_manifest, resolve_path  # noqa: E402
 
@@ -128,7 +128,7 @@ def verify_manifest(
             "calibration": {
                 "path": str(Path(calibration.__file__).resolve()),
                 "sha256": sha256(Path(calibration.__file__)),
-                "call": "build_int8_engine.preprocess",
+                "call": "calibration_preprocessing.preprocess",
             },
             "evaluation": {
                 "path": str(Path(evaluation.__file__).resolve()),

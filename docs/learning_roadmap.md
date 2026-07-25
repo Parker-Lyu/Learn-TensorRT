@@ -473,58 +473,29 @@ Acceptance criteria:
 
 Purpose:
 
-- Treat INT8 quantization as an advanced engineering case study rather than a one-command engine build.
-- Use ModelOpt explicit Q/DQ and TensorRT 10.14 strongly typed networks as the target PTQ path.
-- Make the final deployment decision from fixed quality gates and version-matched performance evidence.
+- Build a reproducible YOLOv8 INT8 deployment decision with TensorRT 10.14.
+- Establish PyTorch FP32/FP16 and TensorRT FP32/FP16 references before quantization.
+- Use ModelOpt explicit Q/DQ as the recommended post-training quantization path.
+- Keep a predeclared detection-quality gate and benchmark only passing candidates.
 
 Engineering sequence:
 
-1. Create a versioned calibration-data contract.
-2. Establish immutable PyTorch, TensorRT 10.14 FP32, and FP16 reference bundles.
-3. Export ModelOpt explicit-Q/DQ candidates in the single course development environment.
-4. Build strongly typed TensorRT 10.14 engines and inspect requested versus actual precision.
-5. Validate each candidate against the unchanged task-quality gate.
-6. Benchmark only quality-passing candidates with a version-matched TensorRT 10.14 reference.
-7. Retain FP16 when INT8 has no matched quality and performance benefit.
-
-Topics:
-
-- Fixed 5,000-image COCO train2017 candidate-pool identity
-- Independently coverage-selected 3,000-image calibration manifest
-- Complete 5,000-image COCO val2017 human-labeled validation split
-- Calibration/validation hash-overlap rejection
-- Byte-identical calibration and evaluation preprocessing verification
-- Predeclared mAP50-95, mAP50, precision, and recall regression thresholds
-- Immutable reference bundles and candidate-only evaluation
-- Calibration dataset identity and persistent TensorRT 10.14 timing caches
-- Strict mixed-precision constraints where explicit Q/DQ leaves sensitive operations in FP16
-- Engine Inspector validation of requested and actual precision
-- ModelOpt explicit `QuantizeLinear`/`DequantizeLinear` export
-- TensorRT 10.14 native-FP16 strongly typed Q/DQ build
-- Runtime-version evidence boundaries
-- Matched `trtexec` latency, GPU compute, and throughput measurements
-- Reformat and Q/DQ-boundary evidence for slower mixed-precision execution
-
-Deployment decision:
-
-- Select the fastest candidate that passes the predeclared quality gates under a matched benchmark.
-- Retain FP16 when no INT8 candidate provides both an acceptable quality result and a meaningful,
-  version-matched performance benefit.
+1. Download COCO data and create immutable calibration and validation manifests.
+2. Verify byte-identical preprocessing across calibration and evaluation.
+3. Evaluate PyTorch FP32, PyTorch FP16, TensorRT FP32, and TensorRT FP16.
+4. Export a ModelOpt Q/DQ graph and build a strongly typed TensorRT 10.14 INT8 engine.
+5. Inspect actual layer precision and evaluate mAP50-95, mAP50, precision, and recall.
+6. Compare matched FP32/FP16/INT8 performance only after the INT8 gate passes.
+7. Read the isolated entropy-calibrator API reference as a supplementary implementation.
 
 Acceptance criteria:
 
-- The candidate-pool identity, selected calibration manifest, validation manifest, hashes, and selection method are saved.
-- Calibration and validation contain no duplicate image content across splits.
-- All 3,000 calibration images produce byte-identical tensors through both production preprocessing paths.
-- PyTorch, FP32, and FP16 references are computed once per TensorRT 10.14 runtime identity and reused
-  for later candidates.
-- References, engines, timing caches, and benchmarks record and match the pinned environment identity.
-- Each experiment changes one declared quantization variable and writes distinct artifacts.
-- Failed quality candidates are excluded from authoritative deployment performance comparisons.
-- Every explicit Q/DQ candidate passes or fails the same predeclared quality thresholds.
-- Matched performance uses the same TensorRT version, GPU, shapes, warmup, iterations, stream count, and transfer settings.
-- The final report explains why passing accuracy is necessary but insufficient for deploying INT8.
-- The generated case study and machine-readable summary agree with the saved raw evidence.
+- Dataset identities, image hashes, preprocessing contract, and environment identity are recorded.
+- Every backend uses the same validation split, postprocessing, and metric implementation.
+- INT8 meets both the PyTorch FP32-relative and TensorRT FP16-relative thresholds in the quality contract.
+- Engine Inspector evidence confirms the requested Q/DQ precision and records boundary conversions.
+- Performance evidence uses the same TensorRT version, GPU, shapes, warmup, iterations, and transfers.
+- The final recommendation is based on saved evidence rather than copied benchmark numbers.
 
 ### `12a_precision_performance_report`
 

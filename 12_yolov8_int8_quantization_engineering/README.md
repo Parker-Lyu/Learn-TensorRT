@@ -1,150 +1,63 @@
 # 12 - YOLOv8 INT8 Quantization Engineering
 
-This lesson treats INT8 as an evidence-driven deployment decision. It builds a reproducible
-calibration dataset, proves preprocessing parity, evaluates legacy TensorRT calibration and
-ModelOpt explicit Q/DQ, applies one unchanged task-quality gate, and compares only
-version-matched engines.
+本课使用 `nvcr.io/nvidia/pytorch:25.11-py3`（TensorRT 10.14.1.48、CUDA 13.0）完成一次可复现的 YOLOv8 部署评估。课程主线是显式 `QuantizeLinear`/`DequantizeLinear`（Q/DQ）训练后量化；所有精度结论来自同一数据、同一预处理和同一质量契约。
 
-## Learning Objectives
+## 学习目标
 
-By the end of the lesson, the evidence should answer:
+1. 下载并固定 COCO 数据集，生成带 SHA-256 的 calibration/validation manifest。
+2. 在完整验证集上评估 PyTorch FP32、PyTorch FP16、TensorRT FP32 和 TensorRT FP16 基线。
+3. 使用 ModelOpt 生成 Q/DQ 图，在 TensorRT 10.14 strongly typed network 中构建 INT8 引擎。
+4. 使用预先声明的 mAP50-95、mAP50、precision、recall gate 判断 INT8 是否可接受。
+5. 仅对通过质量 gate 的候选进行匹配性能测试。
+6. 在独立参考目录中阅读 TensorRT legacy entropy calibrator API，并将其结果作为对照，不作为推荐路径。
 
-1. Does the calibration set mostly follow the intended input distribution?
-2. Are small, large, crowded, unusual-aspect, dark, and bright inputs still represented?
-3. Are calibration and evaluation preprocessing byte-identical?
-4. Does each INT8 candidate pass the predeclared detection-quality gate?
-5. If quality passes, is INT8 faster than FP16 in the same TensorRT environment?
+## 运行顺序
 
-## Canonical Data Contract
-
-Validation uses all 5,000 labeled COCO val2017 images. Calibration uses 3,000 images selected from
-the complete 118,287-image train2017 annotation population. Calibration and validation are checked
-for duplicate content, and generated manifests record every selected image hash.
-
-The calibration policy intentionally combines distribution fidelity with explicit tail coverage:
-
-- 2,400 images (80%) are a deterministic random sample from train2017's natural image
-  distribution;
-- 600 images (20%) are split equally across small-object, large-object, crowded,
-  extreme-aspect-ratio, dark, and bright groups;
-- category coverage is a minimum constraint on the natural core, not a request for uniform class
-  frequency;
-- dark and bright groups are measured after the exact 640x640 letterbox, RGB conversion, and
-  normalization used by calibration.
-
-The selection configuration is committed in `configs/calibration_selection.json`. The immutable
-result is `data/calibration_selection.json`; normal course runs recompute the selection and require
-an exact match rather than silently replacing it.
-
-## Prepare And Inspect The Dataset
-
-Run inside the pinned `trt_dev` container from the repository root:
+所有 GPU 命令均在课程基线容器内，从仓库根目录执行。完整命令见
+[`docs/reproduction.md`](docs/reproduction.md)。
 
 ```bash
 python3 assets/coco/prepare_coco.py
-
-python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
-  --materialize
-
+python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py --materialize
 python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_representativeness.py
-```
-
-The shared preparer downloads annotations and val2017. The lesson selector reads the full
-train2017 annotation population, downloads a fixed brightness-screening pool and the selected
-images from the official COCO endpoint, verifies hashes, and materializes only the final 3,000
-images. A full train2017 image archive is not required.
-
-Generated evidence is written under:
-
-```text
-outputs/data_preparation/
-  selection_report.json
-  representativeness/
-    representativeness_report.json
-    representativeness_report.md
-    geometry_distributions.png
-```
-
-The representativeness report separates two questions: whether frequency distributions resemble a
-natural sample, and whether important support regions are covered. Coverage alone is not described
-as distribution fidelity.
-
-## Preprocessing Contract
-
-`calibration_preprocessing.py` is the calibration-side implementation used by both dataset
-selection and TensorRT engine calibration. Qualification independently compares it with the
-evaluation path:
-
-```bash
 python3 12_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
-The required tensor is contiguous FP32 NCHW RGB with shape `1x3x640x640`, generated using the same
-linear resize, centered padding value 114, channel conversion, and `/255` normalization.
-
-## Fixed Quality Contract
-
-`configs/quality_contract.json` fixes the validation dataset identity, input shape, confidence and
-NMS thresholds, maximum detections, metric implementation, and maximum allowed regression before
-candidate results are inspected. Every evaluation records the quality-contract and manifest hashes.
-
-Changing the calibration selection invalidates calibration caches, INT8 engines, source-model
-metadata, evaluation reports, and downstream performance conclusions. Regenerate them rather than
-reusing evidence with a different manifest hash.
-
-## Experiment Sequence
-
-The declared matrix is `configs/experiments.json`. Each stage changes one quantization decision:
-
-1. Qualify data identity and preprocessing, then build FP32 and FP16 references.
-2. Build legacy Entropy INT8+FP16.
-3. Change only the legacy calibrator to MinMax.
-4. Keep MinMax and constrain the complete YOLOv8 detection head to FP16.
-5. Export ModelOpt explicit-Q/DQ candidates.
-6. Rebuild references when moving from TensorRT 8.6 to TensorRT 10.
-7. Benchmark only candidates that pass the unchanged quality gate.
-
-TensorRT 8.6 candidates run in `trt_dev`. ModelOpt export and TensorRT 10 evidence run in the
-environment declared by `configs/environments.json`. A reference bundle is reusable only while its
-model, dataset manifest, quality contract, preprocessing, postprocessing, runtime, and reference
-engine identities remain unchanged.
-
-Complete commands are in [`docs/reproduction.md`](docs/reproduction.md).
-
-## Deployment Decision Rule
-
-Dataset statistics qualify the calibration inputs, not the engine. A calibration set is considered
-usable only when the resulting engine passes the task-quality gate. A quality-passing INT8 engine is
-eligible for deployment only when it also improves matched performance enough to justify its added
-complexity.
-
-After collecting fresh evidence, generate the curated case study:
+然后导出 ONNX，建立四个基线，并导出、构建和检查 Q/DQ INT8：
 
 ```bash
-python3 12_yolov8_int8_quantization_engineering/tools/generate_case_study.py
+python3 12_yolov8_int8_quantization_engineering/modelopt/export_qdq.py \
+  --high-precision fp16 --name yolov8n_qdq_fp16
+python3 12_yolov8_int8_quantization_engineering/modelopt/build_engines.py
+python3 12_yolov8_int8_quantization_engineering/compare_engines.py \
+  --experiment-id modelopt_qdq_int8
+python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_precision.py
 ```
 
-The generator rejects missing or identity-mismatched evidence instead of combining unrelated runs.
+`compare_engines.py` 在同一验证集上生成统一 JSON/Markdown 结果。INT8 必须同时满足相对
+PyTorch FP32 和 TensorRT FP16 的 gate；失败候选不会进入性能结论。
 
-## Verification
+## 质量契约
 
-Run the lesson CPU tests inside `trt_dev`:
+`configs/quality_contract.json` 固定输入 shape、后处理、指标实现和阈值。不要在看到结果后
+修改阈值。任何 manifest、模型、预处理或运行时身份变化都要求重新构建和重新评估。
+
+## Legacy API 参考
+
+`reference_legacy_calibrator/` 只展示 `IInt8EntropyCalibrator2` 的历史接口、cache 身份和
+独立评估命令，帮助读者理解 calibration cache 与显式 Q/DQ 的差异。该目录不是主线实现，
+不影响 Q/DQ 候选的 gate 或部署推荐。
+
+## 输出与测试
+
+引擎、cache、预测、性能采样和中间报告均写入被忽略的 `outputs/`。运行 CPU 单元测试：
 
 ```bash
 PYTHONPATH=12_yolov8_int8_quantization_engineering \
-python3 -m unittest discover \
-  -s 12_yolov8_int8_quantization_engineering/tests -v
-```
-
-Run ModelOpt and TensorRT 10 focused tests inside `learn-tensorrt-modelopt`:
-
-```bash
+python3 -m unittest discover -s 12_yolov8_int8_quantization_engineering/tests -v
 PYTHONPATH=12_yolov8_int8_quantization_engineering \
-python3 -m unittest discover \
-  -s 12_yolov8_int8_quantization_engineering/modelopt \
-  -p 'test_*.py' -v
+python3 -m unittest discover -s 12_yolov8_int8_quantization_engineering/modelopt -p 'test_*.py' -v
 ```
 
-Generated datasets, calibration caches, engines, predictions, and benchmark captures remain in
-ignored output directories. Curated reports should be committed only after all linked evidence has
-been regenerated from the canonical manifest.
+TensorRT、CUDA、PyTorch 和 ModelOpt 版本由 `configs/environments.json` 记录；没有 GPU 或
+容器时只能执行静态检查和不依赖运行时的测试，不能声称完成引擎验证。

@@ -15,7 +15,7 @@ def identity() -> dict[str, str]:
         "preprocessing_id": "letterbox-v1",
         "postprocessing_id": "yolov8-decode-nms-v1",
         "metric_id": "course-coco-like-v1",
-        "runtime_id": "trt-8.6.1-cuda-12.2-gpu-test",
+        "runtime_id": "trt-10.14.1-cuda-13.0-gpu-test",
         "fp32_engine_sha256": "fp32",
         "fp16_engine_sha256": "fp16",
     }
@@ -32,7 +32,7 @@ class ReferenceBundleTests(unittest.TestCase):
             report = root / "report.json"
             report.write_text(json.dumps({"status": "PASS"}), encoding="utf-8")
             bundle_path = root / "bundle.json"
-            write_bundle(bundle_path, identity(), report, {"tensorrt": "8.6.1"})
+            write_bundle(bundle_path, identity(), report, {"tensorrt": "10.14.1"})
             bundle = load_bundle(bundle_path)
             assert_compatible(bundle, identity())
 

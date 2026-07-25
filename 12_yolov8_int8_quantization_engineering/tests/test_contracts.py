@@ -12,7 +12,7 @@ class ContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "quality.json"
             path.write_text(json.dumps({
-                "schema_version": 1,
+                "schema_version": 2,
                 "dataset_manifest_id": "dataset-v1",
                 "validation_dataset_id": "validation-v1",
                 "input_shape": [1, 3, 320, 320],
@@ -22,12 +22,10 @@ class ContractTests(unittest.TestCase):
                     "max_detections": 100,
                     "metric": "metric-v1",
                 },
-                "maximum_drop_from_pytorch": {
-                    "map50_95": 0.01,
-                    "map50": 0.02,
-                    "precision": 0.03,
-                    "recall": 0.04,
-                },
+                "baseline_gate": {"reference": "pytorch_fp32", "maximum_drop": {
+                    "map50_95": 0.01, "map50": 0.02, "precision": 0.03, "recall": 0.04}},
+                "int8_gate": {"references": ["pytorch_fp32", "tensorrt_fp16"], "maximum_drop": {
+                    "map50_95": 0.01, "map50": 0.02, "precision": 0.03, "recall": 0.04}},
             }), encoding="utf-8")
             contract = load_quality_contract(path)
             self.assertEqual(evaluation_settings(contract)["input_shape"], [1, 3, 320, 320])
@@ -42,7 +40,7 @@ class ContractTests(unittest.TestCase):
             import hashlib
             metadata.write_text(json.dumps({
                 "schema_version": 1,
-                "tensorrt_version": "8.6.1",
+                "tensorrt_version": "10.14.1.48",
                 "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
                 "calibration_algorithm": "entropy",
             }), encoding="utf-8")
@@ -51,19 +49,19 @@ class ContractTests(unittest.TestCase):
                 "schema_version": 1,
                 "stages": [{
                     "id": "minmax",
-                    "runtime": "trt8",
+                    "runtime": "tensorrt_10_14",
                     "engine_metadata": {"calibration_algorithm": "minmax"},
                 }],
             }), encoding="utf-8")
             environments = root / "environments.json"
             environments.write_text(json.dumps({
-                "environments": {"trt8": {"tensorrt": "8.6.1"}}
+                "environments": {"tensorrt_10_14": {"tensorrt": "10.14.1.48"}}
             }), encoding="utf-8")
             manifest = root / "manifest.json"
             manifest.write_text("{}", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "metadata mismatch"):
                 validate_engine_for_experiment(
-                    "minmax", experiments, environments, engine, metadata, manifest, "8.6.1"
+                    "minmax", experiments, environments, engine, metadata, manifest, "10.14.1.48"
                 )
 
 

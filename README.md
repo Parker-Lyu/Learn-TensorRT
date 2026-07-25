@@ -66,7 +66,7 @@ from the job descriptions you are targeting instead of completing every elective
 | --- | --- | --- |
 | Foundation | `00_environment_check` through `10_yolov8_trt_cpp` | End-to-end YOLOv8n TensorRT C++ inference |
 | Checkpoint 1 | `10a_end_to_end_validation_report` | Reproducible functional and architecture evidence |
-| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, quantization evolution, and deployment evidence |
+| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
 | Checkpoint 2 | `12a_precision_performance_report` | Application-ready precision and performance report |
 | Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
 | Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |

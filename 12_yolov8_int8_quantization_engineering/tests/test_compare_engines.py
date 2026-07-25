@@ -27,7 +27,7 @@ class ReferenceReuseTests(unittest.TestCase):
         )
         quality_contract = root / "quality_contract.json"
         quality_contract.write_text(json.dumps({
-            "schema_version": 1,
+            "schema_version": 2,
             "dataset_manifest_id": "fixture-v1",
             "validation_dataset_id": "fixture-validation-v1",
             "input_shape": [1, 3, 640, 640],
@@ -37,12 +37,10 @@ class ReferenceReuseTests(unittest.TestCase):
                 "max_detections": 300,
                 "metric": "fixture-metric-v1",
             },
-            "maximum_drop_from_pytorch": {
-                "map50_95": 0.02,
-                "map50": 0.02,
-                "precision": 0.03,
-                "recall": 0.03,
-            },
+            "baseline_gate": {"reference": "pytorch_fp32", "maximum_drop": {
+                "map50_95": 0.02, "map50": 0.02, "precision": 0.03, "recall": 0.03}},
+            "int8_gate": {"references": ["pytorch_fp32", "tensorrt_fp16"], "maximum_drop": {
+                "map50_95": 0.02, "map50": 0.02, "precision": 0.03, "recall": 0.03}},
         }), encoding="utf-8")
         experiments = root / "experiments.json"
         experiments.write_text('{"schema_version": 1, "stages": [{"id": "fixture"}]}')
@@ -75,7 +73,7 @@ class ReferenceReuseTests(unittest.TestCase):
             "software": compare.current_software(),
             "backends": {
                 name: {"passed": True, "metrics": {}}
-                for name in ("pytorch", "tensorrt_fp32", "tensorrt_fp16")
+                for name in ("pytorch_fp32", "pytorch_fp16", "tensorrt_fp32", "tensorrt_fp16")
             },
         }
         args.reference_report.write_text(json.dumps(report), encoding="utf-8")

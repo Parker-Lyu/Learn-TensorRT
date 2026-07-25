@@ -48,7 +48,7 @@ def main() -> int:
             "reference report does not match the quality contract: "
             + ", ".join(changed_settings)
         )
-    drops = contract["maximum_drop_from_pytorch"]
+    drops = contract["baseline_gate"]["maximum_drop"]
     expected_thresholds = {
         "max_map50_95_drop": drops["map50_95"],
         "max_map50_drop": drops["map50"],

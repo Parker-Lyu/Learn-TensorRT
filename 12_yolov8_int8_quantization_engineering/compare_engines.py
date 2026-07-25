@@ -39,6 +39,7 @@ from quality_contract import (
     evaluation_settings,
     load_quality_contract,
     regression_thresholds as contract_regression_thresholds,
+    int8_regression_thresholds,
 )
 from reference_bundle import assert_compatible, load_bundle
 
@@ -89,13 +90,18 @@ class TensorRtRunner:
 
 
 class PyTorchRunner:
-    def __init__(self, weights: Path, device: str, input_shape: tuple[int, ...]) -> None:
+    def __init__(self, weights: Path, device: str, input_shape: tuple[int, ...], precision: str) -> None:
         import torch
         from ultralytics import YOLO
 
         self.torch = torch
         self.device = torch.device(device)
+        self.precision = precision
         self.model = YOLO(str(weights)).model.to(self.device).eval()
+        if precision == "fp16":
+            if self.device.type != "cuda":
+                raise ValueError("PyTorch FP16 evaluation requires a CUDA device")
+            self.model.half()
         self.input_shape = input_shape
 
     def run(self, image_path: Path, confidence: float, iou: float, max_detections: int) -> dict:
@@ -105,6 +111,8 @@ class PyTorchRunner:
             self.torch.cuda.synchronize(self.device)
         started = time.perf_counter()
         tensor = self.torch.from_numpy(input_tensor).to(self.device)
+        if self.precision == "fp16":
+            tensor = tensor.half()
         with self.torch.inference_mode():
             output = self.model(tensor)
         if isinstance(output, (tuple, list)):
@@ -117,7 +125,7 @@ class PyTorchRunner:
             output_array, letterbox_info, confidence, iou, max_detections
         )
         return {
-            "output_name": "pytorch_output",
+            "output_name": f"pytorch_{self.precision}_output",
             "output": output_array,
             "detections": [asdict(item) for item in detections],
             "latency_ms": elapsed_ms,
@@ -296,7 +304,7 @@ def load_validated_reference_report(
 
     if report.get("software") != current_software():
         raise ValueError("reference report software identity does not match the current environment")
-    for name in ("pytorch", "tensorrt_fp32", "tensorrt_fp16"):
+    for name in ("pytorch_fp32", "pytorch_fp16", "tensorrt_fp32", "tensorrt_fp16"):
         backend = report.get("backends", {}).get(name)
         if not isinstance(backend, dict) or not backend.get("passed"):
             raise ValueError(f"reference report has no passing {name} backend")
@@ -333,7 +341,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                     f"{name} input shape {runner.input_shape} != FP32 {input_shape}"
                 )
         runners: dict[str, Any] = {
-            "pytorch": PyTorchRunner(args.weights, args.device, input_shape),
+            "pytorch_fp32": PyTorchRunner(args.weights, args.device, input_shape, "fp32"),
+            "pytorch_fp16": PyTorchRunner(args.weights, args.device, input_shape, "fp16"),
             **trt_runners,
         }
     except Exception:
@@ -406,13 +415,25 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         metrics[name] = detection_metrics_packed(
             prediction_buffers[name][:prediction_offsets[name]], ground_truth
         )
-    reference = metrics["pytorch"]
+    reference = metrics["pytorch_fp32"]
     thresholds = regression_thresholds(args)
     backends = {}
     failures = []
     for name, backend_metrics in metrics.items():
         deltas = {metric: backend_metrics[metric] - reference[metric] for metric in thresholds}
         passed = all(deltas[metric] >= -allowed for metric, allowed in thresholds.items())
+        delta_vs_fp16 = None
+        if name == "tensorrt_int8":
+            int8_thresholds = int8_regression_thresholds(args.quality_contract_document)
+            fp16_reference = metrics["tensorrt_fp16"]
+            delta_vs_fp16 = {
+                metric: backend_metrics[metric] - fp16_reference[metric]
+                for metric in int8_thresholds
+            }
+            passed = passed and all(
+                delta_vs_fp16[metric] >= -allowed
+                for metric, allowed in int8_thresholds.items()
+            )
         if not passed:
             failures.append(name)
         backends[name] = {
@@ -425,6 +446,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             },
             "passed": passed,
         }
+        if delta_vs_fp16 is not None:
+            backends[name]["delta_vs_tensorrt_fp16"] = delta_vs_fp16
         if name in drift_maxima:
             backends[name]["tensor_drift_vs_fp32"] = drift_maxima[name]
 
@@ -463,6 +486,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "experiment": experiment,
         "regression_thresholds": {f"max_{name}_drop": value for name, value in thresholds.items()},
+        "int8_regression_thresholds": {
+            f"max_{name}_drop": value
+            for name, value in int8_regression_thresholds(args.quality_contract_document).items()
+        },
         "backends": backends,
         "changed_or_high_drift_examples": changed_examples[: args.max_inspection_examples],
         "release_gate": {"passed": not failures, "failed_backends": failures},
@@ -509,13 +536,20 @@ def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, An
 
     print("Computing detection metrics: tensorrt_int8", flush=True)
     metrics = detection_metrics_packed(predictions[:prediction_offset], ground_truth)
-    thresholds = regression_thresholds(args)
-    pytorch_metrics = reference["backends"]["pytorch"]["metrics"]
-    deltas = {name: metrics[name] - pytorch_metrics[name] for name in thresholds}
-    passed = all(deltas[name] >= -allowed for name, allowed in thresholds.items())
+    pytorch_metrics = reference["backends"]["pytorch_fp32"]["metrics"]
+    fp16_metrics = reference["backends"]["tensorrt_fp16"]["metrics"]
+    baseline_thresholds = regression_thresholds(args)
+    int8_thresholds = int8_regression_thresholds(args.quality_contract_document)
+    deltas = {name: metrics[name] - pytorch_metrics[name] for name in baseline_thresholds}
+    deltas_vs_fp16 = {name: metrics[name] - fp16_metrics[name] for name in int8_thresholds}
+    passed = (
+        all(deltas[name] >= -allowed for name, allowed in baseline_thresholds.items())
+        and all(deltas_vs_fp16[name] >= -allowed for name, allowed in int8_thresholds.items())
+    )
     candidate_backend = {
         "metrics": metrics,
         "delta_vs_pytorch": deltas,
+        "delta_vs_tensorrt_fp16": deltas_vs_fp16,
         "latency_ms": {
             "mean": statistics.fmean(latencies),
             "p50": float(np.percentile(latencies, 50)),
@@ -528,7 +562,7 @@ def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, An
     }
     backends = {
         name: copy.deepcopy(reference["backends"][name])
-        for name in ("pytorch", "tensorrt_fp32", "tensorrt_fp16")
+        for name in ("pytorch_fp32", "pytorch_fp16", "tensorrt_fp32", "tensorrt_fp16")
     }
     backends["tensorrt_int8"] = candidate_backend
     artifacts = {
@@ -567,7 +601,10 @@ def evaluate_candidate_with_references(args: argparse.Namespace) -> dict[str, An
         ),
         "experiment": experiment,
         "regression_thresholds": {
-            f"max_{name}_drop": value for name, value in thresholds.items()
+            f"max_{name}_drop": value for name, value in baseline_thresholds.items()
+        },
+        "int8_regression_thresholds": {
+            f"max_{name}_drop": value for name, value in int8_thresholds.items()
         },
         "backends": backends,
         "changed_or_high_drift_examples": [],
@@ -621,15 +658,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weights", type=Path, default=Path("../assets/yolov8n.pt"))
     parser.add_argument(
         "--fp32-engine", type=Path,
-        default=Path("../06_trtexec_engine/outputs/yolov8n_static_fp32.engine")
+        default=Path("outputs/tensorrt10/references/yolov8n_trt10_fp32.engine")
     )
     parser.add_argument(
         "--fp16-engine", type=Path,
-        default=Path("../06_trtexec_engine/outputs/yolov8n_static_fp16.engine")
+        default=Path("outputs/tensorrt10/references/yolov8n_trt10_fp16.engine")
     )
     parser.add_argument(
         "--int8-engine", type=Path,
-        default=Path("outputs/yolov8n_static_int8.engine")
+        default=Path("outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine")
     )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--quality-contract", type=Path, default=DEFAULT_QUALITY_CONTRACT)

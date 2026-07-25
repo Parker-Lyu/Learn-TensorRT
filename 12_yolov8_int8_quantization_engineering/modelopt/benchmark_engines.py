@@ -16,11 +16,11 @@ from pathlib import Path
 
 LESSON_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = LESSON_DIR.parent
-STEP_OUTPUT = LESSON_DIR / "outputs/04_modelopt_qdq/trt10"
+STEP_OUTPUT = LESSON_DIR / "outputs/tensorrt10"
 DEFAULT_ENGINES = {
     "fp32": STEP_OUTPUT / "references/yolov8n_trt10_fp32.engine",
     "fp16": STEP_OUTPUT / "references/yolov8n_trt10_fp16.engine",
-    "int8": STEP_OUTPUT / "candidate/yolov8n_modelopt_hp_fp16_trt10.engine",
+    "int8": STEP_OUTPUT / "candidate/yolov8n_qdq_int8.engine",
 }
 THROUGHPUT_PATTERN = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps")
 

@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parent / "benchmark_trt10_evidence.py"
-SPEC = importlib.util.spec_from_file_location("benchmark_trt10_evidence", SCRIPT)
+SCRIPT = Path(__file__).resolve().parent / "benchmark_engines.py"
+SPEC = importlib.util.spec_from_file_location("benchmark_engines", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 BENCHMARK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BENCHMARK)

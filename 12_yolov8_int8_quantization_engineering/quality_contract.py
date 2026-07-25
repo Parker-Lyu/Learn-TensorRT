@@ -23,7 +23,7 @@ def sha256(path: Path) -> str:
 
 def load_quality_contract(path: Path) -> dict[str, Any]:
     document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("schema_version") != 1:
+    if document.get("schema_version") != 2:
         raise ValueError(f"unsupported quality-contract schema in {path}")
     if not isinstance(document.get("validation_dataset_id"), str):
         raise ValueError("quality contract has no validation_dataset_id")
@@ -56,12 +56,20 @@ def load_quality_contract(path: Path) -> dict[str, Any]:
     if not isinstance(metric, str) or not metric:
         raise ValueError("quality contract has no metric implementation ID")
 
-    drops = document.get("maximum_drop_from_pytorch")
-    if not isinstance(drops, dict) or set(drops) != set(REQUIRED_METRICS):
-        raise ValueError("quality contract must declare every supported regression metric")
-    for name, value in drops.items():
-        if not isinstance(value, (int, float)) or value < 0.0:
-            raise ValueError(f"quality-contract drop for {name} cannot be negative")
+    for gate_name in ("baseline_gate", "int8_gate"):
+        gate = document.get(gate_name)
+        if not isinstance(gate, dict):
+            raise ValueError(f"quality contract has no {gate_name}")
+        drops = gate.get("maximum_drop")
+        if not isinstance(drops, dict) or set(drops) != set(REQUIRED_METRICS):
+            raise ValueError(f"{gate_name} must declare every supported regression metric")
+        for name, value in drops.items():
+            if not isinstance(value, (int, float)) or value < 0.0:
+                raise ValueError(f"quality-contract drop for {name} cannot be negative")
+    if document["baseline_gate"].get("reference") != "pytorch_fp32":
+        raise ValueError("baseline gate reference must be pytorch_fp32")
+    if document["int8_gate"].get("references") != ["pytorch_fp32", "tensorrt_fp16"]:
+        raise ValueError("INT8 gate references must be pytorch_fp32 and tensorrt_fp16")
     return document
 
 
@@ -78,7 +86,14 @@ def evaluation_settings(contract: dict[str, Any]) -> dict[str, Any]:
 
 def regression_thresholds(contract: dict[str, Any]) -> dict[str, float]:
     return {
-        name: float(contract["maximum_drop_from_pytorch"][name])
+        name: float(contract["baseline_gate"]["maximum_drop"][name])
+        for name in REQUIRED_METRICS
+    }
+
+
+def int8_regression_thresholds(contract: dict[str, Any]) -> dict[str, float]:
+    return {
+        name: float(contract["int8_gate"]["maximum_drop"][name])
         for name in REQUIRED_METRICS
     }
 

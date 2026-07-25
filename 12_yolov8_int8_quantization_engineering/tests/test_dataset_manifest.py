@@ -15,7 +15,7 @@ class DatasetManifestTests(unittest.TestCase):
         missing = Path("/external/dataset/does-not-exist.jpg")
         self.assertEqual(resolve_path(Path("unused.json"), str(missing)), missing)
 
-    def test_default_manifest_is_owned_by_new_lesson(self) -> None:
+    def test_default_manifest_is_owned_by_lesson(self) -> None:
         expected = Path(__file__).resolve().parents[1] / "data/dataset_manifest.json"
         self.assertEqual(DEFAULT_COCO_MANIFEST, expected)
 

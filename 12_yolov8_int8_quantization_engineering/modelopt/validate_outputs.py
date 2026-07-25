@@ -19,12 +19,12 @@ from dataset_manifest import load_manifest, resolve_path  # noqa: E402
 from evaluation import tensor_drift  # noqa: E402
 
 
-STEP_OUTPUT = LESSON_DIR / "outputs/04_modelopt_qdq/trt10"
+STEP_OUTPUT = LESSON_DIR / "outputs/tensorrt10"
 DEFAULT_MANIFEST = LESSON_DIR / "data/dataset_manifest.json"
 DEFAULT_ENGINES = {
     "tensorrt_fp32": STEP_OUTPUT / "references/yolov8n_trt10_fp32.engine",
     "tensorrt_fp16": STEP_OUTPUT / "references/yolov8n_trt10_fp16.engine",
-    "tensorrt_int8": STEP_OUTPUT / "candidate/yolov8n_modelopt_hp_fp16_trt10.engine",
+    "tensorrt_int8": STEP_OUTPUT / "candidate/yolov8n_qdq_int8.engine",
 }
 EXPECTED_OUTPUT_SHAPE = (1, 84, 8400)
 

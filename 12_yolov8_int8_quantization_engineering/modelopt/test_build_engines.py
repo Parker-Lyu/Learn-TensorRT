@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parent / "build_trt10_evidence.py"
-SPEC = importlib.util.spec_from_file_location("build_trt10_evidence", SCRIPT)
+SCRIPT = Path(__file__).resolve().parent / "build_engines.py"
+SPEC = importlib.util.spec_from_file_location("build_engines", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 BUILD = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = BUILD

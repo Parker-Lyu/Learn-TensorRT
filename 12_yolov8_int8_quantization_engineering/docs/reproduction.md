@@ -1,136 +1,56 @@
-# Reproduction Runbook
+# Lesson 12 reproduction runbook
 
-Run GPU and TensorRT commands only in the matching containers declared in
-`../configs/environments.json`.
+## 0. Fixed data and preprocessing
 
-## 0. Reproduce The Fixed Dataset
-
-Run from the repository root inside `trt_dev`. The first command prepares the pinned COCO
-annotations and labeled val2017 split. The second reproduces the canonical 80% natural-distribution
-core and 20% explicit-tail selection from the complete train2017 annotation population, downloads
-the required images, verifies every image hash, and materializes the final 3,000 images:
+Run in `nvcr.io/nvidia/pytorch:25.11-py3` from the repository root:
 
 ```bash
 python3 assets/coco/prepare_coco.py
-
-python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py \
-  --materialize
-
+python3 12_yolov8_int8_quantization_engineering/tools/prepare_calibration_dataset.py --materialize
 python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_representativeness.py
+python3 12_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
-`data/calibration_selection.json` is a read-only release contract, not a generated local baseline.
-The preparation command must reproduce it exactly. Selection and distribution evidence are written
-below `outputs/data_preparation/`; a mismatch stops preparation without changing the committed
-contract. The complete train2017 image archive is not required.
+The committed selection and manifest are immutable contracts. A hash mismatch stops the run.
+Calibration tensors and evaluation tensors must be contiguous FP32 NCHW RGB, `1x3x640x640`.
 
-## 1. TensorRT 8.6 Reference And Candidates
+## 1. Export the source model
 
-The first TensorRT 8.6 full evaluation establishes the reference and evaluates Entropy in the same
-5,000-image pass. Later TRT8 candidates reuse that report and run only their new engine.
+Complete Lesson 05 to create `05_torch_to_onnx/outputs/yolov8n.onnx` and its metadata. The ONNX
+hash is recorded in every engine metadata file.
 
-Run inside `trt_dev` from the new lesson directory:
+## 2. Evaluate references and build Q/DQ INT8
 
 ```bash
-cd /workspace/Projects/Learn-TensorRT/12_yolov8_int8_quantization_engineering
-
-python3 build_int8_engine.py \
-  --calibrator entropy \
-  --enable-fp16 \
-  --timing-cache outputs/trt86.timing.cache \
-  --output outputs/01_legacy_entropy/yolov8n_entropy.engine \
-  --cache outputs/01_legacy_entropy/yolov8n_entropy.cache
-
-python3 compare_engines.py \
-  --experiment-id 01_legacy_entropy \
-  --int8-engine outputs/01_legacy_entropy/yolov8n_entropy.engine \
-  --output-dir outputs/references/trt86_full
-
-python3 tools/create_reference_bundle.py \
-  --report outputs/references/trt86_full/precision_evaluation.json \
-  --onnx ../05_torch_to_onnx/outputs/yolov8n.onnx \
-  --output outputs/references/trt86_full/reference_bundle.json
-
-python3 build_int8_engine.py \
-  --calibrator minmax \
-  --enable-fp16 \
-  --timing-cache outputs/trt86.timing.cache \
-  --output outputs/02_legacy_minmax/yolov8n_minmax.engine \
-  --cache outputs/02_legacy_minmax/yolov8n_minmax.cache
-
-python3 compare_engines.py \
-  --experiment-id 02_legacy_minmax \
-  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
-  --int8-engine outputs/02_legacy_minmax/yolov8n_minmax.engine \
-  --output-dir outputs/02_legacy_minmax/evaluation
-
-python3 build_int8_engine.py \
-  --calibrator minmax \
-  --precision-profile detection_head_fp16 \
-  --enable-fp16 \
-  --timing-cache outputs/trt86.timing.cache \
-  --output outputs/03_detection_head_fp16/yolov8n_minmax_head_fp16.engine \
-  --cache outputs/02_legacy_minmax/yolov8n_minmax.cache
-
-python3 compare_engines.py \
-  --experiment-id 03_detection_head_fp16 \
-  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
-  --int8-engine outputs/03_detection_head_fp16/yolov8n_minmax_head_fp16.engine \
-  --output-dir outputs/03_detection_head_fp16/evaluation
+python3 12_yolov8_int8_quantization_engineering/modelopt/export_qdq.py \
+  --high-precision fp16 --name yolov8n_qdq_fp16
+python3 12_yolov8_int8_quantization_engineering/modelopt/build_engines.py
+python3 12_yolov8_int8_quantization_engineering/compare_engines.py \
+  --experiment-id modelopt_qdq_int8 \
+  --fp32-engine outputs/tensorrt10/references/yolov8n_trt10_fp32.engine \
+  --fp16-engine outputs/tensorrt10/references/yolov8n_trt10_fp16.engine \
+  --int8-engine outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine
+python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_precision.py
+python3 12_yolov8_int8_quantization_engineering/modelopt/validate_outputs.py
 ```
 
-Export Q/DQ INT8 graphs inside `learn-tensorrt-modelopt`. FP32 high-precision tensors target
-TensorRT 8.6; native FP16 high-precision tensors target the TensorRT 10 INT8+FP16 candidate:
+The evaluation records PyTorch FP32/FP16, TensorRT FP32/FP16 and Q/DQ INT8 metrics in one report.
+Only a candidate with `release_gate.passed=true` is eligible for matched `trtexec` benchmarking.
+
+## 3. Optional legacy API reference
 
 ```bash
-cd /workspace/Learn-TensorRT
-
-python3 12_yolov8_int8_quantization_engineering/modelopt/modelopt_ptq.py \
-  --high-precision fp32 \
-  --name yolov8n_modelopt_qdq_calibration_v4
-
-python3 12_yolov8_int8_quantization_engineering/modelopt/modelopt_ptq.py \
-  --high-precision fp16 \
-  --name yolov8n_modelopt_qdq_native_fp16_calibration_v4
+python3 12_yolov8_int8_quantization_engineering/reference_legacy_calibrator/build_entropy_engine.py \
+  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --manifest 12_yolov8_int8_quantization_engineering/data/dataset_manifest.json \
+  --output outputs/legacy_entropy/yolov8n_entropy_int8.engine
 ```
 
-Return to `trt_dev` to build and evaluate the TRT8 Q/DQ candidate against the existing TRT8
-reference. Then use the ModelOpt container to build a complete, version-matched TRT10 evidence set:
+This is an isolated API example. Evaluate it with the same quality contract if you want a numerical
+comparison; do not use it as the deployment path.
 
-```bash
-# trt_dev
-cd /workspace/Projects/Learn-TensorRT
-python3 12_yolov8_int8_quantization_engineering/modelopt/build_trt86_qdq_engine.py
+## 4. Performance evidence
 
-cd 12_yolov8_int8_quantization_engineering
-python3 compare_engines.py \
-  --experiment-id 04_modelopt_qdq_trt8 \
-  --reference-bundle outputs/references/trt86_full/reference_bundle.json \
-  --int8-engine outputs/04_modelopt_qdq/trt8/yolov8n_modelopt_qdq_trt86_int8_fp16.engine \
-  --output-dir outputs/04_modelopt_qdq/trt8/evaluation
-
-# learn-tensorrt-modelopt
-cd /workspace/Learn-TensorRT
-python3 12_yolov8_int8_quantization_engineering/modelopt/build_trt10_evidence.py
-python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_trt10_layers.py
-python3 12_yolov8_int8_quantization_engineering/modelopt/validate_trt10_outputs.py
-
-cd 12_yolov8_int8_quantization_engineering
-python3 compare_engines.py \
-  --experiment-id 05_modelopt_native_fp16_qdq_trt10 \
-  --fp32-engine outputs/04_modelopt_qdq/trt10/references/yolov8n_trt10_fp32.engine \
-  --fp16-engine outputs/04_modelopt_qdq/trt10/references/yolov8n_trt10_fp16.engine \
-  --int8-engine outputs/04_modelopt_qdq/trt10/candidate/yolov8n_modelopt_hp_fp16_trt10.engine \
-  --output-dir outputs/04_modelopt_qdq/trt10/evaluation
-
-python3 tools/create_reference_bundle.py \
-  --report outputs/04_modelopt_qdq/trt10/evaluation/precision_evaluation.json \
-  --onnx ../05_torch_to_onnx/outputs/yolov8n.onnx \
-  --output outputs/04_modelopt_qdq/trt10/evaluation/reference_bundle.json
-
-cd /workspace/Learn-TensorRT
-python3 12_yolov8_int8_quantization_engineering/modelopt/benchmark_trt10_evidence.py
-```
-
-The TRT10 full evaluation is mandatory because the runtime and both TensorRT reference engines
-changed. Subsequent TRT10 Q/DQ candidates may reuse that new TRT10 reference bundle.
+Use `modelopt/benchmark_engines.py` only after the Q/DQ candidate passes the gate. Keep raw
+`trtexec` output under `outputs/`; record GPU, driver, CUDA, TensorRT, warmup, iterations, and
+transfer settings in the generated JSON.

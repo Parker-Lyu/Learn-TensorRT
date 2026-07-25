@@ -241,16 +241,13 @@ decision; high-drift examples in `precision_evaluation.json` identify images for
 
 ## Timeline Diagnosis
 
-Lesson 11 historical Nsight baseline: {dominant} This diagnosis is contextual evidence from the
-pinned TensorRT 8.6 pipeline and is not identity-linked to the TensorRT 10 precision engines. A new
-timeline capture is required before attributing the TensorRT 10 FP16-versus-Q/DQ difference to a
-specific layer or runtime cause.
+Lesson 11 Nsight baseline: {dominant} This diagnosis is contextual evidence. Capture a matched TensorRT 10.14
+timeline before attributing an FP16-versus-Q/DQ difference to a specific layer or runtime cause.
 
 ## Reproduction
 
 ```bash
 # Follow 12_yolov8_int8_quantization_engineering/docs/reproduction.md
-python3 12_yolov8_int8_quantization_engineering/tools/generate_case_study.py
 python3 12a_precision_performance_report/collect_performance.py
 python3 12a_precision_performance_report/generate_report.py
 ```
@@ -278,7 +275,7 @@ def main() -> int:
                         default=ROOT / "12a_precision_performance_report/outputs/performance.json")
     parser.add_argument("--evaluation", type=Path,
                         default=ROOT / "12_yolov8_int8_quantization_engineering/outputs/"
-                        "04_modelopt_qdq/trt10/evaluation/precision_evaluation.json")
+                        "outputs/precision_evaluation.json")
     parser.add_argument("--diagnosis", type=Path,
                         default=ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json")
     parser.add_argument("--manifest", type=Path,

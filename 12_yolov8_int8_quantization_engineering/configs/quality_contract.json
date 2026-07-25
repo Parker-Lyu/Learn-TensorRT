@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "dataset_manifest_id": "coco2017-yolov8n-calibration-v4-val5000-human-labels-v1",
   "validation_dataset_id": "coco2017-val5000-human-labels-v1",
   "input_shape": [1, 3, 640, 640],
@@ -9,10 +9,12 @@
     "max_detections": 300,
     "metric": "course-coco-like-101point-v2-no-crowd-no-area-ranges"
   },
-  "maximum_drop_from_pytorch": {
-    "map50_95": 0.02,
-    "map50": 0.02,
-    "precision": 0.03,
-    "recall": 0.03
+  "baseline_gate": {
+    "reference": "pytorch_fp32",
+    "maximum_drop": {"map50_95": 0.02, "map50": 0.02, "precision": 0.03, "recall": 0.03}
+  },
+  "int8_gate": {
+    "references": ["pytorch_fp32", "tensorrt_fp16"],
+    "maximum_drop": {"map50_95": 0.02, "map50": 0.02, "precision": 0.03, "recall": 0.03}
   }
 }

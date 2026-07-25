@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parent / "inspect_trt10_layers.py"
-SPEC = importlib.util.spec_from_file_location("inspect_trt10_layers", SCRIPT)
+SCRIPT = Path(__file__).resolve().parent / "inspect_precision.py"
+SPEC = importlib.util.spec_from_file_location("inspect_precision", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 INSPECT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(INSPECT)

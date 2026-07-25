@@ -28,13 +28,13 @@ LESSON_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = LESSON_DIR.parent
 sys.path.insert(0, str(LESSON_DIR))
 
-from build_int8_engine import preprocess
+from calibration_preprocessing import preprocess
 from dataset_manifest import load_manifest, resolve_path, sha256
 
 
 DEFAULT_WEIGHTS = REPO_ROOT / "assets/yolov8n.pt"
 DEFAULT_MANIFEST = LESSON_DIR / "data/dataset_manifest.json"
-DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs/04_modelopt_qdq/export"
+DEFAULT_OUTPUT_DIR = LESSON_DIR / "outputs/qdq"
 INPUT_SHAPE = (1, 3, 640, 640)
 PREPROCESS_ID = "letterbox114-bgr2rgb-fp32-div255-nchw-v1"
 HIGH_PRECISION_DTYPES = {"fp32": "Float", "fp16": "Half"}
@@ -330,9 +330,9 @@ def parse_args() -> argparse.Namespace:
         help="Smoke artifacts validate the pipeline but are never valid accuracy candidates.",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--name", default="yolov8n_modelopt_qdq_calibration_v4")
+    parser.add_argument("--name", default="yolov8n_qdq_fp16")
     parser.add_argument(
-        "--high-precision", choices=tuple(HIGH_PRECISION_DTYPES), default="fp32",
+        "--high-precision", choices=tuple(HIGH_PRECISION_DTYPES), default="fp16",
         help="Data type used by Q/DQ high-precision tensors inside the exported graph.",
     )
     return parser.parse_args()
