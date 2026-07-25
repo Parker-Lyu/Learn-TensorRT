@@ -1,6 +1,7 @@
 #include "preprocess.hpp"
 
 #include <opencv2/imgcodecs.hpp>
+#include <cuda_runtime_api.h>
 
 #include <algorithm>
 #include <chrono>
@@ -29,7 +30,7 @@ int main(int argc, char** argv) {
     try {
         const auto executable = std::filesystem::absolute(argv[0]).parent_path();
         const auto root = (executable / ".." / "..").lexically_normal();
-        std::filesystem::path image_path = root / "assets/img2.jpeg";
+        std::filesystem::path image_path = root / "assets/img.jpeg";
         int iterations = 30;
         for (int index = 1; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -53,7 +54,27 @@ int main(int argc, char** argv) {
         const auto output_dir = executable / ".." / "outputs";
         std::filesystem::create_directories(output_dir);
         std::ofstream csv(output_dir / "preprocess_benchmark.csv");
+        if (!csv) throw std::runtime_error("failed to create benchmark CSV");
         csv << "mode,cpu_ms,host_stage_ms,h2d_ms,gpu_preprocess_ms,d2h_ms,max_abs_error,mean_abs_error\n";
+
+        int device = 0;
+        int runtime_version = 0;
+        int driver_version = 0;
+        cudaDeviceProp properties{};
+        if (cudaGetDevice(&device) != cudaSuccess ||
+            cudaGetDeviceProperties(&properties, device) != cudaSuccess ||
+            cudaRuntimeGetVersion(&runtime_version) != cudaSuccess ||
+            cudaDriverGetVersion(&driver_version) != cudaSuccess) {
+            throw std::runtime_error("failed to query CUDA benchmark environment");
+        }
+        std::ofstream environment(output_dir / "preprocess_benchmark_environment.json");
+        if (!environment) throw std::runtime_error("failed to create benchmark environment JSON");
+        environment << "{\n"
+                    << "  \"gpu\": \"" << properties.name << "\",\n"
+                    << "  \"compute_capability\": \"" << properties.major << '.'
+                    << properties.minor << "\",\n"
+                    << "  \"cuda_runtime_version\": " << runtime_version << ",\n"
+                    << "  \"cuda_driver_version\": " << driver_version << "\n}\n";
         for (const auto mode : {lesson17::HostMemoryMode::Pageable,
                                 lesson17::HostMemoryMode::Pinned,
                                 lesson17::HostMemoryMode::Mapped}) {
@@ -85,6 +106,10 @@ int main(int argc, char** argv) {
                 << ',' << mean(preprocess) << ',' << mean(d2h) << ',' << max_error << ','
                 << mean_error << '\n';
         }
+        if (!csv || !environment) throw std::runtime_error("failed to write benchmark evidence");
+        std::cout << "GPU=" << properties.name << " compute_capability=" << properties.major << '.'
+                  << properties.minor << " CUDA_runtime=" << runtime_version
+                  << " CUDA_driver=" << driver_version << '\n';
         std::cout << "cpu=" << mean(cpu_times) << " ms saved "
                   << output_dir / "preprocess_benchmark.csv" << '\n';
         return EXIT_SUCCESS;
