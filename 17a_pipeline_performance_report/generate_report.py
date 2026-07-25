@@ -59,6 +59,14 @@ def render(evidence: dict, cuda_rows: list[dict]) -> str:
 
 Generated from saved measurements. Checkpoint status: **{overall}**.
 
+## Measurement Environment
+
+- Development image: `{evidence['platform']['development_image']}`
+- GPU / compute capability / driver / memory MiB: `{evidence['platform']['gpu_query']}`
+- TensorRT: `{evidence['platform']['tensorrt_version']}`
+
+Performance values are valid only for this recorded software and hardware environment.
+
 ## Architecture
 
 ```text
@@ -122,9 +130,8 @@ the measured kernel time must be included before describing it as faster.
 {gate_rows}
 
 ThreadSanitizer output: `{evidence['sanitizers']['thread_sanitizer']['stderr'].strip() or 'no diagnostics'}`.
-The current host may reject TSAN before tests start with an unexpected memory mapping; that is an
-environment limitation, not a passing race check. Run the pinned container/host combination where
-TSAN starts successfully before marking this gate complete.
+A nonzero ThreadSanitizer return code keeps the gate incomplete; never reinterpret a tool startup
+failure as a passing race check.
 
 ## Reproduction
 

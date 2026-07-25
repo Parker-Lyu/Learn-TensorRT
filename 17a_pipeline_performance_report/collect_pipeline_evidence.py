@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -44,6 +45,22 @@ def parse_multi(text: str) -> dict:
     if "total_fps" not in total or len(streams) < 2:
         raise ValueError("multi-stream output is missing metrics")
     return {"total_fps": total["total_fps"], "streams": streams}
+
+
+def platform_identity() -> dict:
+    gpu = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,compute_cap,driver_version,memory.total",
+         "--format=csv,noheader,nounits"], text=True, capture_output=True, check=False)
+    tensorrt = subprocess.run(
+        [sys.executable, "-c", "import tensorrt; print(tensorrt.__version__)"],
+        text=True, capture_output=True, check=False)
+    return {
+        "development_image": "nvcr.io/nvidia/pytorch:25.11-py3",
+        "gpu_query": gpu.stdout.strip(),
+        "gpu_query_returncode": gpu.returncode,
+        "tensorrt_version": tensorrt.stdout.strip(),
+        "tensorrt_query_returncode": tensorrt.returncode,
+    }
 
 
 def gpu_memory_mib() -> float:
@@ -151,7 +168,8 @@ def main() -> int:
               "stdout": "", "stderr": "TSAN build not found"}
     )
 
-    evidence = {"schema_version": 1, "single_stream": single, "multi_stream": multi,
+    evidence = {"schema_version": 2, "platform": platform_identity(),
+                "single_stream": single, "multi_stream": multi,
                 "restarts": restarts, "soak": soak, "faults": faults, "sanitizers": sanitizer,
                 "cuda_benchmark_csv": "17_cuda_preprocess_npp/outputs/preprocess_benchmark.csv"}
     args.output.parent.mkdir(parents=True, exist_ok=True)
