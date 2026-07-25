@@ -3,12 +3,6 @@
 Goal: confirm that the GPU, CUDA, TensorRT, C++, and Python environment required by later lessons
 is working.
 
-The course uses a development container derived from:
-
-```text
-nvcr.io/nvidia/pytorch:25.11-py3
-```
-
 ## Prepare The Development Environment
 
 Use a coding agent such as Codex or Claude Code to prepare the course environment. Ask the agent
@@ -44,7 +38,9 @@ The interactive main shell is also attachable:
 docker attach learn-tensorrt
 ```
 
-When using `docker attach`, press `Ctrl-p`, then `Ctrl-q` to detach without stopping the container.
+When using `docker attach`, press `Ctrl-p`, then `Ctrl-q` to detach without stopping the container.  
+
+**All subsequent code for this course will run inside this container.**
 
 ## Check The Environment
 
