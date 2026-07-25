@@ -42,6 +42,10 @@ class PerformanceSummaryTests(unittest.TestCase):
         finally:
             MODULE.command_output = original
 
+    def test_course_version_rejects_another_tensorrt_series(self):
+        with self.assertRaisesRegex(RuntimeError, "requires TensorRT 10.14"):
+            MODULE.require_course_tensorrt("10.13.3")
+
 
 if __name__ == "__main__":
     unittest.main()

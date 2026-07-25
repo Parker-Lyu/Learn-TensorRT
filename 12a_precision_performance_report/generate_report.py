@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE_KEYS = {"fp32": "tensorrt_fp32", "fp16": "tensorrt_fp16", "int8": "tensorrt_int8"}
+EXPECTED_TRT_SERIES = "10.14"
 
 
 def load(path: Path) -> dict:
@@ -89,6 +90,10 @@ def validate_evidence(
 
     trtexec_version = performance["environment"].get("trtexec", "")
     python_trt_version = evaluation["software"].get("tensorrt", "")
+    if not trtexec_version.startswith(EXPECTED_TRT_SERIES + "."):
+        raise ValueError(f"performance evidence is not TensorRT {EXPECTED_TRT_SERIES}.x")
+    if not python_trt_version.startswith(EXPECTED_TRT_SERIES + "."):
+        raise ValueError(f"accuracy evidence is not TensorRT {EXPECTED_TRT_SERIES}.x")
     if not python_trt_version.startswith(trtexec_version):
         raise ValueError("TensorRT version differs between performance and accuracy evidence")
     required_settings = {
@@ -96,9 +101,11 @@ def validate_evidence(
     }
     if required_settings - set(evaluation.get("settings", {})):
         raise ValueError("evaluation evidence is missing required methodology settings")
-    if diagnosis.get("schema_version") != 2:
-        raise ValueError("diagnosis evidence must use schema version 2; rerun lesson 11")
-    diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
+    if diagnosis.get("schema_version") != 1 or not isinstance(diagnosis.get("engines"), dict):
+        raise ValueError("TensorRT 10.14 layer audit must use schema version 1")
+    int8_audit = diagnosis["engines"].get("tensorrt_int8", {})
+    if not isinstance(int8_audit.get("compute_output_precision_counts"), dict):
+        raise ValueError("TensorRT 10.14 layer audit has no precision counts")
     failed = {
         name for name, backend in evaluation["backends"].items()
         if not backend.get("passed", False)
@@ -164,7 +171,12 @@ def render(
     insufficient_evidence = dataset["validation_images"] < 100
     overall = "FAIL" if not release["passed"] or insufficient_evidence else "PASS"
     thresholds = evaluation["regression_thresholds"]
-    dominant = diagnosis["baseline_summary"]["heuristic_diagnosis"]["diagnosis"]
+    counts = diagnosis["engines"]["tensorrt_int8"]["compute_output_precision_counts"]
+    dominant = (
+        f"The TensorRT 10.14 Q/DQ engine contains {counts.get('INT8', 0)} INT8, "
+        f"{counts.get('FP16', 0)} FP16, and {counts.get('FP32', 0)} FP32 compute outputs."
+    )
+    diagnosis_heading = "TensorRT 10.14 layer audit"
     fp16_decision = backend_decision(performance, evaluation, "fp16")
     int8_decision = backend_decision(performance, evaluation, "int8")
     if evaluation["backends"]["tensorrt_int8"]["passed"]:
@@ -239,10 +251,10 @@ recall={thresholds['max_recall_drop']}. Failed backends:
 Drift is diagnostic rather than a release metric. Detection-quality thresholds above control the
 decision; high-drift examples in `precision_evaluation.json` identify images for inspection.
 
-## Timeline Diagnosis
+## {diagnosis_heading}
 
-Lesson 11 Nsight baseline: {dominant} This diagnosis is contextual evidence. Capture a matched TensorRT 10.14
-timeline before attributing an FP16-versus-Q/DQ difference to a specific layer or runtime cause.
+{dominant} This is diagnostic evidence. Use a matched TensorRT 10.14 timeline before attributing an
+FP16-versus-Q/DQ difference to a specific layer or runtime cause.
 
 ## Reproduction
 
@@ -263,9 +275,9 @@ documented course COCO-like evaluator, not the official `pycocotools` implementa
 
 ## Three-to-Five-Minute Walkthrough
 
-Explain the dataset and engine identity checks, timing methodology, decoded quality metrics, and raw
-tensor drift. State the measured FP16 and INT8 outcomes from the tables, then connect the profiler
-diagnosis to the lesson 17 experiment without claiming an unmeasured optimization.
+Explain the dataset and engine identity checks, timing methodology, decoded quality metrics, raw
+tensor drift, and TensorRT 10.14 layer audit. State the measured FP16 and INT8 outcomes without
+claiming an optimization that was not measured.
 """
 
 
@@ -277,7 +289,8 @@ def main() -> int:
                         default=ROOT / "12_yolov8_int8_quantization_engineering/outputs/"
                         "evaluation/precision_evaluation.json")
     parser.add_argument("--diagnosis", type=Path,
-                        default=ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json")
+                        default=ROOT / "12_yolov8_int8_quantization_engineering/outputs/"
+                        "tensorrt10/layer_audit.json")
     parser.add_argument("--manifest", type=Path,
                         default=ROOT / "12_yolov8_int8_quantization_engineering/"
                         "data/dataset_manifest.json")

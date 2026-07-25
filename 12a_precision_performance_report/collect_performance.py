@@ -20,6 +20,7 @@ DEFAULT_ENGINES = {
     "int8": ROOT / "12_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine",
 }
 THROUGHPUT_PATTERN = re.compile(r"Throughput:\s*([0-9]+(?:\.[0-9]+)?)\s*qps")
+EXPECTED_TRT_SERIES = "10.14"
 
 
 def percentile(values: list[float], fraction: float) -> float:
@@ -84,6 +85,13 @@ def trtexec_version(executable: str) -> str:
     return f"{int(major)}.{int(minor)}.{int(patch)}"
 
 
+def require_course_tensorrt(version: str) -> None:
+    if not version.startswith(EXPECTED_TRT_SERIES + "."):
+        raise RuntimeError(
+            f"checkpoint 12a requires TensorRT {EXPECTED_TRT_SERIES}.x, found {version}"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=120)
@@ -96,6 +104,8 @@ def main() -> int:
         parser.error("iterations must be >=100 and warmup-ms must be non-negative")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    version = trtexec_version(args.trtexec)
+    require_course_tensorrt(version)
     evidence = {
         "schema_version": 3,
         "methodology": {
@@ -107,7 +117,7 @@ def main() -> int:
         "environment": {
             "gpu": command_output(["nvidia-smi", "--query-gpu=name,driver_version,pstate,power.limit",
                                    "--format=csv,noheader"]),
-            "trtexec": trtexec_version(args.trtexec),
+            "trtexec": version,
         },
         "backends": {},
     }

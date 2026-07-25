@@ -509,7 +509,7 @@ Deliverables:
 - `reports/12a_precision_performance.md`
 - Hardware, software, power-state, warmup, iteration-count, and synchronization methodology
 - FP32, FP16, and INT8 latency and throughput tables
-- Nsight Systems timeline evidence and bottleneck explanation
+- TensorRT 10.14 Engine Inspector precision, Q/DQ-boundary, and reformat evidence
 - Single-input raw tensor alignment linked to multi-image drift and detection-quality results
 - Model, dataset, evaluator, preprocessing, and postprocessing version information
 - Calibration and validation dataset manifests with no overlap

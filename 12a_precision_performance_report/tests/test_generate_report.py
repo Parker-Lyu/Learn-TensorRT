@@ -82,9 +82,12 @@ def fixtures():
         "failed_backends": ["tensorrt_int8"],
     }
     diagnosis = {
-        "schema_version": 2,
-        "artifacts": {"engine": {"sha256": "1" * 64}},
-        "baseline_summary": {"heuristic_diagnosis": {"diagnosis": "CPU work dominates."}}
+        "schema_version": 1,
+        "engines": {
+            "tensorrt_int8": {
+                "compute_output_precision_counts": {"INT8": 44, "FP16": 50, "FP32": 2}
+            }
+        },
     }
     return performance, evaluation, diagnosis, manifest, manifest_hash
 
@@ -131,11 +134,10 @@ class GenerateReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid trtexec throughput"):
             MODULE.render(*evidence)
 
-    def test_profiler_engine_is_contextual_without_matched_identity(self):
+    def test_layer_audit_context_is_rendered(self):
         evidence = list(fixtures())
-        evidence[2]["artifacts"]["engine"]["sha256"] = "f" * 64
         text = MODULE.render(*evidence)
-        self.assertIn("Lesson 11 Nsight baseline", text)
+        self.assertIn("TensorRT 10.14 layer audit", text)
 
 
 if __name__ == "__main__":
