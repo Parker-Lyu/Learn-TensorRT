@@ -62,14 +62,12 @@ struct PipelineMetrics {
     std::size_t captured{0};
     std::size_t processed{0};
     std::size_t dropped{0};
-    std::size_t failures{0};
     std::size_t queue_high_watermark{0};
     double elapsed_seconds{0.0};
     double fps{0.0};
     double latency_p50_ms{0.0};
     double latency_p90_ms{0.0};
     double latency_p99_ms{0.0};
-    double gpu_utilization_percent{0.0};
 };
 
 class AsyncVideoPipeline {
