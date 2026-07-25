@@ -96,7 +96,7 @@ Options parse_args(int argc, char** argv) {
     if (options.images.empty()) {
         const auto executable_dir = std::filesystem::absolute(argv[0]).parent_path();
         const auto assets_dir = (executable_dir / ".." / ".." / "assets").lexically_normal();
-        options.images = {assets_dir / "dog.webp", assets_dir / "img2.jpeg"};
+        options.images = {assets_dir / "img.jpeg"};
     }
     return options;
 }

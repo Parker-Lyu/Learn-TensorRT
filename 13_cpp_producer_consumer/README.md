@@ -55,7 +55,7 @@ cmake --build build -j
 ./build/cpp_producer_consumer
 ```
 
-The defaults locate the repository's `assets/dog.webp` and `assets/img2.jpeg` from the executable,
+The default locates the repository's `assets/img.jpeg` from the executable,
 produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four frames, and retain
 the newest frames:
 
@@ -71,7 +71,7 @@ the newest frames:
 Run with one or more custom images by repeating `--image`:
 
 ```bash
-./build/cpp_producer_consumer --image ../assets/img2.jpeg --image ../assets/dog.webp
+./build/cpp_producer_consumer --image ../assets/img.jpeg
 ```
 
 Use `--help` for every option. `--fail-producer-at` and `--fail-consumer-at` are deliberate failure
