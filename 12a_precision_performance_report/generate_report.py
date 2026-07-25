@@ -275,7 +275,7 @@ def main() -> int:
                         default=ROOT / "12a_precision_performance_report/outputs/performance.json")
     parser.add_argument("--evaluation", type=Path,
                         default=ROOT / "12_yolov8_int8_quantization_engineering/outputs/"
-                        "outputs/precision_evaluation.json")
+                        "evaluation/precision_evaluation.json")
     parser.add_argument("--diagnosis", type=Path,
                         default=ROOT / "11_nsight_performance_diagnosis/outputs/diagnosis_summary.json")
     parser.add_argument("--manifest", type=Path,

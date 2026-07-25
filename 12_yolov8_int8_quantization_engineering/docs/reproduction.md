@@ -16,8 +16,16 @@ Calibration tensors and evaluation tensors must be contiguous FP32 NCHW RGB, `1x
 
 ## 1. Export the source model
 
-Complete Lesson 05 to create `05_torch_to_onnx/outputs/yolov8n.onnx` and its metadata. The ONNX
-hash is recorded in every engine metadata file.
+Create `05_torch_to_onnx/outputs/yolov8n.onnx` and its metadata:
+
+```bash
+(cd 05_torch_to_onnx && python3 export_yolov8_onnx.py)
+python3 05_torch_to_onnx/inspect_onnx.py
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+```
+
+The ONNX hash is recorded in every engine metadata file. The export script downloads the shared
+`assets/yolov8n.pt` weights when they are not already present.
 
 ## 2. Evaluate references and build Q/DQ INT8
 
@@ -49,8 +57,32 @@ python3 12_yolov8_int8_quantization_engineering/reference_legacy_calibrator/buil
 This is an isolated API example. Evaluate it with the same quality contract if you want a numerical
 comparison; do not use it as the deployment path.
 
+Create a reusable reference bundle from the main evaluation, then evaluate only the entropy
+candidate rather than repeating all four reference backends:
+
+```bash
+python3 12_yolov8_int8_quantization_engineering/tools/create_reference_bundle.py \
+  --report 12_yolov8_int8_quantization_engineering/outputs/evaluation/precision_evaluation.json \
+  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --output 12_yolov8_int8_quantization_engineering/outputs/evaluation/reference_bundle.json
+
+python3 12_yolov8_int8_quantization_engineering/compare_engines.py \
+  --experiment-id reference_entropy_calibrator \
+  --int8-engine 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine \
+  --engine-metadata 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine.json \
+  --reference-bundle 12_yolov8_int8_quantization_engineering/outputs/evaluation/reference_bundle.json \
+  --output-dir 12_yolov8_int8_quantization_engineering/outputs/evaluation_legacy
+```
+
+Exit status `2` means the candidate completed evaluation but failed the predeclared quality gate;
+inspect the generated JSON and Markdown instead of treating it as an execution failure.
+
 ## 4. Performance evidence
 
 Use `modelopt/benchmark_engines.py` only after the Q/DQ candidate passes the gate. Keep raw
 `trtexec` output under `outputs/`; record GPU, driver, CUDA, TensorRT, warmup, iterations, and
 transfer settings in the generated JSON.
+
+```bash
+python3 12_yolov8_int8_quantization_engineering/modelopt/benchmark_engines.py
+```

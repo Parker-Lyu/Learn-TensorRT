@@ -13,7 +13,17 @@
 
 ## 运行顺序
 
-所有 GPU 命令均在课程基线容器内，从仓库根目录执行。完整命令见
+所有 GPU 命令均在课程基线容器内，从仓库根目录执行。若还没有开发容器，可在仓库根目录
+构建并启动课程镜像（需要 NVIDIA Container Toolkit）：
+
+```bash
+docker build -f docker/Dockerfile.dev -t learn-tensorrt:dev .
+docker run --gpus all --rm -it --name learn-tensorrt \
+  -v "$PWD:/workspace/Learn-TensorRT" -w /workspace/Learn-TensorRT \
+  learn-tensorrt:dev
+```
+
+完整命令见
 [`docs/reproduction.md`](docs/reproduction.md)。
 
 ```bash
@@ -23,9 +33,10 @@ python3 12_yolov8_int8_quantization_engineering/tools/analyze_calibration_repres
 python3 12_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
-然后导出 ONNX，建立四个基线，并导出、构建和检查 Q/DQ INT8：
+导出课程使用的静态 ONNX，然后建立四个基线，并导出、构建和检查 Q/DQ INT8：
 
 ```bash
+(cd 05_torch_to_onnx && python3 export_yolov8_onnx.py)
 python3 12_yolov8_int8_quantization_engineering/modelopt/export_qdq.py \
   --high-precision fp16 --name yolov8n_qdq_fp16
 python3 12_yolov8_int8_quantization_engineering/modelopt/build_engines.py
@@ -36,6 +47,10 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_precision.py
 
 `compare_engines.py` 在同一验证集上生成统一 JSON/Markdown 结果。INT8 必须同时满足相对
 PyTorch FP32 和 TensorRT FP16 的 gate；失败候选不会进入性能结论。
+
+仓库中的 [`reports/12_int8_quantization.md`](../reports/12_int8_quantization.md) 是一次完整
+TensorRT 10.14 复现实验的精简证据。它展示如何从质量 gate、Engine Inspector 和匹配性能
+共同得出部署结论；学习者仍应在自己的 GPU 和驱动环境中重新生成全部本地证据。
 
 ## 质量契约
 
