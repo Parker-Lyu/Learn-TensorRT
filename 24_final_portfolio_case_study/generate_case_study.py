@@ -9,20 +9,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def read(path):
-    if not path.is_file(): raise FileNotFoundError(path)
+def read(path: Path) -> str:
+    if not path.is_file():
+        raise FileNotFoundError(path)
     return path.read_text(encoding="utf-8")
 
 
 def section(report: str, heading: str, next_heading: str) -> str:
     match = re.search(rf"## {re.escape(heading)}\n(.*?)\n## {re.escape(next_heading)}", report, re.S)
-    if not match: raise ValueError(f"missing {heading} section")
+    if not match:
+        raise ValueError(f"missing {heading} section")
     return match.group(1)
 
 
 def row(report_section: str, precision: str) -> list[str]:
     match = re.search(rf"\| {precision} \| ([^\n]+)", report_section)
-    if not match: raise ValueError(f"missing {precision} performance row")
+    if not match:
+        raise ValueError(f"missing {precision} performance row")
     return [value.strip() for value in match.group(1).split("|") if value.strip()]
 
 
@@ -49,13 +52,36 @@ def main() -> int:
     else:
         precision_decision = "FP32 remains the deployment baseline because reduced precision fails."
         precision_next = "investigate FP16/INT8 numerical drift"
-    single = re.search(r"\| (\d+) \| (\d+) \| (\d+) \| (\d+) \| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \|", report17)
-    if not single: raise ValueError("missing single-stream evidence")
-    commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
+    single = re.search(
+        r"\| (\d+) \| (\d+) \| (\d+) \| (\d+) \| ([0-9.]+) \| "
+        r"([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \|",
+        report17,
+    )
+    if not single:
+        raise ValueError("missing single-stream evidence")
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     docker_sizes = ROOT / "24_final_portfolio_case_study/outputs/docker_image_sizes.txt"
-    docker_note = read(docker_sizes).strip() if docker_sizes.exists() else "Not measured: Docker unavailable on this host."
-    test_rows = "\n".join(f"| {item['name']} | {'PASS' if item['returncode']==0 else 'FAIL'} |"
-                          for item in checks["checks"])
+    docker_note = (
+        read(docker_sizes).strip()
+        if docker_sizes.exists()
+        else "Not generated; run `24_final_portfolio_case_study/measure_images.sh`."
+    )
+    def check_status(item: dict) -> str:
+        if item["returncode"] != 0:
+            return "FAIL"
+        if "Skipped" in item["stdout"]:
+            return "PASS WITH SKIP"
+        return "PASS"
+
+    test_rows = "\n".join(
+        f"| {item['name']} | {check_status(item)} |" for item in checks["checks"]
+    )
+    platform_evidence = checks["platform"]
+    gpu = platform_evidence["gpu"]
+    tensorrt = platform_evidence["tensorrt"]
+    cuda = platform_evidence["cuda_toolkit"]
     text = f"""# Final TensorRT Deployment Portfolio Case Study
 
 Repository evidence revision: `{commit}`. This project develops a YOLOv8n deployment from ONNX
@@ -69,6 +95,18 @@ preprocessing, server/edge integration exercises, and reusable language bindings
 - [17a pipeline performance and reliability](17a_pipeline_performance.md)
 
 The linked reports retain commands and raw-artifact paths; this case study does not duplicate them.
+
+## Verification Environment
+
+- Development image: `{platform_evidence['development_image']}`
+- Container build identity: `{platform_evidence['container_build_id']}`
+- Declared course GPU: `{platform_evidence['declared_gpu']}`
+- Runtime GPU / compute capability / driver / memory MiB query:
+  `{gpu['stdout'].strip() or gpu['stderr'].strip()}`
+- TensorRT: `{tensorrt['stdout'].strip() or tensorrt['stderr'].strip()}`
+- CUDA Toolkit query: `{cuda['stdout'].strip() or cuda['stderr'].strip()}`
+
+Performance and acceptance results are valid only for their recorded hardware and software identity.
 
 ## Precision Decision
 
@@ -106,15 +144,17 @@ round-robin scheduling protects fairness, while dynamic batching trades queue de
 | --- | --- |
 {test_rows}
 
-Local-equivalent status: **{'PASS' if checks['passed'] else 'FAIL'}**. GPU/TensorRT checks run in the
-pinned development environment. Current unresolved evidence remains the full 30-minute soak and a
-host where ThreadSanitizer starts successfully.
+Local-equivalent status: **{'PASS' if checks['passed'] else 'FAIL'}**. The JSON evidence retains each
+command's stdout, stderr, return code, duration, and platform query. A failed or unavailable GPU check
+remains failed rather than being converted into a CPU-only pass. The formal 30-minute soak and a
+successful ThreadSanitizer run remain separate release gates.
 
 ## Delivery Image
 
-`24_final_portfolio_case_study/Dockerfile` uses a TensorRT development builder and a CUDA runtime
-stage containing the executable, required TensorRT runtime library, OpenCV runtime packages, one
-engine, and one input fixture. Engines must be rebuilt for the deployment environment.
+`24_final_portfolio_case_study/Dockerfile` uses the pinned development image as its builder and a
+CUDA 13.0 Ubuntu 24.04 base as its runtime stage. The runtime contains the executable, TensorRT 10
+runtime library, OpenCV runtime packages, one engine, and `assets/img.jpeg`. Engines must be rebuilt
+for the deployment environment.
 
 Image-size evidence: `{docker_note}`
 
@@ -163,4 +203,5 @@ command and environment needed to complete it.
     return 0
 
 
-if __name__ == "__main__": raise SystemExit(main())
+if __name__ == "__main__":
+    raise SystemExit(main())
