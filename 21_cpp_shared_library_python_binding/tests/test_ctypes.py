@@ -12,7 +12,7 @@ from trt_ctypes import TensorRtSession
 class BindingTests(unittest.TestCase):
     def test_real_inference_and_error_boundary(self):
         library = ROOT / "21_cpp_shared_library_python_binding/build/libtrt_inference.so"
-        engine = ROOT / "06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine"
+        engine = ROOT / "14_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine"
         with TensorRtSession(library, engine) as session:
             result = session.infer(np.zeros((1, 3, 640, 640), np.float32))
             self.assertEqual(result.output_elements, 84 * 8400)
