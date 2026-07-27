@@ -14,3 +14,11 @@
 **/*.engine
 **/*.plan
 **/*.timing-cache
+
+# Delivery builds need only the shared default image, not local datasets or model caches.
+assets/*
+!assets/img.jpeg
+
+# Lesson 24 packages this generated engine intentionally into the delivery image.
+!06_trtexec_engine/outputs/
+!06_trtexec_engine/outputs/yolov8n_static_fp16.engine
