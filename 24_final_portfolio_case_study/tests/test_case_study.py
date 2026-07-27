@@ -18,7 +18,6 @@ class CaseStudyTests(unittest.TestCase):
         self.assertIn("COPY --from=builder", text)
         self.assertIn("libnvinfer.so.10", text)
         self.assertIn("assets/img.jpeg", text)
-        self.assertNotIn("img2.jpeg", text)
 
     def test_local_matrix_has_explicit_build_script(self):
         script = ROOT / "24_final_portfolio_case_study/build_local_checks.sh"

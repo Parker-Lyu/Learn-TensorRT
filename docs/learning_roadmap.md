@@ -1212,7 +1212,7 @@ After `22_llm_inference_intro`, you should be able to answer:
 
 After `24_final_portfolio_case_study`, you should be able to answer:
 
-- What is the best latency you achieved on this RTX 2060?
+- What is the best latency you achieved on the recorded RTX 4090 platform?
 - How much faster is FP16 than FP32?
 - Did INT8 help on this model and GPU?
 - What accuracy trade-off did you observe?
