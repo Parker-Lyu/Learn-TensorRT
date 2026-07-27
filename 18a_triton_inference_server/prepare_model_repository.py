@@ -23,8 +23,7 @@ def main() -> int:
     parser.add_argument("--engine", type=Path,
                         default=ROOT / "14_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine")
     args = parser.parse_args()
-    fallback = ROOT / "06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine"
-    engine = args.engine if args.engine.is_file() else fallback
+    engine = args.engine
     if not engine.is_file():
         raise FileNotFoundError("build lesson 14's dynamic engine first")
     config = ROOT / "18a_triton_inference_server/model_repository/yolov8/config.pbtxt"
