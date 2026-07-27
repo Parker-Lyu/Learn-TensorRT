@@ -43,7 +43,11 @@ def main() -> int:
     output = ROOT / "outputs"
     engines = {"gpu": output / "yolov8n_jetson_gpu_fp16.engine",
                "dla_with_gpu_fallback": output / "yolov8n_jetson_dla_fp16.engine"}
+    manifest = output / "platform_manifest.json"
+    if not manifest.is_file():
+        raise FileNotFoundError("run check_platform.py on the target before benchmarking")
     evidence = {"methodology": {"iterations": args.iterations, "warmup_ms": args.warmup_ms},
+                "platform": json.loads(manifest.read_text(encoding="utf-8")),
                 "backends": {}}
     for name, engine in engines.items():
         if not engine.is_file():
