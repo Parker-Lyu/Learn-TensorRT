@@ -1,28 +1,47 @@
 # Final TensorRT Deployment Portfolio Case Study
 
-Repository evidence revision: `92194e5`. This project develops a YOLOv8n deployment from ONNX
+Repository evidence revision: `285035b`. This project develops a YOLOv8n deployment from ONNX
 export through TensorRT C++ inference, precision validation, bounded asynchronous pipelines, CUDA
 preprocessing, server/edge integration exercises, and reusable language bindings.
 
 ## Evidence Map
 
 - [10a functional and architecture validation](10a_end_to_end_validation.md)
+- [12a precision and performance decision](12a_precision_performance.md)
 - [17a pipeline performance and reliability](17a_pipeline_performance.md)
 
 The linked reports retain commands and raw-artifact paths; this case study does not duplicate them.
 
+## Verification Environment
+
+- Development image: `learn-tensorrt:25.11`
+- Container build identity: `231036167`
+- Declared course GPU: `NVIDIA GeForce RTX 4090`
+- Runtime GPU / compute capability / driver / memory MiB query:
+  `NVIDIA GeForce RTX 4090, 8.9, 595.84, 24564`
+- TensorRT: `10.14.1.48`
+- CUDA Toolkit: `Build cuda_13.0.r13.0/compiler.36424714_0`
+
+Performance and acceptance results are valid only for their recorded hardware and software identity.
+
 ## Precision Decision
 
-Pending regeneration from lesson 12's current calibration manifest. No FP32, FP16, or INT8
-deployment recommendation is carried across a calibration-dataset identity change. A one-input
-Polygraphy alignment remains useful for locating numerical conversion bugs, but it cannot replace
-dataset accuracy, tail latency, or long-run reliability.
+| Precision | Samples | Mean ms | P50 ms | P90 ms | P99 ms | Images/s | Accuracy gate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| FP32 | 120 | 1.222 | 1.134 | 1.473 | 1.934 | 1172.8 | PASS |
+| FP16 | 120 | 0.861 | 0.817 | 0.888 | 1.515 | 2001.3 | PASS |
+| INT8 | 120 | 1.005 | 0.959 | 0.998 | 1.695 | 1578.8 | PASS |
+
+INT8 is the current deployment candidate under the declared gate. The decision uses the canonical 5,000-image human-labeled validation split
+and identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating
+numerical conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run
+reliability.
 
 ## Pipeline Result
 
 | Captured | Processed | Dropped | Queue peak | FPS | P50 ms | P90 ms | P99 ms |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 500 | 286 | 214 | 4 | 626.38 | 12.59 | 15.28 | 20.08 |
+| 500 | 496 | 4 | 4 | 813.01 | 11.18 | 12.49 | 13.06 |
 
 The latest-frame bounded queue trades completeness for freshness under sustained overload. Normal
 EOS drains work; cancellation and failure discard queued work and join all workers. Multi-stream
@@ -40,25 +59,32 @@ round-robin scheduling protects fairness, while dynamic batching trades queue de
 
 | Check | Result |
 | --- | --- |
+| lesson10 preprocessing/postprocessing | PASS |
 | lesson13 concurrency | PASS |
 | lesson14 batching | PASS |
 | lesson15 async pipeline | PASS |
 | lesson16 multistream | PASS |
 | lesson17 CUDA preprocess | PASS |
-| lesson21 ctypes | PASS |
+| lesson21 ctypes inference | PASS |
 | lesson23 katas | PASS |
 
-Local-equivalent status: **PASS**. GPU/TensorRT checks run in the
-pinned development environment. Current unresolved evidence remains the full 30-minute soak and a
-host where ThreadSanitizer starts successfully.
+Local-equivalent status: **PASS**. The JSON evidence retains each
+command's stdout, stderr, return code, duration, and platform query. A failed or unavailable GPU check
+remains failed rather than being converted into a CPU-only pass. The formal 30-minute soak and a
+successful ThreadSanitizer run remain separate release gates.
 
 ## Delivery Image
 
-`24_final_portfolio_case_study/Dockerfile` uses a TensorRT development builder and a CUDA runtime
-stage containing the executable, required TensorRT runtime library, OpenCV runtime packages, one
-engine, and one input fixture. Engines must be rebuilt for the deployment environment.
+`24_final_portfolio_case_study/Dockerfile` uses the pinned development image as its builder and a
+CUDA 13.0 Ubuntu 24.04 base as its runtime stage. The runtime contains the executable, TensorRT 10
+runtime library, OpenCV runtime packages, one engine, and `assets/img.jpeg`. Engines must be rebuilt
+for the deployment environment.
 
-Image-size evidence: `Not measured: Docker unavailable on this host.`
+| Image | ID | Size MiB |
+| --- | --- | ---: |
+| `learn-tensorrt:25.11, learn-tensorrt:25.11-audit` | `c231b081df78` | 9308.2 |
+| `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` | `6e43a6b02e5f` | 132.9 |
+| `learn-tensorrt-runtime:10.14` | `2b6f4355bcbb` | 564.1 |
 
 ## Completed Elective Track
 
@@ -71,8 +97,8 @@ DeepStream, and Jetson runtime acceptance remains explicitly hardware/container 
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
 CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
-regenerate the precision evidence, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
-DeepStream, and Jetson hardware.
+confirm INT8 behavior on the target deployment hardware, complete the formal soak/TSAN gates, and validate runtime behavior on
+Triton, DeepStream, and Jetson hardware.
 
 ## Resume Bullets
 
@@ -86,8 +112,8 @@ DeepStream, and Jetson hardware.
 ## Five-Minute English Presentation
 
 Start with the deployment goal and controlled YOLOv8 model. Explain ONNX/TensorRT correctness and
-why raw alignment precedes detection metrics. Present the precision decision only after regenerating
-the 12a gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
+why raw alignment precedes detection metrics. Present the measured precision decision from the 12a
+gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
 the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
 remaining soak/TSAN/hardware gates, and why those limitations are reported rather than hidden.
 

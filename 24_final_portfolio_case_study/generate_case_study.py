@@ -29,6 +29,21 @@ def row(report_section: str, precision: str) -> list[str]:
     return [value.strip() for value in match.group(1).split("|") if value.strip()]
 
 
+def docker_image_rows(path: Path) -> str:
+    if not path.exists():
+        return "| Not generated | - | - |"
+
+    rows = []
+    for line in read(path).splitlines():
+        tags_text, image_id, size_text = line.rsplit(" ", 2)
+        tags = ", ".join(json.loads(tags_text))
+        size_mib = int(size_text) / (1024 * 1024)
+        rows.append(
+            f"| `{tags}` | `{image_id.removeprefix('sha256:')[:12]}` | {size_mib:.1f} |"
+        )
+    return "\n".join(rows)
+
+
 def main() -> int:
     report10 = read(ROOT / "reports/10a_end_to_end_validation.md")
     report12 = read(ROOT / "reports/12a_precision_performance.md")
@@ -63,11 +78,8 @@ def main() -> int:
         ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True
     ).strip()
     docker_sizes = ROOT / "24_final_portfolio_case_study/outputs/docker_image_sizes.txt"
-    docker_note = (
-        read(docker_sizes).strip()
-        if docker_sizes.exists()
-        else "Not generated; run `24_final_portfolio_case_study/measure_images.sh`."
-    )
+    docker_rows = docker_image_rows(docker_sizes)
+
     def check_status(item: dict) -> str:
         if item["returncode"] != 0:
             return "FAIL"
@@ -104,7 +116,7 @@ The linked reports retain commands and raw-artifact paths; this case study does 
 - Runtime GPU / compute capability / driver / memory MiB query:
   `{gpu['stdout'].strip() or gpu['stderr'].strip()}`
 - TensorRT: `{tensorrt['stdout'].strip() or tensorrt['stderr'].strip()}`
-- CUDA Toolkit query: `{cuda['stdout'].strip() or cuda['stderr'].strip()}`
+- CUDA Toolkit: `{(cuda['stdout'].strip() or cuda['stderr'].strip()).splitlines()[-1]}`
 
 Performance and acceptance results are valid only for their recorded hardware and software identity.
 
@@ -116,9 +128,10 @@ Performance and acceptance results are valid only for their recorded hardware an
 | FP16 | {' | '.join(fp16)} | {gates['FP16']} |
 | INT8 | {' | '.join(int8)} | {gates['INT8']} |
 
-{precision_decision} The decision uses the canonical 5,000-image human-labeled validation split and
-identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating numerical
-conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run reliability.
+{precision_decision} The decision uses the canonical 5,000-image human-labeled validation split
+and identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating
+numerical conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run
+reliability.
 
 ## Pipeline Result
 
@@ -156,7 +169,9 @@ CUDA 13.0 Ubuntu 24.04 base as its runtime stage. The runtime contains the execu
 runtime library, OpenCV runtime packages, one engine, and `assets/img.jpeg`. Engines must be rebuilt
 for the deployment environment.
 
-Image-size evidence: `{docker_note}`
+| Image | ID | Size MiB |
+| --- | --- | ---: |
+{docker_rows}
 
 ## Completed Elective Track
 
@@ -169,8 +184,8 @@ DeepStream, and Jetson runtime acceptance remains explicitly hardware/container 
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
 CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
-{precision_next}, complete the formal soak/TSAN gates, and validate runtime behavior on Triton,
-DeepStream, and Jetson hardware.
+{precision_next}, complete the formal soak/TSAN gates, and validate runtime behavior on
+Triton, DeepStream, and Jetson hardware.
 
 ## Resume Bullets
 
