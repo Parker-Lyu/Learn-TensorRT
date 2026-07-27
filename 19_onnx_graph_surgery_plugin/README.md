@@ -27,13 +27,14 @@ export PYTHONPATH=19_onnx_graph_surgery_plugin/.deps
 python3 19_onnx_graph_surgery_plugin/create_demo_model.py
 python3 19_onnx_graph_surgery_plugin/diagnose_model.py
 
-trtexec --onnx=19_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
+trtexec --stronglyTyped --onnx=19_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
 # Expected failure: no importer for com.acme::AcmeSwish.
 
 python3 19_onnx_graph_surgery_plugin/rewrite_with_graphsurgeon.py
 python3 19_onnx_graph_surgery_plugin/validate_rewrite.py
 
 trtexec \
+  --stronglyTyped \
   --onnx=19_onnx_graph_surgery_plugin/outputs/rewritten_swish.onnx \
   --saveEngine=19_onnx_graph_surgery_plugin/outputs/rewritten_swish.engine
 ```
@@ -43,11 +44,8 @@ topological sorting remove the disconnected custom node before export.
 
 ## Plugin Interface Awareness
 
-Modern TensorRT uses `IPluginV3` capability interfaces to separate core identity, build-time shape
+TensorRT 10.14 uses `IPluginV3` capability interfaces to separate core identity, build-time shape
 and format negotiation, and runtime execution. A creator constructs plugins from fields, and engine
-deserialization must find the registered creator and compatible plugin library.
-
-The pinned TensorRT 8.6 environment predates the current V3 workflow, so legacy production code may
-use `IPluginV2DynamicExt`: one class owns format support, output dimensions, serialization, cloning,
-and `enqueue`. Lesson 19a implements that legacy path honestly and documents the migration boundary;
-do not paste a V2 implementation into a current V3 codebase and rename the class.
+deserialization must find the registered creator and compatible plugin library. Lesson 19a provides
+the runnable V3 implementation. The repaired standard-operator graph is built as a strongly typed
+network so TensorRT follows the data types declared by ONNX.
