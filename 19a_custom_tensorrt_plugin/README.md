@@ -4,13 +4,11 @@ This lesson implements `output = input * scale + shift` as a complete custom Ten
 kernel, creator fields, registration, format negotiation, shape propagation, serialization,
 deserialization, engine build, and C++ runtime validation.
 
-## Pinned API Boundary
+## TensorRT 10.14 API
 
-The course container uses TensorRT 8.6.1. The runnable implementation therefore uses
-`IPluginV2DynamicExt`, the correct dynamic-shape interface for this pinned legacy environment.
-Current TensorRT releases use `IPluginV3` capability interfaces; the concepts map, but the class
-surface does not. Porting requires separate core/build/runtime capabilities and current creator
-registration—not a class rename.
+The implementation uses `IPluginV3` with separate core, build, and runtime capability interfaces.
+`IPluginCreatorV3One` receives ONNX attributes during the build phase and the serialized field
+collection during engine deserialization. The build uses a strongly typed network.
 
 ## Build and Validate
 
@@ -19,12 +17,9 @@ registration—not a class rename.
 ```
 
 The script builds `libscale_shift_plugin.so`, creates an ONNX graph containing the custom
-`ScaleShift` node, loads the library with `trtexec --staticPlugins`, builds an engine, then deserializes it
-in C++ and compares four outputs with the CPU formula. Generated engines remain ignored and must be
+`ScaleShift` node, loads the library with `trtexec --staticPlugins`, builds a strongly typed
+engine, then deserializes it in C++ and compares four outputs with the CPU formula. Generated engines remain ignored and must be
 rebuilt for the deployment TensorRT/CUDA/GPU environment.
-
-Older examples use `--plugins`; TensorRT 8.6 accepts it but marks it deprecated. This lesson uses
-the current flag exposed by the pinned `trtexec` binary.
 
 Run CUDA memory checking:
 
@@ -36,9 +31,10 @@ compute-sanitizer --tool memcheck \
 ## Lifecycle
 
 - The creator receives ONNX attributes `scale` and `shift` as plugin fields.
-- TensorRT clones the plugin while building execution contexts.
+- TensorRT clones the V3 plugin and attaches a runtime capability to each execution context.
 - `supportsFormatCombination` accepts only linear FP32 input/output.
-- `getOutputDimensions` preserves the input shape.
+- `getOutputShapes` preserves the input shape.
 - `enqueue` launches on the TensorRT-provided CUDA stream without synchronizing it.
-- Two floats are serialized into the engine; deserialization reconstructs the plugin.
+- The `scale` and `shift` fields are serialized into the engine; deserialization reconstructs the V3
+  plugin.
 - The plugin library must be loaded before deserializing an engine that contains the plugin.
