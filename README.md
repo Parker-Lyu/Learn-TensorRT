@@ -7,14 +7,14 @@
 
 A practical, hands-on repository C++17 learning repository focused on **TensorRT 10.x High-Performance Deployment** and **Low-Latency Pipeline Engineering**. 
 
-Built around an end-to-end YOLOv8 object detection pipeline, this project bridges the gap between basic model export and bridges the gap between model export and production-oriented deployment engineering, covering explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling.  
+Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export and production-grade deployment. It incorporates explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling to ensure low-latency inference.  
 
 
 ## Target Audience
 
 This repository is designed for developers bridging the gap between algorithm research and production engineering:
 
-* **Algorithm Engineers Transitioning to Deployment:** You have solid deep learning knowledge (PyTorch, ONNX) but need to master C++ for production-grade inference.
+* **Algorithm Engineers Transitioning to Deployment:** You have solid deep learning knowledge (PyTorch, ONNX) but need to master C++/TensorRT for production-grade inference.
 * **Junior/Mid-level Deployment Engineers:** You have used the Python TensorRT API or `trtexec`, and want to level up to explicit Q/DQ quantization, CUDA zero-copy, multi-stream asynchronous execution, and Nsight profiling.
 * **Engineers Building a Production Portfolio:** You are targeting senior-level Edge CV or high-performance AI deployment roles and need a reference project that demonstrates real-world pipeline architecture.
 
@@ -98,7 +98,7 @@ cmake --build build
 
 ## Requirements
 
-- Ubuntu host capable of running Docker and NVIDIA containers
+- An Ubuntu host with a suitable NVIDIA GPU, capable of running Docker and NVIDIA containers.
 
 
 ## 🚀 From Learning to Landing
