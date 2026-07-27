@@ -7,13 +7,13 @@ headless sink keeps throughput measurements independent of display rendering.
 ## Environment
 
 DeepStream is not installed in the course's TensorRT development container. Use the NVIDIA
-DeepStream 6.4 development image on an x86 NVIDIA host:
+DeepStream 8.0 development image on an x86 NVIDIA host:
 
 ```bash
 docker run --rm -it --gpus all --network host \
   -v "$PWD:/workspace/Learn-TensorRT" \
   -w /workspace/Learn-TensorRT \
-  nvcr.io/nvidia/deepstream:6.4-triton-multiarch
+  nvcr.io/nvidia/deepstream:8.0-triton-multiarch
 ```
 
 TensorRT engines are environment-specific. Build the engine inside this DeepStream container rather
@@ -52,15 +52,27 @@ the custom parser only converts one network output into boxes and classes.
 NVMM can avoid unnecessary host copies between NVIDIA plugins, but decode, colorspace conversion,
 muxing, inference, and display choices still determine whether the pipeline remains GPU-resident.
 
-## Verification Boundary
+## Verification
 
-The current machine lacks Docker and DeepStream headers, so only configuration tests were run here:
+Run the static checks before entering the DeepStream container:
 
 ```bash
 python3 -m unittest discover -s 20_deepstream_gstreamer_multistream/tests -v
 python3 20_deepstream_gstreamer_multistream/validate_config.py
 ```
 
-Full acceptance requires the documented DeepStream container, two real videos, parser compilation,
-successful model loading, per-stream FPS output, and `nvidia-smi dmon` or DeepStream performance
-logs. Do not treat static configuration validation as a successful DeepStream run.
+Acceptance requires the documented DeepStream container, two real videos, parser compilation,
+successful model loading, and per-stream FPS output. Save the execution platform beside performance
+evidence:
+
+```bash
+mkdir -p 20_deepstream_gstreamer_multistream/outputs
+nvidia-smi --query-gpu=name,compute_cap,driver_version,memory.total \
+  --format=csv > 20_deepstream_gstreamer_multistream/outputs/gpu_platform.csv
+deepstream-app --version-all \
+  > 20_deepstream_gstreamer_multistream/outputs/deepstream_versions.txt
+nvidia-smi dmon -s u -d 1 \
+  > 20_deepstream_gstreamer_multistream/outputs/gpu_utilization.log
+```
+
+Static configuration checks alone are not a successful DeepStream run.
