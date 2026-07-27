@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,13 +49,24 @@ def main() -> int:
     tensor = np.load(args.input_npy).astype(np.float32, copy=False)
     if tensor.shape != (1, 3, 640, 640):
         raise ValueError(f"expected [1,3,640,640], received {tensor.shape}")
+    metadata_client = httpclient.InferenceServerClient(url=args.url, verbose=False)
+    server_metadata = metadata_client.get_server_metadata()
+    gpu_query = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,compute_cap,driver_version,memory.total",
+         "--format=csv,noheader,nounits"], text=True, capture_output=True, check=False)
+    if gpu_query.returncode != 0:
+        raise RuntimeError(f"failed to query GPU identity: {gpu_query.stderr.strip()}")
     for _ in range(args.warmup):
         infer_once(args.url, tensor)
     started = time.perf_counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
         results = list(executor.map(lambda _: infer_once(args.url, tensor), range(args.requests)))
     elapsed = time.perf_counter() - started
-    evidence = {"url": args.url, "model": "yolov8", "concurrency": args.concurrency,
+    evidence = {"url": args.url, "model": "yolov8",
+                "environment": {"gpu": gpu_query.stdout.strip(),
+                                "server_name": server_metadata["name"],
+                                "server_version": server_metadata["version"]},
+                "concurrency": args.concurrency,
                 **summarize([item[0] for item in results], elapsed),
                 "output_shape": results[-1][1], "last_output_checksum": results[-1][2]}
     args.output.parent.mkdir(parents=True, exist_ok=True)
