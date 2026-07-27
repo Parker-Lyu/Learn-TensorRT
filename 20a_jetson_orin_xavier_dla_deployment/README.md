@@ -9,7 +9,7 @@ JetPack couples the L4T kernel, CUDA, TensorRT, cuDNN, DeepStream, firmware, and
 Do not install or upgrade CUDA/TensorRT independently with generic host packages. Start from a
 documented JetPack image, record the exact target manifest, and build engines on that target.
 
-TensorRT engines are not portable from this x86 RTX 2060 environment to Jetson, nor should an engine
+TensorRT engines are not portable from the x86 RTX 4090 development environment to Jetson, nor should an engine
 built on one JetPack/TensorRT/device combination be assumed valid on another.
 
 Audit the current machine:
@@ -18,8 +18,8 @@ Audit the current machine:
 python3 20a_jetson_orin_xavier_dla_deployment/check_platform.py
 ```
 
-The current x86 machine should report `is_jetson=false` and zero DLA cores. That is an expected
-preparation result, not Jetson acceptance.
+An x86 development machine reports `is_jetson=false` and zero DLA cores. That is a compatibility
+check, not Jetson acceptance.
 
 ## Build on the Target
 
@@ -40,8 +40,8 @@ python3 20a_jetson_orin_xavier_dla_deployment/analyze_fallback.py
 python3 20a_jetson_orin_xavier_dla_deployment/benchmark_target.py
 ```
 
-Use `tegrastats` in a separate terminal to record clocks, temperatures, power, CPU/GPU/DLA load,
-and memory. Lock the same power mode and clocks before comparisons, document warmup, and save the
+`benchmark_target.py` embeds `outputs/platform_manifest.json` in its result. Use `tegrastats` in a
+separate terminal to record clocks, temperatures, power, CPU/GPU/DLA load, and memory. Lock the same power mode and clocks before comparisons, document warmup, and save the
 raw logs with the benchmark JSON.
 
 ## DLA Trade-offs

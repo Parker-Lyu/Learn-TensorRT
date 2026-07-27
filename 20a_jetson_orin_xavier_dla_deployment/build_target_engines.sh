@@ -8,7 +8,7 @@ OUTPUT_DIR="${SCRIPT_DIR}/outputs"
 python3 "${SCRIPT_DIR}/check_platform.py" --require-jetson
 mkdir -p "${OUTPUT_DIR}"
 
-trtexec \
+"${TRTEXEC:-trtexec}" \
   --onnx="${ONNX_PATH}" \
   --saveEngine="${OUTPUT_DIR}/yolov8n_jetson_gpu_fp16.engine" \
   --fp16 \
@@ -16,7 +16,7 @@ trtexec \
   --dumpLayerInfo \
   > "${OUTPUT_DIR}/gpu_build.log" 2>&1
 
-trtexec \
+"${TRTEXEC:-trtexec}" \
   --onnx="${ONNX_PATH}" \
   --saveEngine="${OUTPUT_DIR}/yolov8n_jetson_dla_fp16.engine" \
   --fp16 \

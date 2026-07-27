@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parent
 
 
 def command(command: list[str]) -> str:
-    result = subprocess.run(command, text=True, capture_output=True, check=False)
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, check=False)
+    except FileNotFoundError:
+        return f"unavailable: {command[0]} not found"
     return (result.stdout + result.stderr).strip()
 
 
@@ -30,9 +33,13 @@ def detect() -> dict:
         tensorrt_version = f"unavailable: {error}"
         dla_cores = 0
     machine = platform.machine()
+    model_file = Path("/proc/device-tree/model")
+    device_model = (model_file.read_bytes().rstrip(b"\0").decode("utf-8", errors="replace")
+                    if model_file.exists() else platform.node())
     is_jetson = machine == "aarch64" and (release_file.exists() or Path("/etc/nv_boot_control.conf").exists())
     return {
         "machine": machine,
+        "device_model": device_model,
         "is_jetson": is_jetson,
         "l4t_release": l4t_release,
         "jetpack_package": command(["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"]),
