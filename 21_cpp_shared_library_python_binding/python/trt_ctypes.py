@@ -57,7 +57,7 @@ def main() -> int:
     parser.add_argument("--library", type=Path,
                         default=ROOT / "21_cpp_shared_library_python_binding/build/libtrt_inference.so")
     parser.add_argument("--engine", type=Path,
-                        default=ROOT / "06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine")
+                        default=ROOT / "14_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine")
     parser.add_argument("--batch", type=int, default=2)
     args = parser.parse_args()
     tensor = np.full((args.batch, 3, 640, 640), 0.5, np.float32)

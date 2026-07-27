@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(cpp_shared_library_python_binding LANGUAGES CXX)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(CUDAToolkit REQUIRED)
 find_path(TENSORRT_INCLUDE_DIR NAMES NvInferRuntime.h

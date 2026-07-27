@@ -36,6 +36,7 @@ int boundary(Function&& function) noexcept {
 extern "C" TRT_API int trt_session_create(const char* engine_path, TrtSession** session) {
     return boundary([&] {
         if (!engine_path || !session) throw std::invalid_argument("engine_path and session are required");
+        *session = nullptr;
         *session = new TrtSession(engine_path);
     });
 }
