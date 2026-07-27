@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import platform
 import resource
 import statistics
 import time
@@ -65,13 +67,22 @@ def main() -> int:
             row["estimated_kv_cache_mib"] = model.kv_cache_bytes(
                 batch, input_length + args.output_length) / 2**20
             rows.append(row)
+    cpu_model = "unknown"
+    cpuinfo = Path("/proc/cpuinfo")
+    if cpuinfo.is_file():
+        for line in cpuinfo.read_text(encoding="utf-8").splitlines():
+            if line.startswith("model name"):
+                cpu_model = line.split(":", 1)[1].strip()
+                break
     evidence = {
         "model": {"name": "educational-tiny-transformer", "revision": model.config.revision,
                   "config": vars(model.config), "weight_format": "FP32 deterministic NumPy",
                   "weight_memory_mib": model.weight_bytes() / 2**20},
         "tokenizer": "UTF-8 byte tokenizer v1", "backend": "NumPy CPU autoregressive",
-        "hardware": {"peak_host_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+        "hardware": {"cpu_model": cpu_model, "logical_cpu_count": os.cpu_count(),
+                     "peak_host_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
                      "peak_gpu_memory_mib": 0.0},
+        "software": {"python": platform.python_version(), "numpy": np.__version__},
         "methodology": {"warmup": args.warmup, "repetitions": args.repetitions,
                         "fixed_output_length": args.output_length}, "results": rows}
     output = ROOT / "outputs/llm_benchmark.json"

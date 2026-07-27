@@ -12,7 +12,9 @@ rows = "\n".join(
 text = f"""# Tiny Local LLM Inference Benchmark
 
 Model revision: `{data['model']['revision']}`; tokenizer: {data['tokenizer']}; backend:
-{data['backend']}; weights: {data['model']['weight_format']} ({data['model']['weight_memory_mib']:.3f} MiB).
+{data['backend']}; CPU: {data['hardware']['cpu_model']}
+({data['hardware']['logical_cpu_count']} logical CPUs); Python {data['software']['python']}; NumPy
+{data['software']['numpy']}; weights: {data['model']['weight_format']} ({data['model']['weight_memory_mib']:.3f} MiB).
 
 | Input tokens | Batch | TTFT ms | TPOT ms | Prefill tok/s | Decode tok/s | Total tok/s | KV MiB |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
