@@ -13,5 +13,8 @@ ctest --test-dir 23_cpp_interview_katas/build --output-on-failure
 
 Tests cover empty NMS, degenerate boxes, overlapping boxes from different classes, interpolation
 boundaries, extreme letterbox clamping, Top-K ties, ring wrap/full/empty behavior, queue close waking
-a blocked producer, and CUDA ownership transfer. Practice rewriting one group from memory after its
-related core lesson; explain validation and complexity before optimizing syntax.
+a blocked producer, and CUDA ownership transfer. The CPU katas and CUDA ownership checks are separate
+CTest cases, so a machine without an accessible CUDA device reports only the CUDA case as skipped.
+
+Practice rewriting one group from memory after its related core lesson. Explain input validation,
+ownership, synchronization, and algorithmic complexity before optimizing syntax.
