@@ -1,45 +1,56 @@
 # 14 - TensorRT Dynamic Batching
 
-This lesson runs batch sizes 1, 2, and 4 through one TensorRT engine. It makes the runtime shape,
-NCHW sample offsets, output offsets, and latency/throughput trade-off explicit.
+This lesson runs batch sizes 1, 2, and 4 through one TensorRT engine. It makes runtime shapes, NCHW
+sample offsets, output offsets, and the latency/throughput trade-off explicit.
 
-## Build the Engine
+## Prerequisites and engine build
 
-The checked-in course artifacts already include a compatible lesson 06 dynamic FP16 engine. To
-build a lesson-local engine with a fixed 640x640 spatial shape and dynamic batch profile:
+Complete the lesson 05 dynamic export and validation first. The validation tensor is generated from
+the shared default image, `assets/img.jpeg`:
 
 ```bash
-./build_dynamic_engine.sh
+python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
+python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
-The profile is `min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. Engines are generated,
-environment-specific artifacts and remain ignored. The script reuses lesson 06's timing cache and
-uses builder optimization level 0 so the classroom build remains reasonably short; production
-release builds should benchmark higher optimization levels separately. TensorRT 10.14 removed the
-old `--minTiming` and `--avgTiming` builder flags, so the script does not use them.
+TensorRT 10.14 strongly typed networks express reduced precision in the model rather than through a
+builder precision flag. Install the lesson-local ONNX dependencies, run NVIDIA ModelOpt AutoCast,
+and build the engine:
 
-## Build and Run
+```bash
+./14_dynamic_batching/setup_autocast_deps.sh
+./14_dynamic_batching/build_dynamic_engine.sh
+```
+
+AutoCast preserves FP32 input/output tensors, converts the suitable backbone nodes to FP16, and
+keeps the YOLO detection head in FP32. The exclusion keeps dynamic shape calculations and final box
+decoding in their declared types. `trtexec --stronglyTyped` then builds the explicit mixed-precision
+graph without weakly typed precision selection.
+
+The profile is `min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. The script reuses lesson
+06's timing cache and uses builder optimization level 0 so the classroom build remains reasonably
+short; benchmark higher optimization levels before choosing production settings. Engines, the
+AutoCast ONNX graph, calibration input, and timing cache are generated environment-specific
+artifacts and remain ignored.
+
+## Build and run
 
 Use the pinned TensorRT development container:
 
 ```bash
-cmake -S . -B build
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-./build/dynamic_batching --warmup 5 --iterations 50
-```
-
-The default engine is `../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine`. Use the
-lesson-local engine with:
-
-```bash
-./build/dynamic_batching --engine outputs/yolov8n_batch1_4_fp16.engine
+cmake -S 14_dynamic_batching -B 14_dynamic_batching/build
+cmake --build 14_dynamic_batching/build -j
+ctest --test-dir 14_dynamic_batching/build --output-on-failure
+./14_dynamic_batching/build/dynamic_batching \
+  --engine 14_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine \
+  --warmup 5 \
+  --iterations 50
 ```
 
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
 allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It also writes
 `outputs/batch_benchmark_environment.json` with the GPU, compute capability, TensorRT version, and
-CUDA runtime/driver versions so the measurements are not separated from their execution platform.
+CUDA runtime/driver versions so measurements remain attached to their execution platform.
 
 ## Layout
 

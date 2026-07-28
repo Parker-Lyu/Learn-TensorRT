@@ -27,6 +27,8 @@ For the real C ABI inference check, also build the dynamic engine expected by le
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+./14_dynamic_batching/setup_autocast_deps.sh
 ./14_dynamic_batching/build_dynamic_engine.sh
 ```
 

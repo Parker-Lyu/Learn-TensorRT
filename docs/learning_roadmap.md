@@ -361,7 +361,7 @@ Acceptance criteria:
 
 - A C++ program loads a TensorRT engine and runs one inference with dummy or real input.
 - Builder, parser, engine, runtime, context, buffer, and stream lifetimes are clear.
-- Deprecated `kEXPLICIT_BATCH` and builder-level `kFP16` paths are not used.
+- Strongly typed network creation and explicit tensor precision are used consistently.
 
 ### `09_yolov8_trt_python`
 

@@ -1,0 +1,6 @@
+ml_dtypes==0.5.4
+numpy==2.2.6
+onnx==1.19.1
+onnx-graphsurgeon==0.5.8
+protobuf==7.35.1
+typing_extensions==4.16.0

@@ -18,8 +18,8 @@ collection during engine deserialization. The build uses a strongly typed networ
 
 The script builds `libscale_shift_plugin.so`, creates an ONNX graph containing the custom
 `ScaleShift` node, loads the library with `trtexec --staticPlugins`, builds a strongly typed
-engine, then deserializes it in C++ and compares four outputs with the CPU formula. Generated engines remain ignored and must be
-rebuilt for the deployment TensorRT/CUDA/GPU environment.
+engine, then deserializes it in C++ and compares four outputs with the CPU formula. Generated
+engines remain ignored and must be rebuilt for the deployment TensorRT/CUDA/GPU environment.
 
 Run CUDA memory checking:
 

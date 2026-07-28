@@ -4,9 +4,12 @@ This lesson packages the real lesson 14 TensorRT dynamic-batch runner as `libtrt
 exposes a narrow C ABI consumed by Python `ctypes`.
 
 ```bash
+python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+./14_dynamic_batching/setup_autocast_deps.sh
+./14_dynamic_batching/build_dynamic_engine.sh
 cmake -S 21_cpp_shared_library_python_binding -B 21_cpp_shared_library_python_binding/build
 cmake --build 21_cpp_shared_library_python_binding/build -j
-./14_dynamic_batching/build_dynamic_engine.sh
 python3 21_cpp_shared_library_python_binding/python/trt_ctypes.py --batch 2
 python3 -m unittest discover -s 21_cpp_shared_library_python_binding/tests -v
 ```
