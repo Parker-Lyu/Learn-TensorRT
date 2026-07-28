@@ -1,6 +1,6 @@
 # Final TensorRT Deployment Portfolio Case Study
 
-Repository evidence revision: `285035b`. This project develops a YOLOv8n deployment from ONNX
+Repository evidence revision: `a66d7f3`. This project develops a YOLOv8n deployment from ONNX
 export through TensorRT C++ inference, precision validation, bounded asynchronous pipelines, CUDA
 preprocessing, server/edge integration exercises, and reusable language bindings.
 
@@ -84,7 +84,7 @@ for the deployment environment.
 | --- | --- | ---: |
 | `learn-tensorrt:25.11, learn-tensorrt:25.11-audit` | `c231b081df78` | 9308.2 |
 | `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` | `6e43a6b02e5f` | 132.9 |
-| `learn-tensorrt-runtime:10.14` | `2b6f4355bcbb` | 564.1 |
+| `learn-tensorrt-runtime:10.14` | `4bafbc73d5e3` | 568.4 |
 
 ## Completed Elective Track
 
