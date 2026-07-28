@@ -29,8 +29,12 @@ mkdir -p 10a_end_to_end_validation_report/outputs/cpp
 bash 00_environment_check/check_env.sh \
   > 10a_end_to_end_validation_report/outputs/environment_check.log 2>&1
 
+python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py \
   --image assets/img.jpeg
+
+python3 06_trtexec_engine/build_and_benchmark.py \
+  --builds static_fp32
 
 python3 06a_polygraphy_precision_alignment/align_precision.py \
   --input-npy 05_torch_to_onnx/outputs/input_nchw_float32.npy \

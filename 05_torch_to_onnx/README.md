@@ -49,6 +49,12 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 
 ## Export
 
+Run the lesson commands from its directory:
+
+```bash
+cd 05_torch_to_onnx
+```
+
 Export a simplified static-shape ONNX model:
 
 ```bash

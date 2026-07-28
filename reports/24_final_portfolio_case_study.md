@@ -1,6 +1,6 @@
 # Final TensorRT Deployment Portfolio Case Study
 
-Repository evidence revision: `a66d7f3`. This project develops a YOLOv8n deployment from ONNX
+Repository evidence revision: `e485a2e`. This project develops a YOLOv8n deployment from ONNX
 export through TensorRT C++ inference, precision validation, bounded asynchronous pipelines, CUDA
 preprocessing, server/edge integration exercises, and reusable language bindings.
 
@@ -32,7 +32,7 @@ Performance and acceptance results are valid only for their recorded hardware an
 | FP16 | 120 | 0.861 | 0.817 | 0.888 | 1.515 | 2001.3 | PASS |
 | INT8 | 120 | 1.005 | 0.959 | 0.998 | 1.695 | 1578.8 | PASS |
 
-INT8 is the current deployment candidate under the declared gate. The decision uses the canonical 5,000-image human-labeled validation split
+FP16 is the current deployment choice: INT8 passes the declared quality gate but is slower than matched FP16. The decision uses the canonical 5,000-image human-labeled validation split
 and identity-linked engine evidence. A one-input Polygraphy alignment is valuable for locating
 numerical conversion bugs, but it cannot replace dataset accuracy, tail latency, or long-run
 reliability.
@@ -86,18 +86,19 @@ for the deployment environment.
 | `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` | `6e43a6b02e5f` | 132.9 |
 | `learn-tensorrt-runtime:10.14` | `4bafbc73d5e3` | 568.4 |
 
-## Completed Elective Track
+## Elective Track Status
 
-The advanced NVIDIA deployment path includes Triton configuration/client load tests, ONNX graph
-surgery, a real custom TensorRT CUDA plugin, DeepStream multi-stream configuration/parser work,
-Jetson/DLA target procedures, a C ABI Python integration, and LLM inference awareness. Triton,
-DeepStream, and Jetson runtime acceptance remains explicitly hardware/container dependent.
+The implemented advanced NVIDIA exercises include Triton configuration and a client load-test tool,
+ONNX graph surgery, a runnable custom TensorRT CUDA plugin, DeepStream multi-stream configuration
+and parser code, Jetson/DLA target procedures, a C ABI Python integration, and LLM inference
+awareness. This is not a fully completed runtime-validated elective track: Triton, DeepStream, and
+Jetson acceptance remains pending in their required containers or target hardware.
 
 ## Bottleneck and Future Work
 
 Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
 CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
-confirm INT8 behavior on the target deployment hardware, complete the formal soak/TSAN gates, and validate runtime behavior on
+investigate the Q/DQ INT8 performance regression, complete the formal soak/TSAN gates, and validate runtime behavior on
 Triton, DeepStream, and Jetson hardware.
 
 ## Resume Bullets

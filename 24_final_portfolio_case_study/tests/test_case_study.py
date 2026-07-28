@@ -32,5 +32,11 @@ class CaseStudyTests(unittest.TestCase):
         self.assertIn("5000 fixed", text)
         self.assertNotIn("smoke", text.lower())
 
+    def test_case_study_uses_quality_and_performance_for_precision_choice(self):
+        text = (ROOT / "reports/24_final_portfolio_case_study.md").read_text()
+        self.assertIn("FP16 is the current deployment choice", text)
+        self.assertIn("INT8 passes the declared quality gate but is slower", text)
+        self.assertNotIn("INT8 is the current deployment candidate", text)
+
 
 if __name__ == "__main__": unittest.main()

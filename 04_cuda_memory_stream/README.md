@@ -73,7 +73,10 @@ toward TensorRT engines, execution contexts, streams, and buffers.
 
 ## Build
 
+Run the lesson commands from its directory:
+
 ```bash
+cd 04_cuda_memory_stream
 cmake -S . -B build
 cmake --build build
 ```

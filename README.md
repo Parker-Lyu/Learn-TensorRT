@@ -8,7 +8,11 @@
 A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance deployment** and
 **low-latency pipeline engineering**.
 
-Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export and production-grade deployment. It incorporates explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling to ensure low-latency inference.  
+Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export
+and production-oriented deployment. It includes explicit Q/DQ quantization, measured CUDA memory
+paths and preprocessing, CPU-testable asynchronous multi-stream scheduling, and Nsight Systems
+profiling. The scheduling lessons still require integration with the real TensorRT backend before
+they constitute a fully GPU-executed video pipeline.
 
 
 ## Target Audience
@@ -28,7 +32,9 @@ execution, and build-system fundamentals.
 
 Read [`docs/learning_roadmap.md`](docs/learning_roadmap.md) first. Use
 [`docs/coverage_matrix.md`](docs/coverage_matrix.md) to map the core and elective topics to
-production deployment skills.
+production deployment skills. The dated
+[`docs/roadmap_alignment_audit.md`](docs/roadmap_alignment_audit.md) distinguishes implemented
+content from partial lessons and pending runtime acceptance.
 
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
@@ -61,8 +67,8 @@ from the job descriptions you are targeting instead of completing every elective
 | Checkpoint 1 | `10a_end_to_end_validation_report` | Reproducible functional and architecture evidence |
 | Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
 | Checkpoint 2 | `12a_precision_performance_report` | Application-ready precision and performance report |
-| Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic, asynchronous, multi-stream inference pipeline |
-| Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability evidence |
+| Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic TensorRT batching plus CPU-testable asynchronous/multi-stream orchestration and CUDA preprocessing |
+| Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
 
 
 ### Elective Tracks

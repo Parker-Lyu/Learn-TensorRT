@@ -55,15 +55,27 @@ def main() -> int:
     )
     fp32, fp16, int8 = (row(performance, name) for name in ("FP32", "FP16", "INT8"))
     gates = {name: row(quality, name)[-1] for name in ("FP32", "FP16", "INT8")}
-    if gates["INT8"] == "PASS":
-        precision_decision = "INT8 is the current deployment candidate under the declared gate."
+    fp16_throughput = float(fp16[-1])
+    int8_throughput = float(int8[-1])
+    if gates["INT8"] == "PASS" and int8_throughput > fp16_throughput:
+        precision_decision = (
+            "INT8 is the current deployment choice because it passes the declared quality gate "
+            "and outperforms matched FP16."
+        )
         precision_next = "confirm INT8 behavior on the target deployment hardware"
     elif gates["FP16"] == "PASS":
-        precision_decision = (
-            "FP16 is the current deployment choice; INT8 remains blocked by the declared "
-            "fixed-dataset accuracy gate."
-        )
-        precision_next = "improve INT8 calibration, mixed precision, or QAT"
+        if gates["INT8"] == "PASS":
+            precision_decision = (
+                "FP16 is the current deployment choice: INT8 passes the declared quality gate "
+                "but is slower than matched FP16."
+            )
+            precision_next = "investigate the Q/DQ INT8 performance regression"
+        else:
+            precision_decision = (
+                "FP16 is the current deployment choice; INT8 remains blocked by the declared "
+                "fixed-dataset accuracy gate."
+            )
+            precision_next = "improve INT8 calibration, mixed precision, or QAT"
     else:
         precision_decision = "FP32 remains the deployment baseline because reduced precision fails."
         precision_next = "investigate FP16/INT8 numerical drift"
@@ -173,12 +185,13 @@ for the deployment environment.
 | --- | --- | ---: |
 {docker_rows}
 
-## Completed Elective Track
+## Elective Track Status
 
-The advanced NVIDIA deployment path includes Triton configuration/client load tests, ONNX graph
-surgery, a real custom TensorRT CUDA plugin, DeepStream multi-stream configuration/parser work,
-Jetson/DLA target procedures, a C ABI Python integration, and LLM inference awareness. Triton,
-DeepStream, and Jetson runtime acceptance remains explicitly hardware/container dependent.
+The implemented advanced NVIDIA exercises include Triton configuration and a client load-test tool,
+ONNX graph surgery, a runnable custom TensorRT CUDA plugin, DeepStream multi-stream configuration
+and parser code, Jetson/DLA target procedures, a C ABI Python integration, and LLM inference
+awareness. This is not a fully completed runtime-validated elective track: Triton, DeepStream, and
+Jetson acceptance remains pending in their required containers or target hardware.
 
 ## Bottleneck and Future Work
 

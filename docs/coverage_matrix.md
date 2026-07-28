@@ -26,17 +26,17 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 | TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
 | Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `11_nsight_performance_diagnosis` |
 | CUDA or NPP preprocessing optimization | Covered as advanced path | `17_cuda_preprocess_npp` |
-| Single-stream video pipeline | Covered as core path | `13_cpp_producer_consumer`, `15_async_video_pipeline` |
-| Multi-stream video pipeline | Covered as core/advanced bridge | `14_dynamic_batching`, `16_multistream_video_pipeline` |
-| Pipeline latency, overload, and stability evidence | Covered as core reporting path | `17a_pipeline_performance_report` |
-| Failure injection, sanitizer checks, and soak testing | Covered across the core reliability path | `07_tensorrt_raii_resource`, `13_cpp_producer_consumer`, `15_async_video_pipeline`, `16_multistream_video_pipeline`, `17a_pipeline_performance_report` |
-| Triton model serving, dynamic batching, and metrics | Covered as server inference elective | `18a_triton_inference_server` |
-| DeepStream and GStreamer | Covered as advanced path | `20_deepstream_gstreamer_multistream` |
-| Jetson Orin/Xavier, cross compilation, and DLA | Covered as edge deployment extension | `20a_jetson_orin_xavier_dla_deployment`, `20_deepstream_gstreamer_multistream` |
+| Single-stream video pipeline | Orchestration covered; TensorRT backend integration pending | `13_cpp_producer_consumer`, `15_async_video_pipeline` |
+| Multi-stream video pipeline | Scheduling covered; TensorRT detection integration pending | `14_dynamic_batching`, `16_multistream_video_pipeline` |
+| Pipeline latency, overload, and stability evidence | Partially covered; formal soak and sanitizer gates incomplete | `17a_pipeline_performance_report` |
+| Failure injection, sanitizer checks, and soak testing | Partially covered; see the incomplete 17a report gates | `07_tensorrt_raii_resource`, `13_cpp_producer_consumer`, `15_async_video_pipeline`, `16_multistream_video_pipeline`, `17a_pipeline_performance_report` |
+| Triton model serving, dynamic batching, and metrics | Implementation scaffold; runtime comparison report pending | `18a_triton_inference_server` |
+| DeepStream and GStreamer | Implementation scaffold; two-stream runtime acceptance pending | `20_deepstream_gstreamer_multistream` |
+| Jetson Orin/Xavier, cross compilation, and DLA | Target-native scaffold; cross-compilation path and target acceptance pending | `20a_jetson_orin_xavier_dla_deployment`, `20_deepstream_gstreamer_multistream` |
 | C++ shared library and Python binding | Covered as advanced path | `21_cpp_shared_library_python_binding` |
 | Production Docker runtime packaging | Covered as delivery path | `24_final_portfolio_case_study` |
 | C++ hand-written deployment interview code | Covered as advanced path | `23_cpp_interview_katas` |
-| LLM inference entry point and controlled benchmark matrix | Covered as extension | `22_llm_inference_intro` |
+| LLM inference entry point and controlled benchmark matrix | Teaching implementation covered; benchmark evidence pending | `22_llm_inference_intro` |
 | Incremental portfolio evidence | Covered across core checkpoints | `10a_end_to_end_validation_report`, `12a_precision_performance_report`, `17a_pipeline_performance_report`, `24_final_portfolio_case_study` |
 
 ## Notes

@@ -4,7 +4,7 @@ This lesson implements YOLO-style image preprocessing in C++ with OpenCV.
 
 Goal: understand exactly what happens before an image tensor is passed into a TensorRT engine.
 
-This lesson establish the input contract used by later TensorRT 10.14 lessons: batch is an
+This lesson establishes the input contract used by later TensorRT 10.14 lessons: batch is an
 explicit tensor dimension, the host buffer is contiguous, and the engine's input tensor metadata—not
 TensorRT itself—determines the required shape, data type, layout, color order, and normalization.
 
@@ -88,7 +88,10 @@ each part can evolve without turning the example into one large source file.
 
 ## Build
 
+Run the lesson commands from its directory:
+
 ```bash
+cd 03_opencv_preprocess
 cmake -S . -B build
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
