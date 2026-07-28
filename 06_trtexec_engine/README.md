@@ -228,9 +228,8 @@ profile.
 Dynamic-shape flags are required only for `dynamic_fp16`. Static engines have fixed input dimensions
 from the ONNX graph, so they do not need `--minShapes`, `--optShapes`, `--maxShapes`, or `--shapes`.
 
-Treat serialized TensorRT engines as machine-local artifacts. If you move from an RTX 2060 laptop to
-an RTX 4090 desktop, keep the ONNX and rebuild the `.engine` files on the target machine so tactics
-match that GPU and software stack.
+Treat serialized TensorRT engines as machine-local artifacts. Keep the ONNX model and rebuild the
+`.engine` files on each target machine so tactics match its GPU and software stack.
 
 ## Review: Generated trtexec Commands
 

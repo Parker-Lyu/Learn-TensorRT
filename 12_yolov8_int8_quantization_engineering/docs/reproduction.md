@@ -45,39 +45,7 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/validate_outputs.py
 The evaluation records PyTorch FP32/FP16, TensorRT FP32/FP16 and Q/DQ INT8 metrics in one report.
 Only a candidate with `release_gate.passed=true` is eligible for matched `trtexec` benchmarking.
 
-## 3. Optional legacy API reference
-
-```bash
-python3 12_yolov8_int8_quantization_engineering/reference_legacy_calibrator/build_entropy_engine.py \
-  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
-  --manifest 12_yolov8_int8_quantization_engineering/data/dataset_manifest.json \
-  --output 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine
-```
-
-This is an isolated API example. Evaluate it with the same quality contract if you want a numerical
-comparison; do not use it as the deployment path.
-
-Create a reusable reference bundle from the main evaluation, then evaluate only the entropy
-candidate rather than repeating all four reference backends:
-
-```bash
-python3 12_yolov8_int8_quantization_engineering/tools/create_reference_bundle.py \
-  --report 12_yolov8_int8_quantization_engineering/outputs/evaluation/precision_evaluation.json \
-  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
-  --output 12_yolov8_int8_quantization_engineering/outputs/evaluation/reference_bundle.json
-
-python3 12_yolov8_int8_quantization_engineering/compare_engines.py \
-  --experiment-id reference_entropy_calibrator \
-  --int8-engine 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine \
-  --engine-metadata 12_yolov8_int8_quantization_engineering/outputs/legacy_entropy/yolov8n_entropy_int8.engine.json \
-  --reference-bundle 12_yolov8_int8_quantization_engineering/outputs/evaluation/reference_bundle.json \
-  --output-dir 12_yolov8_int8_quantization_engineering/outputs/evaluation_legacy
-```
-
-Exit status `2` means the candidate completed evaluation but failed the predeclared quality gate;
-inspect the generated JSON and Markdown instead of treating it as an execution failure.
-
-## 4. Performance evidence
+## 3. Performance evidence
 
 Use `modelopt/benchmark_engines.py` only after the Q/DQ candidate passes the gate. Keep raw
 `trtexec` output under `outputs/`; record GPU, driver, CUDA, TensorRT, warmup, iterations, and

@@ -9,7 +9,6 @@
 3. 使用 ModelOpt 生成 Q/DQ 图，在 TensorRT 10.14 strongly typed network 中构建 INT8 引擎。
 4. 使用预先声明的 mAP50-95、mAP50、precision、recall gate 判断 INT8 是否可接受。
 5. 仅对通过质量 gate 的候选进行匹配性能测试。
-6. 在独立参考目录中阅读 TensorRT legacy entropy calibrator API，并将其结果作为对照，不作为推荐路径。
 
 ## 运行顺序
 
@@ -56,12 +55,6 @@ TensorRT 10.14 复现实验的精简证据。它展示如何从质量 gate、Eng
 
 `configs/quality_contract.json` 固定输入 shape、后处理、指标实现和阈值。不要在看到结果后
 修改阈值。任何 manifest、模型、预处理或运行时身份变化都要求重新构建和重新评估。
-
-## Legacy API 参考
-
-`reference_legacy_calibrator/` 只展示 `IInt8EntropyCalibrator2` 的历史接口、cache 身份和
-独立评估命令，帮助读者理解 calibration cache 与显式 Q/DQ 的差异。该目录不是主线实现，
-不影响 Q/DQ 候选的 gate 或部署推荐。
 
 ## 输出与测试
 

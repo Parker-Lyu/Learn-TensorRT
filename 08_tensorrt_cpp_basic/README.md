@@ -191,8 +191,7 @@ buffer allocation. This lesson uses one supplied shape as min/opt/max to keep th
 without introducing profile tuning yet. The builder owns the profile returned by
 `createOptimizationProfile`, so the code keeps that ownership boundary explicit.
 
-TensorRT 10 networks are always explicit-batch. The deprecated `kEXPLICIT_BATCH` flag is not used;
-the network is created with `kSTRONGLY_TYPED`. The default build also clears `BuilderFlag::kTF32` so
+The network is created with `kSTRONGLY_TYPED`. The default build also clears `BuilderFlag::kTF32` so
 the FP32 reference does not silently use TensorFloat-32 math.
 
 ## Checkpoints

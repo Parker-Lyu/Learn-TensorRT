@@ -42,7 +42,7 @@ Congratulations! You have successfully compiled and run your first C++ program.
   ISO C++17.
 - `CMAKE_EXPORT_COMPILE_COMMANDS` writes `compile_commands.json` for editor and analysis tooling.
 
-No TensorRT migration is required in this lesson because it has no TensorRT API usage or linkage.
+This lesson has no TensorRT API usage or linkage.
 Its relevant compatibility requirement is that the host code continues to compile as ISO C++17.
 
 ## Acceptance criteria

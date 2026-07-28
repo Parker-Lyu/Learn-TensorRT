@@ -11,6 +11,8 @@
 **/outputs/**
 **/__pycache__
 **/*.pyc
+**/.deps
+**/.deps/**
 **/*.engine
 **/*.plan
 **/*.timing-cache

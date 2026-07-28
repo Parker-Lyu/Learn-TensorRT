@@ -66,13 +66,6 @@ Although Q/DQ INT8 passed the quality gate, FP16 was faster on this RTX 4090: FP
 `1969.04` qps versus `1590.38` qps for INT8.
 The deployment decision for this measured environment is therefore **retain TensorRT FP16**.
 
-## Legacy entropy-calibrator reference
-
-The isolated `IInt8EntropyCalibrator2` example completed calibration over the same 3,000 images and
-was evaluated on the same 5,000-image validation set. It produced mAP50-95 `0.3043` and
-mAP50 `0.4333`; its quality gate result was **FAIL**. This supports keeping the
-legacy API as reference code rather than the recommended deployment path.
-
 ## Reproduction
 
 Follow `12_yolov8_int8_quantization_engineering/docs/reproduction.md`. A different GPU, driver,
