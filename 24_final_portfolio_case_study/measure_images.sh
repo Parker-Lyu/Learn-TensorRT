@@ -7,12 +7,12 @@ OUTPUT_DIR="${SCRIPT_DIR}/outputs"
 DEVELOPMENT_IMAGE=${DEVELOPMENT_IMAGE:-learn-tensorrt:25.11}
 RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE:-nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04}
 RUNTIME_IMAGE=${RUNTIME_IMAGE:-learn-tensorrt-runtime:10.14}
-ENGINE="${ROOT_DIR}/06_trtexec_engine/outputs/yolov8n_static_fp16.engine"
+ENGINE="${SCRIPT_DIR}/outputs/yolov8n_static_autocast_fp16.engine"
 
 command -v docker >/dev/null || { echo "Docker is required" >&2; exit 2; }
 if [[ ! -f "${ENGINE}" ]]; then
   echo "Missing ${ENGINE}" >&2
-  echo "Build the lesson 06 static FP16 engine in the pinned development environment first." >&2
+  echo "Run 24_final_portfolio_case_study/build_delivery_engine.sh first." >&2
   exit 2
 fi
 

@@ -1,7 +1,7 @@
 # 24 - Final Portfolio Case Study
 
 This lesson assembles the validated YOLOv8n deployment into a reproducible portfolio report and an
-optional multi-stage delivery image. It consumes generated evidence from lessons 05, 06, 10a, 12a,
+optional multi-stage delivery image. It consumes generated evidence from lessons 05, 10a, 12a,
 17a, 14, and 21; it never treats an absent engine or failed GPU check as a successful deployment.
 
 ## Reproduce the evidence
@@ -10,11 +10,13 @@ Run these commands from the repository root **inside the pinned `learn-tensorrt:
 development environment**. The existing development container is sufficient; this lesson does not
 require rebuilding that image.
 
-First create the static engine used by the lesson 10 C++ runner:
+First create the strongly typed static engine used by the lesson 10 C++ runner:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
-python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+./14_dynamic_batching/setup_autocast_deps.sh
+./24_final_portfolio_case_study/build_delivery_engine.sh
 ```
 
 Build the local checkpoint matrix (generated `build/` directories are ignored):
@@ -51,7 +53,7 @@ with a CPU-only claim.
 The optional image uses `nvcr.io/nvidia/pytorch:25.11-py3` as the reproducible TensorRT 10.14/CUDA
 13.0 builder and `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` as the CUDA runtime base. It copies
 only the lesson 10 executable, TensorRT 10 runtime library, OpenCV runtime packages, the generated
-static FP16 engine, and `assets/img.jpeg` into the final stage.
+strongly typed mixed-precision engine, and `assets/img.jpeg` into the final stage.
 
 After the static engine exists, build and record image/platform identity:
 

@@ -20,5 +20,6 @@ assets/*
 !assets/img.jpeg
 
 # Lesson 24 packages this generated engine intentionally into the delivery image.
-!06_trtexec_engine/outputs/
-!06_trtexec_engine/outputs/yolov8n_static_fp16.engine
+!24_final_portfolio_case_study/outputs/
+24_final_portfolio_case_study/outputs/*
+!24_final_portfolio_case_study/outputs/yolov8n_static_autocast_fp16.engine
