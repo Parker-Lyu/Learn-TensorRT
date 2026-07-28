@@ -41,6 +41,18 @@ void check_cuda(cudaError_t status, const char* operation) {
     }
 }
 
+void ensure_cuda_runtime_available() {
+    int device_count = 0;
+    const cudaError_t status = cudaGetDeviceCount(&device_count);
+    if (status != cudaSuccess) {
+        throw std::runtime_error("CUDA runtime is unavailable: " +
+                                 std::string(cudaGetErrorString(status)));
+    }
+    if (device_count <= 0) {
+        throw std::runtime_error("No CUDA-capable device detected.");
+    }
+}
+
 class TensorRtLogger final : public nvinfer1::ILogger {
 public:
     void log(Severity severity, const char* message) noexcept override {
@@ -506,6 +518,8 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
     if (config.warmup_iterations < 0 || config.measured_iterations <= 0) {
         throw std::runtime_error("Invalid warmup or measured iteration count.");
     }
+
+    ensure_cuda_runtime_available();
 
     TensorRtLogger logger;
     const std::vector<char> engine_bytes = read_binary_file(config.engine_path);
