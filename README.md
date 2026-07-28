@@ -5,7 +5,8 @@
 [![CUDA](https://img.shields.io/badge/CUDA-13.0-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 [![Container](https://img.shields.io/badge/NGC_PyTorch-25.11-orange.svg)](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
 
-A practical, hands-on repository C++17 learning repository focused on **TensorRT 10.x High-Performance Deployment** and **Low-Latency Pipeline Engineering**. 
+A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance deployment** and
+**low-latency pipeline engineering**.
 
 Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export and production-grade deployment. It incorporates explicit Q/DQ quantization, CUDA zero-copy preprocessing, asynchronous multi-stream execution, and Nsight Systems profiling to ensure low-latency inference.  
 
@@ -18,22 +19,16 @@ This repository is designed for developers bridging the gap between algorithm re
 * **Junior/Mid-level Deployment Engineers:** You have used the Python TensorRT API or `trtexec`, and want to level up to explicit Q/DQ quantization, CUDA zero-copy, multi-stream asynchronous execution, and Nsight profiling.
 * **Engineers Building a Production Portfolio:** You are targeting senior-level Edge CV or high-performance AI deployment roles and need a reference project that demonstrates real-world pipeline architecture.
 
-**⚠️ Prerequisites:** This is a heavy C++ engineering course. You should have basic familiarity with modern C++ (11/14/17) and CMake. While Python-only developers will face a learning curve, there is no need to worry—AI coding assistants can accelerate exploration and debugging, though undertanding C++ memory models, CUDA execution, and build systems remains essential..
+**Prerequisites:** This is a substantial C++ engineering course. You should have basic familiarity
+with ISO C++17 and CMake. Python-only developers should first learn C++ ownership, concurrency, CUDA
+execution, and build-system fundamentals.
 
 
 ## Learning Roadmap
 
-Read the full roadmap first:
-
-```bash
-docs/learning_roadmap.md
-```
-
-For senior production deployment coverage, also read:
-
-```bash
-docs/coverage_matrix.md
-```
+Read [`docs/learning_roadmap.md`](docs/learning_roadmap.md) first. Use
+[`docs/coverage_matrix.md`](docs/coverage_matrix.md) to map the core and elective topics to
+production deployment skills.
 
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
@@ -49,13 +44,11 @@ git clone git@github.com:Parker-Lyu/Learn-TensorRT.git
 cd Learn-TensorRT
 ```
 
-2. Use an AI coding assistant (Codex, Claude Code, etc.) to prepare the development environment by following the agent guide, it will pull a image and build your container.
+2. Follow [`00_environment_check/README.md`](00_environment_check/README.md) to start the pinned
+development environment and verify TensorRT, CUDA, and GPU access.
 
-```bash
-00_environment_check/agent_env_setup.md
-```
-
-(option) 3. Install VS Code and the Dev Containers extension, then attach VS Code to the running container and open the mounted project directory inside the container.
+3. Optionally install VS Code and the Dev Containers extension, then attach to the running container
+and open the mounted project directory.
 
 4. Complete the core lessons in order, writing a report at each checkpoint. Then choose electives
 from the job descriptions you are targeting instead of completing every elective sequentially.
