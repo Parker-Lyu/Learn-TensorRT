@@ -235,3 +235,114 @@ nsys stats \
 The Python driver captures the baseline and profiler metadata in
 `outputs/diagnosis_summary.json`, and redirects the `nsys stats` output to
 `outputs/nsys/nsys_stats.txt` itself.
+
+## Appendix: From Timeline Evidence To An Optimization Plan
+
+The following screenshot shows one steady-state `measured_iteration_0` from the FP32 capture used
+for this lesson. It is a useful example of why the empty space between named ranges must be
+investigated rather than automatically classified as idle time.
+
+![Nsight Systems steady-state iteration with host staging gaps](../assets/lesson11_nsys_measured_iteration.png)
+
+### Account For The Unlabelled Host Work
+
+In the screenshot, `preprocess` finishes before `h2d_submit` begins. The gap is not unexplained GPU
+work. `TensorRtRunner::infer()` first copies the approximately 4.9 MB FP32 input tensor from its
+ordinary `std::vector<float>` into a pinned host staging buffer:
+
+```cpp
+std::copy(input_tensor.begin(), input_tensor.end(), impl_->input_host->data());
+```
+
+Only the subsequent event recording and `cudaMemcpyAsync` call are inside the `h2d_submit` NVTX
+range. Because an ordinary `std::copy` is neither a CUDA API call nor an annotated range, Nsight
+Systems leaves that CPU work visually unlabelled. Querying the captured SQLite timestamps gives a
+roughly 0.254--0.263 ms input-staging gap across the five measured iterations.
+
+There is a similar gap after `d2h_submit_and_wait`: the pinned output is copied into another
+`std::vector<float>` before `postprocess` starts. That output-staging gap is approximately
+0.128--0.137 ms in the measured iterations. Together, the two host copies account for about
+0.39 ms, which closely matches the report's approximately 0.40 ms P50 unaccounted time. Add
+`input_host_staging_copy` and `output_host_unstaging_copy` NVTX ranges when experimenting so a new
+capture makes those costs explicit.
+
+The green `cudaEventSynchronize` interval needs similar care. It mostly represents the host waiting
+for preceding stream work to finish; it is not evidence that the event API itself needs a faster
+replacement. A single request must eventually wait for its result. A multi-request pipeline can
+instead perform useful CPU work for another request while the current request is in flight.
+
+### Read The Baseline Before Choosing A Target
+
+The reproducible 50-iteration baseline associated with this trace reported the following P50
+values:
+
+| Stage or category | P50 | Share of total |
+| --- | ---: | ---: |
+| Preprocess | 0.621 ms | part of the 39.3% CPU share |
+| H2D | 0.241 ms | part of the 14.1% transfer share |
+| GPU compute | 0.840 ms | 31.3% |
+| D2H | 0.141 ms | part of the 14.1% transfer share |
+| Postprocess | 0.437 ms | part of the 39.3% CPU share |
+| Unaccounted host work | about 0.40 ms | 14.8% |
+| End-to-end total | 2.723 ms | 100% |
+
+No individual steady-state TensorRT kernel dominates this request. The first warmup is also a cold
+path: its tens-of-milliseconds library loading and first-enqueue costs must not be mixed with the
+sub-millisecond steady-state GPU compute time. For a resident inference process, optimize the
+steady-state pipeline before investigating cold startup.
+
+Latency and throughput are separate acceptance metrics, but their implementations do not need to
+be separate. Buffer reuse, removal of redundant copies, reduced precision, and compact outputs can
+benefit both. Request concurrency primarily improves throughput and may increase queueing latency;
+moving CPU work onto the GPU may reduce isolated-request latency but can reduce throughput after
+the GPU becomes the pipeline bottleneck.
+
+| Optimization | Isolated-request latency | Steady-state throughput | Combination guidance |
+| --- | --- | --- | --- |
+| Eliminate redundant Host-to-Host copies | Improves | Improves | Strong first candidate |
+| Reuse slot-owned buffers, contexts, streams, and events | Improves or stabilizes | Improves or stabilizes | Foundation for safe double buffering |
+| Build an FP16 engine and validate its outputs | Improves | Improves | Strong candidate on supported hardware |
+| Decode, filter, and run NMS on the GPU; return compact detections | Usually improves | Usually improves | Strong candidate when the raw output is much larger than the final result |
+| Reduce TensorRT reformat and layout conversions | Improves when reformats are material | Improves when reformats are material | Inspect the new trace before changing tensor layouts |
+| Capture stable work in a CUDA Graph | Usually improves submission overhead | Usually improves submission overhead | Add after buffer addresses, shapes, streams, and slot ownership are stable |
+| Fuse preprocessing on the GPU | May improve | Depends on available GPU capacity | Measure against overlapped CPU preprocessing |
+| Double-buffer or allow controlled multi-request concurrency | May be unchanged or worse due to queueing | Often improves substantially | Throughput core; bound the queue and in-flight count |
+| Increase batch size | Often increases latency | Usually improves until saturation | Conflicts with strict latency unless batching is bounded |
+
+### Recommended Experiment Order
+
+Apply one change at a time and preserve the previous report as the comparison baseline:
+
+1. **Make the staging costs visible, then remove redundant host copies.** Let preprocessing write
+   into a reusable pinned input owned by a pipeline slot, and let postprocessing read a slot's
+   pinned output without an intermediate vector copy. Keep ownership explicit so a later request
+   cannot overwrite a buffer that is still in use.
+2. **Introduce two reusable slots and controlled asynchronous execution.** Initially keep
+   preprocessing and postprocessing on the CPU so they can overlap the GPU work of another
+   request. Give every in-flight slot stable buffers and completion events; use separate TensorRT
+   execution contexts when requests can execute concurrently. Do not create an unbounded queue.
+3. **Build and measure FP16.** Compare detection results and P50/P90/P99 latency as well as
+   throughput. A faster engine may move the bottleneck from the GPU to the CPU, so recapture the
+   timeline instead of assuming the FP32 diagnosis still applies.
+4. **Move decode/filter/NMS to the GPU and compact the output.** The captured application copies an
+   approximately 2.82 MB raw output back to the CPU even though the final result contains only a
+   few detections. Copying only a bounded detection count can reduce both D2H traffic and CPU
+   postprocessing.
+5. **Decide whether CUDA preprocessing is beneficial in the new pipeline.** It is attractive for
+   isolated latency because it can upload a smaller `uint8` image and fuse resize, letterbox,
+   color conversion, normalization, and layout conversion. For throughput, retain overlapped CPU
+   preprocessing if it is already hidden behind GPU execution and moving it would lengthen the GPU
+   critical path.
+6. **Add CUDA Graphs after the data flow is stable.** Capture fixed-shape work per reusable slot
+   only after buffer addresses, execution contexts, streams, and GPU pre/postprocessing choices no
+   longer change.
+7. **Inspect remaining reformats and use Nsight Compute last.** Nsight Systems should first show a
+   well-filled pipeline and identify a repeatable GPU hotspot. Use Nsight Compute only then to
+   study that kernel's occupancy, memory behavior, and instruction mix.
+
+For an interactive single-image program with no concurrent request, step 2 offers little direct
+latency benefit; prioritize steps 1, 3, 4, and possibly 5. For a real-time video or online service,
+the two directions can be combined: use a small bounded slot pool, batch size one when latency is
+strict, FP16 inference, compact GPU postprocessing, and GPU preprocessing only when measurements
+show sufficient GPU headroom. Always report latency and throughput separately because a deeper
+queue can raise throughput while making P99 latency worse.
