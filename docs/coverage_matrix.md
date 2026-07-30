@@ -13,31 +13,31 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 
 | Requirement | Coverage | Repository targets |
 | --- | --- | --- |
-| ISO C++17 engineering and memory safety | Covered as core path | `01_hello_world`, `03_opencv_preprocess`, `07_tensorrt_raii_resource`, `23_cpp_interview_katas` |
-| TensorRT 10.14 C++ inference lifecycle | Covered as core path | `06_trtexec_engine`, `08_tensorrt_cpp_basic`, `10_yolov8_trt_cpp` |
-| Precision alignment and backend output debugging | Covered as core deployment-debug path | `05_torch_to_onnx`, `06a_polygraphy_precision_alignment`, `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
-| Pinned memory, CUDA streams, async copies, overlap | Covered as core path | `04_cuda_memory_stream`, `11_nsight_performance_diagnosis`, `15_async_video_pipeline` |
-| Zero-copy-style memory paths and Unified Memory trade-offs | Covered as advanced transfer topic | `04_cuda_memory_stream`, `17_cuda_preprocess_npp` |
-| Explicit-Q/DQ PTQ and INT8 accuracy regression | Covered as core path | `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
-| Dataset-level detection metrics and regression gates | Covered as core validation path | `12_yolov8_int8_quantization_engineering`, `12a_precision_performance_report` |
-| Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `12_yolov8_int8_quantization_engineering` |
-| Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
-| TensorRT custom plugin implementation | Covered as portfolio differentiator | `19a_custom_tensorrt_plugin` |
-| TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
-| Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `11_nsight_performance_diagnosis` |
-| CUDA or NPP preprocessing optimization | Covered as advanced path | `17_cuda_preprocess_npp` |
-| Single-stream video pipeline | Orchestration covered; TensorRT backend integration pending | `13_cpp_producer_consumer`, `15_async_video_pipeline` |
-| Multi-stream video pipeline | Scheduling covered; TensorRT detection integration pending | `14_dynamic_batching`, `16_multistream_video_pipeline` |
-| Pipeline latency, overload, and stability evidence | Partially covered; formal soak and sanitizer gates incomplete | `17a_pipeline_performance_report` |
-| Failure injection, sanitizer checks, and soak testing | Partially covered; see the incomplete 17a report gates | `07_tensorrt_raii_resource`, `13_cpp_producer_consumer`, `15_async_video_pipeline`, `16_multistream_video_pipeline`, `17a_pipeline_performance_report` |
-| Triton model serving, dynamic batching, and metrics | Implementation scaffold; runtime comparison report pending | `18a_triton_inference_server` |
-| DeepStream and GStreamer | Implementation scaffold; two-stream runtime acceptance pending | `20_deepstream_gstreamer_multistream` |
-| Jetson Orin/Xavier, cross compilation, and DLA | Target-native scaffold; cross-compilation path and target acceptance pending | `20a_jetson_orin_xavier_dla_deployment`, `20_deepstream_gstreamer_multistream` |
-| C++ shared library and Python binding | Covered as advanced path | `21_cpp_shared_library_python_binding` |
-| Production Docker runtime packaging | Covered as delivery path | `24_final_portfolio_case_study` |
-| C++ hand-written deployment interview code | Covered as advanced path | `23_cpp_interview_katas` |
-| LLM inference entry point and controlled benchmark matrix | Teaching implementation covered; benchmark evidence pending | `22_llm_inference_intro` |
-| Incremental portfolio evidence | Covered across core checkpoints | `10a_end_to_end_validation_report`, `12a_precision_performance_report`, `17a_pipeline_performance_report`, `24_final_portfolio_case_study` |
+| ISO C++17 engineering and memory safety | Covered as core path | `01_hello_world`, `03_opencv_preprocess`, `08_tensorrt_raii_resource`, `30_cpp_interview_katas` |
+| TensorRT 10.14 C++ inference lifecycle | Covered as core path | `06_trtexec_engine`, `09_tensorrt_cpp_basic`, `11_yolov8_trt_cpp` |
+| Precision alignment and backend output debugging | Covered as core deployment-debug path | `05_torch_to_onnx`, `07_polygraphy_precision_alignment`, `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
+| Pinned memory, CUDA streams, async copies, overlap | Covered as core path | `04_cuda_memory_stream`, `13_nsight_performance_diagnosis`, `18_async_video_pipeline` |
+| Zero-copy-style memory paths and Unified Memory trade-offs | Covered as advanced transfer topic | `04_cuda_memory_stream`, `20_cuda_preprocess_npp` |
+| Explicit-Q/DQ PTQ and INT8 accuracy regression | Covered as core path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
+| Dataset-level detection metrics and regression gates | Covered as core validation path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
+| Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `14_yolov8_int8_quantization_engineering` |
+| Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |
+| TensorRT custom plugin implementation | Covered as portfolio differentiator | `25_custom_tensorrt_plugin` |
+| TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |
+| Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `13_nsight_performance_diagnosis` |
+| CUDA or NPP preprocessing optimization | Covered as advanced path | `20_cuda_preprocess_npp` |
+| Single-stream video pipeline | Orchestration covered; TensorRT backend integration pending | `16_cpp_producer_consumer`, `18_async_video_pipeline` |
+| Multi-stream video pipeline | Scheduling covered; TensorRT detection integration pending | `17_dynamic_batching`, `19_multistream_video_pipeline` |
+| Pipeline latency, overload, and stability evidence | Partially covered; formal soak and sanitizer gates incomplete | `21_pipeline_performance_report` |
+| Failure injection, sanitizer checks, and soak testing | Partially covered; see the incomplete 21 report gates | `08_tensorrt_raii_resource`, `16_cpp_producer_consumer`, `18_async_video_pipeline`, `19_multistream_video_pipeline`, `21_pipeline_performance_report` |
+| Triton model serving, dynamic batching, and metrics | Implementation scaffold; runtime comparison report pending | `23_triton_inference_server` |
+| DeepStream and GStreamer | Implementation scaffold; two-stream runtime acceptance pending | `26_deepstream_gstreamer_multistream` |
+| Jetson Orin/Xavier, cross compilation, and DLA | Target-native scaffold; cross-compilation path and target acceptance pending | `27_jetson_orin_xavier_dla_deployment`, `26_deepstream_gstreamer_multistream` |
+| C++ shared library and Python binding | Covered as advanced path | `28_cpp_shared_library_python_binding` |
+| Production Docker runtime packaging | Covered as delivery path | `31_final_portfolio_case_study` |
+| C++ hand-written deployment interview code | Covered as advanced path | `30_cpp_interview_katas` |
+| LLM inference entry point and controlled benchmark matrix | Teaching implementation covered; benchmark evidence pending | `29_llm_inference_intro` |
+| Incremental portfolio evidence | Covered across core checkpoints | `12_end_to_end_validation_report`, `15_precision_performance_report`, `21_pipeline_performance_report`, `31_final_portfolio_case_study` |
 
 ## Notes
 

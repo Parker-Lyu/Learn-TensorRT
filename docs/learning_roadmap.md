@@ -101,24 +101,24 @@ lesson provides one runnable artifact and one concise README.
 ## Learning Flow
 
 Use the core path in order. After the core path, choose an elective track from the job descriptions
-you are targeting instead of completing every elective sequentially. `23_cpp_interview_katas` runs
+you are targeting instead of completing every elective sequentially. `30_cpp_interview_katas` runs
 alongside the course rather than waiting until the end.
 
 | Path | Sequence | Focus |
 | --- | --- | --- |
-| Core foundation | `00` through `10` | Environment, C++, CUDA, ONNX, TensorRT, and end-to-end YOLO C++ inference |
-| Checkpoint 1 | `10a` | Functional validation, architecture evidence, and an English project explanation |
-| Core optimization | `11` through `12` | Nsight diagnosis plus an advanced FP16/INT8 quantization and deployment case study |
-| Checkpoint 2 | `12a` | Reproducible precision and performance report; begin targeted applications |
-| Core pipeline | `13` through `17` | Queues, dynamic batching, async video, multi-stream scheduling, and CUDA/NPP preprocessing |
-| Checkpoint 3 | `17a` | Pipeline load, latency, throughput, and stability report |
-| Server elective | `18a`, `21` | Triton serving and C++/Python integration |
-| Edge CV elective | `20`, `20a` | DeepStream, GStreamer, Jetson, and DLA |
-| Advanced TensorRT elective | `19`, `19a` | Graph surgery and a runnable TensorRT plugin |
-| CPU/Intel elective | `18` | OpenVINO CPU inference comparison |
-| LLM awareness elective | `22` | Entry-level LLM inference concepts and measurements |
-| Ongoing interview practice | `23` | Deployment-relevant C++ exercises tied to completed lessons |
-| Final synthesis | `24` | Portfolio case study, packaging, resume evidence, and English presentation |
+| Core foundation | `00` through `11` | Environment, C++, CUDA, ONNX, TensorRT, and end-to-end YOLO C++ inference |
+| Checkpoint 1 | `12` | Functional validation, architecture evidence, and an English project explanation |
+| Core optimization | `13` through `14` | Nsight diagnosis plus an advanced FP16/INT8 quantization and deployment case study |
+| Checkpoint 2 | `15` | Reproducible precision and performance report; begin targeted applications |
+| Core pipeline | `16` through `20` | Queues, dynamic batching, async video, multi-stream scheduling, and CUDA/NPP preprocessing |
+| Checkpoint 3 | `21` | Pipeline load, latency, throughput, and stability report |
+| Server elective | `23`, `28` | Triton serving and C++/Python integration |
+| Edge CV elective | `26`, `27` | DeepStream, GStreamer, Jetson, and DLA |
+| Advanced TensorRT elective | `24`, `25` | Graph surgery and a runnable TensorRT plugin |
+| CPU/Intel elective | `22` | OpenVINO CPU inference comparison |
+| LLM awareness elective | `29` | Entry-level LLM inference concepts and measurements |
+| Ongoing interview practice | `30` | Deployment-relevant C++ exercises tied to completed lessons |
+| Final synthesis | `31` | Portfolio case study, packaging, resume evidence, and English presentation |
 
 ## Course Plan
 
@@ -382,7 +382,7 @@ Acceptance criteria:
   and environment identity.
 - The generated summary compares FP32 and FP16 under the documented matched conditions.
 
-### `06a_polygraphy_precision_alignment`
+### `07_polygraphy_precision_alignment`
 
 Purpose:
 
@@ -423,7 +423,7 @@ Acceptance criteria:
 - The generated alignment note identifies the likely source of any mismatch and states that
   multi-image detection validation still follows.
 
-### `07_tensorrt_raii_resource`
+### `08_tensorrt_raii_resource`
 
 Purpose:
 
@@ -478,7 +478,7 @@ Acceptance criteria:
 - A repeated create/destroy test exercises runtime, context, buffer, and stream ownership without
   increasing host or device memory use.
 
-### `08_tensorrt_cpp_basic`
+### `09_tensorrt_cpp_basic`
 
 Purpose:
 
@@ -515,7 +515,7 @@ Acceptance criteria:
 - Builder, parser, engine, runtime, context, buffer, and stream lifetimes are clear.
 - Strongly typed network creation and explicit tensor precision are used consistently.
 
-### `09_yolov8_trt_python`
+### `10_yolov8_trt_python`
 
 Purpose:
 
@@ -546,7 +546,7 @@ Acceptance criteria:
 - The Python pipeline produces boxes on a test image.
 - The output is close to the PyTorch or Ultralytics reference.
 
-### `10_yolov8_trt_cpp`
+### `11_yolov8_trt_cpp`
 
 Purpose:
 
@@ -588,7 +588,7 @@ Acceptance criteria:
 - Reusable preprocessing, inference, and postprocessing code is not trapped inside `main`.
 - Focused tests cover representative invalid input and boundary cases.
 
-### `10a_end_to_end_validation_report`
+### `12_end_to_end_validation_report`
 
 Purpose:
 
@@ -614,7 +614,7 @@ Deliverables:
 
 - `generate_report.py` evidence validator and report generator
 - `outputs/evidence.json` machine-readable evidence
-- `reports/10a_end_to_end_validation.md` generated checkpoint report
+- `reports/12_end_to_end_validation.md` generated checkpoint report
 
 Acceptance criteria:
 
@@ -624,7 +624,7 @@ Acceptance criteria:
 - Report values come from saved command output or machine-readable results rather than manually
   maintained duplicate numbers.
 
-### `11_nsight_performance_diagnosis`
+### `13_nsight_performance_diagnosis`
 
 Purpose:
 
@@ -664,7 +664,7 @@ Acceptance criteria:
 - The saved diagnosis identifies whether the measured interval is CPU-bound, transfer-bound,
   synchronization-bound, or keeping the GPU busy.
 
-### `12_yolov8_int8_quantization_engineering`
+### `14_yolov8_int8_quantization_engineering`
 
 Purpose:
 
@@ -716,7 +716,7 @@ Acceptance criteria:
 - Performance evidence uses the same TensorRT version, GPU, shapes, warmup, iterations, and transfers.
 - The final recommendation is based on saved evidence rather than copied benchmark numbers.
 
-### `12a_precision_performance_report`
+### `15_precision_performance_report`
 
 Purpose:
 
@@ -741,7 +741,7 @@ Deliverables:
 
 - `collect_performance.py` evidence collector
 - `generate_report.py` report generator and focused tests
-- `reports/12a_precision_performance.md` generated decision report
+- `reports/15_precision_performance.md` generated decision report
 
 Acceptance criteria:
 
@@ -755,7 +755,7 @@ Acceptance criteria:
 - This checkpoint is strong enough to support targeted applications while later pipeline work
   continues.
 
-### `13_cpp_producer_consumer`
+### `16_cpp_producer_consumer`
 
 Purpose:
 
@@ -803,7 +803,7 @@ Acceptance criteria:
 - The program exits cleanly without deadlock.
 - CPU-only queue stress tests complete without ThreadSanitizer findings.
 
-### `14_dynamic_batching`
+### `17_dynamic_batching`
 
 Purpose:
 
@@ -840,7 +840,7 @@ Acceptance criteria:
 - Input and output buffer offsets are calculated explicitly.
 - A benchmark compares batch size 1 and batch size 4 latency and throughput.
 
-### `15_async_video_pipeline`
+### `18_async_video_pipeline`
 
 Purpose:
 
@@ -887,7 +887,7 @@ Acceptance criteria:
 - The README identifies `--inference-ms` as simulated work and does not present it as TensorRT or
   GPU evidence; GPU utilization is reported only after integrating and running a real backend.
 
-### `16_multistream_video_pipeline`
+### `19_multistream_video_pipeline`
 
 Purpose:
 
@@ -936,7 +936,7 @@ Design notes:
 - A scheduler that pulls frames from multiple queues.
 - A batch assembler that groups frames into `N x C x H x W`.
 - One replaceable inference-worker boundary. The current lesson uses deterministic asynchronous
-  work so scheduling remains CPU-testable; lesson 14 provides the TensorRT runner for a later
+  work so scheduling remains CPU-testable; lesson 17 provides the TensorRT runner for a later
   integration.
 - A result dispatcher that sends detections back to the correct stream by `stream_id` and `frame_id`.
 
@@ -955,7 +955,7 @@ Acceptance criteria:
 - The README does not label the deterministic worker delay as TensorRT inference; end-to-end
   TensorRT detection integration remains a separate completion boundary.
 
-### `17_cuda_preprocess_npp`
+### `20_cuda_preprocess_npp`
 
 Purpose:
 
@@ -994,7 +994,7 @@ Acceptance criteria:
 - A benchmark compares CPU preprocessing and GPU/NPP preprocessing.
 - Transfer time is measured separately from preprocessing and inference time.
 
-### `17a_pipeline_performance_report`
+### `21_pipeline_performance_report`
 
 Purpose:
 
@@ -1003,7 +1003,7 @@ Purpose:
 
 Learning outcomes:
 
-- Generate reproducible load, latency, throughput, fairness, memory, and stability evidence for lessons 13 through 17.
+- Generate reproducible load, latency, throughput, fairness, memory, and stability evidence for lessons 16 through 20.
 - Evaluate overload and failure policies with soak, restart, sanitizer, and fault-injection results.
 - Explain the measured trade-offs among batching efficiency, per-stream fairness, and real-time freshness.
 
@@ -1019,7 +1019,7 @@ Deliverables:
 
 - `collect_pipeline_evidence.py` load and reliability evidence collector
 - `generate_report.py` report generator and focused tests
-- `reports/17a_pipeline_performance.md` generated checkpoint report
+- `reports/21_pipeline_performance.md` generated checkpoint report
 
 Acceptance criteria:
 
@@ -1040,7 +1040,7 @@ Acceptance criteria:
 Choose electives from target job descriptions. The lesson numbers are stable identifiers, not a
 requirement to complete these lessons in numerical order.
 
-### `18_openvino_yolov8`
+### `22_openvino_yolov8`
 
 **Track:** CPU and Intel deployment.
 
@@ -1074,7 +1074,7 @@ Acceptance criteria:
 - The generated comparison records OpenVINO CPU and TensorRT GPU latency with their distinct
   hardware and runtime identities.
 
-### `18a_triton_inference_server`
+### `23_triton_inference_server`
 
 **Track:** server inference and AI platform roles.
 
@@ -1115,7 +1115,7 @@ Acceptance criteria:
 - A benchmark compares at least two concurrency levels and dynamic batching configurations.
 - The report includes throughput, client P50/P90/P99 latency, server queue time, and GPU utilization.
 
-### `19_onnx_graph_surgery_plugin`
+### `24_onnx_graph_surgery_plugin`
 
 **Track:** advanced TensorRT and unsupported-operator deployment.
 
@@ -1154,7 +1154,7 @@ Acceptance criteria:
 - The lesson documentation traces plugin registration, build-time shape/type negotiation, runtime
   `enqueue`, serialization, and engine deserialization.
 
-### `19a_custom_tensorrt_plugin`
+### `25_custom_tensorrt_plugin`
 
 **Track:** advanced TensorRT and unsupported-operator deployment.
 
@@ -1206,7 +1206,7 @@ Acceptance criteria:
 - A small C++ or Python runtime example loads the plugin-backed engine and runs inference.
 - The plugin output is numerically checked against a CPU/Python reference.
 
-### `20_deepstream_gstreamer_multistream`
+### `26_deepstream_gstreamer_multistream`
 
 **Track:** edge CV and multi-stream video analytics.
 
@@ -1244,7 +1244,7 @@ Acceptance criteria:
 - A TensorRT engine is used through DeepStream configuration.
 - At least two video streams are processed concurrently.
 
-### `20a_jetson_orin_xavier_dla_deployment`
+### `27_jetson_orin_xavier_dla_deployment`
 
 **Track:** edge CV and embedded NVIDIA deployment.
 
@@ -1292,7 +1292,7 @@ Acceptance criteria:
 - If no Jetson target is available, the lesson still records the exact commands and expected
   validation steps for future hardware verification.
 
-### `21_cpp_shared_library_python_binding`
+### `28_cpp_shared_library_python_binding`
 
 **Track:** server inference integration and reusable deployment libraries.
 
@@ -1303,7 +1303,7 @@ Purpose:
 
 Learning outcomes:
 
-- Expose the lesson 14 TensorRT runner through a narrow, stable C ABI.
+- Expose the lesson 17 TensorRT runner through a narrow, stable C ABI.
 - Manage opaque session ownership, input/output memory, error codes, and exception boundaries safely.
 - Call the shared library from Python `ctypes` and validate structured results.
 
@@ -1330,7 +1330,7 @@ Acceptance criteria:
 - A Python script loads the library and runs inference.
 - The exposed API uses simple inputs and structured outputs.
 
-### `22_llm_inference_intro`
+### `29_llm_inference_intro`
 
 **Track:** LLM inference awareness for general deployment interviews.
 
@@ -1384,7 +1384,7 @@ Acceptance criteria:
 
 ## Ongoing Interview Practice
 
-### `23_cpp_interview_katas`
+### `30_cpp_interview_katas`
 
 Purpose:
 
@@ -1421,9 +1421,9 @@ Design notes:
 **Suggested timing:**
 
 - After `03`: letterbox mapping and HWC-to-CHW.
-- After `07`: RAII wrappers and move-only resource ownership.
-- After `10`: IoU, NMS, and Top-K.
-- After `13`: bounded queues and ring buffers.
+- After `08`: RAII wrappers and move-only resource ownership.
+- After `11`: IoU, NMS, and Top-K.
+- After `16`: bounded queues and ring buffers.
 
 Acceptance criteria:
 
@@ -1435,7 +1435,7 @@ Acceptance criteria:
 
 ## Final Synthesis
 
-### `24_final_portfolio_case_study`
+### `31_final_portfolio_case_study`
 
 Purpose:
 
@@ -1460,7 +1460,7 @@ Deliverables:
 - `generate_case_study.py` evidence-driven report generator
 - Local verification tools and focused report tests
 - Multi-stage runtime `Dockerfile` and engine-delivery helper
-- `reports/24_final_portfolio_case_study.md` generated case study
+- `reports/31_final_portfolio_case_study.md` generated case study
 
 Acceptance criteria:
 
@@ -1497,7 +1497,7 @@ After `06_trtexec_engine`, you should be able to answer:
 - What is a dynamic shape optimization profile?
 - What does `trtexec` measure?
 
-After `06a_polygraphy_precision_alignment`, you should be able to answer:
+After `07_polygraphy_precision_alignment`, you should be able to answer:
 
 - Why can ONNX Runtime and TensorRT produce different outputs?
 - How do you compare two backends with the same input tensor?
@@ -1505,7 +1505,7 @@ After `06a_polygraphy_precision_alignment`, you should be able to answer:
 - Why is one-image tensor alignment insufficient for release approval?
 - How would you debug the first layer where accuracy starts to diverge?
 
-After `07_tensorrt_raii_resource`, you should be able to answer:
+After `08_tensorrt_raii_resource`, you should be able to answer:
 
 - What is RAII?
 - Why are raw TensorRT pointers risky in production code?
@@ -1515,7 +1515,7 @@ After `07_tensorrt_raii_resource`, you should be able to answer:
 - How do you inject an initialization failure without depending on a real out-of-memory event?
 - What evidence distinguishes correct RAII ownership from a long-run leak claim?
 
-After `10_yolov8_trt_cpp`, you should be able to answer:
+After `11_yolov8_trt_cpp`, you should be able to answer:
 
 - How does YOLO preprocessing work?
 - How do you allocate and bind TensorRT input/output buffers?
@@ -1523,13 +1523,13 @@ After `10_yolov8_trt_cpp`, you should be able to answer:
 - What parts run on CPU and what parts run on GPU?
 - How do you validate TensorRT output against PyTorch output?
 
-After `10a_end_to_end_validation_report`, you should be able to answer:
+After `12_end_to_end_validation_report`, you should be able to answer:
 
 - Can another engineer reproduce the pipeline from a clean environment?
 - Which evidence establishes functional correctness, and which claims are still unproven?
 - How are TensorRT, CUDA, and OpenCV resources owned across the pipeline?
 
-After `13_cpp_producer_consumer`, `14_dynamic_batching`, and `16_multistream_video_pipeline`, you
+After `16_cpp_producer_consumer`, `17_dynamic_batching`, and `19_multistream_video_pipeline`, you
 should be able to answer:
 
 - Why is a single video-reading loop not enough for industrial camera systems?
@@ -1541,7 +1541,7 @@ should be able to answer:
 - How do you choose between fairness and latest-frame freshness?
 - What metrics do you report for each stream?
 
-After `19_onnx_graph_surgery_plugin` and `19a_custom_tensorrt_plugin`, you should be able to answer:
+After `24_onnx_graph_surgery_plugin` and `25_custom_tensorrt_plugin`, you should be able to answer:
 
 - What do you do when TensorRT does not support an ONNX operator?
 - When should you rewrite PyTorch code instead of writing a plugin?
@@ -1550,14 +1550,14 @@ After `19_onnx_graph_surgery_plugin` and `19a_custom_tensorrt_plugin`, you shoul
 - How is a plugin registered, serialized, deserialized, and called from `enqueue`?
 - How do you validate plugin output against a reference implementation?
 
-After `11_nsight_performance_diagnosis` and `17_cuda_preprocess_npp`, you should be able to answer:
+After `13_nsight_performance_diagnosis` and `20_cuda_preprocess_npp`, you should be able to answer:
 
 - How do you prove GPU starvation from a timeline?
 - How do pinned memory and async copies affect overlap?
 - When is GPU preprocessing worth the added complexity?
 - How do you compare two optimization attempts fairly?
 
-After `12a_precision_performance_report` and `17a_pipeline_performance_report`, you should be able to answer:
+After `15_precision_performance_report` and `21_pipeline_performance_report`, you should be able to answer:
 
 - How were warmup, synchronization, sample count, and percentile latency defined?
 - How do you prevent calibration/validation leakage and enforce a predeclared accuracy gate?
@@ -1568,14 +1568,14 @@ After `12a_precision_performance_report` and `17a_pipeline_performance_report`, 
 - Which failures were injected, which sanitizers were applicable, and what does a 30-minute soak test
   still not prove?
 
-After `18a_triton_inference_server` and `21_cpp_shared_library_python_binding`, you should be able to answer:
+After `23_triton_inference_server` and `28_cpp_shared_library_python_binding`, you should be able to answer:
 
 - How does Triton discover, configure, and version a TensorRT model?
 - How do dynamic batching, queue delay, concurrency, and model instances interact?
 - Which latency is measured by the client, and which components are measured by the server?
 - How do you expose a C++ TensorRT engine to Python safely?
 
-After `20_deepstream_gstreamer_multistream` and `20a_jetson_orin_xavier_dla_deployment`, you should be able to answer:
+After `26_deepstream_gstreamer_multistream` and `27_jetson_orin_xavier_dla_deployment`, you should be able to answer:
 
 - What is a GStreamer pipeline?
 - What does `nvstreammux` do?
@@ -1583,7 +1583,7 @@ After `20_deepstream_gstreamer_multistream` and `20a_jetson_orin_xavier_dla_depl
 - What changes when deploying on Jetson instead of a desktop GPU?
 - What constraints determine whether a layer can run on DLA?
 
-After `22_llm_inference_intro`, you should be able to answer:
+After `29_llm_inference_intro`, you should be able to answer:
 
 - What are prefill and decode?
 - What is KV cache?
@@ -1593,7 +1593,7 @@ After `22_llm_inference_intro`, you should be able to answer:
 - How did input length and batch or concurrency affect measured throughput, latency, and memory use?
 - What problems do TensorRT-LLM, OpenVINO GenAI, vLLM, and llama.cpp try to solve?
 
-After `24_final_portfolio_case_study`, you should be able to answer:
+After `31_final_portfolio_case_study`, you should be able to answer:
 
 - What is the best latency you achieved on the recorded RTX 4090 platform?
 - How much faster is FP16 than FP32?

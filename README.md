@@ -63,25 +63,25 @@ from the job descriptions you are targeting instead of completing every elective
 
 | Stage | Lessons | Outcome |
 | --- | --- | --- |
-| Foundation | `00_environment_check` through `10_yolov8_trt_cpp` | End-to-end YOLOv8n TensorRT C++ inference |
-| Checkpoint 1 | `10a_end_to_end_validation_report` | Reproducible functional and architecture evidence |
-| Optimization | `11_nsight_performance_diagnosis`, `12_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
-| Checkpoint 2 | `12a_precision_performance_report` | Application-ready precision and performance report |
-| Pipeline | `13_cpp_producer_consumer` through `17_cuda_preprocess_npp` | Dynamic TensorRT batching plus CPU-testable asynchronous/multi-stream orchestration and CUDA preprocessing |
-| Checkpoint 3 | `17a_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
+| Foundation | `00_environment_check` through `11_yolov8_trt_cpp` | End-to-end YOLOv8n TensorRT C++ inference |
+| Checkpoint 1 | `12_end_to_end_validation_report` | Reproducible functional and architecture evidence |
+| Optimization | `13_nsight_performance_diagnosis`, `14_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
+| Checkpoint 2 | `15_precision_performance_report` | Application-ready precision and performance report |
+| Pipeline | `16_cpp_producer_consumer` through `20_cuda_preprocess_npp` | Dynamic TensorRT batching plus CPU-testable asynchronous/multi-stream orchestration and CUDA preprocessing |
+| Checkpoint 3 | `21_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
 
 
 ### Elective Tracks
 
 | Track | Lessons |
 | --- | --- |
-| Server inference | `18a_triton_inference_server`, `21_cpp_shared_library_python_binding` |
-| Edge CV | `20_deepstream_gstreamer_multistream`, `20a_jetson_orin_xavier_dla_deployment` |
-| Advanced TensorRT | `19_onnx_graph_surgery_plugin`, `19a_custom_tensorrt_plugin` |
-| CPU and Intel | `18_openvino_yolov8` |
-| LLM awareness | `22_llm_inference_intro` |
-| Ongoing interview practice | `23_cpp_interview_katas` |
-| Final synthesis | `24_final_portfolio_case_study` |
+| Server inference | `23_triton_inference_server`, `28_cpp_shared_library_python_binding` |
+| Edge CV | `26_deepstream_gstreamer_multistream`, `27_jetson_orin_xavier_dla_deployment` |
+| Advanced TensorRT | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |
+| CPU and Intel | `22_openvino_yolov8` |
+| LLM awareness | `29_llm_inference_intro` |
+| Ongoing interview practice | `30_cpp_interview_katas` |
+| Final synthesis | `31_final_portfolio_case_study` |
 
 
 ## General Build Pattern
