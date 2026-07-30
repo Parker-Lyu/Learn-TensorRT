@@ -1,7 +1,20 @@
 # 20a - Jetson Orin/Xavier and DLA Deployment
 
+## Purpose
+
 This edge extension makes Jetson compatibility and DLA fallback evidence explicit. It can be
 prepared on x86, but engine building and performance acceptance must run on the target Jetson.
+
+## Prerequisites
+
+- Full acceptance requires a Jetson Orin/Xavier target with a documented JetPack installation.
+- x86 can run only the platform and tool tests; it cannot produce DLA execution evidence.
+
+## Deliverables
+
+- Platform check, engine-build, fallback-analysis, and benchmark tools
+- Jetson-native build and DLA verification procedure
+- CPU-only tool tests for x86 development
 
 ## Environment Boundary
 
@@ -21,7 +34,18 @@ python3 20a_jetson_orin_xavier_dla_deployment/check_platform.py
 An x86 development machine reports `is_jetson=false` and zero DLA cores. That is a compatibility
 check, not Jetson acceptance.
 
-## Build on the Target
+## DLA Trade-offs
+
+- DLA can reserve GPU capacity for other CUDA workloads and may improve system-level power or
+  concurrency even when its isolated latency is slower.
+- GPU fallback introduces synchronization and transfers between device engines; count fallback
+  layers before attributing performance to DLA.
+- INT8 may improve DLA efficiency but requires a target-representative calibration set and the same
+  accuracy gate used in lesson 12.
+- A DLA-only build without fallback is a useful compatibility experiment: failure identifies layers
+  that require model changes, precision changes, or GPU execution.
+
+## Run
 
 Copy the repository and ONNX model to the Jetson, enter the JetPack environment, then run:
 
@@ -45,18 +69,13 @@ separate terminal to record clocks, temperatures, power, CPU/GPU/DLA load, and m
 power mode and clocks before comparisons, document warmup, and save the raw logs with the benchmark
 JSON.
 
-## DLA Trade-offs
+## Outputs
 
-- DLA can reserve GPU capacity for other CUDA workloads and may improve system-level power or
-  concurrency even when its isolated latency is slower.
-- GPU fallback introduces synchronization and transfers between device engines; count fallback
-  layers before attributing performance to DLA.
-- INT8 may improve DLA efficiency but requires a target-representative calibration set and the same
-  accuracy gate used in lesson 12.
-- A DLA-only build without fallback is a useful compatibility experiment: failure identifies layers
-  that require model changes, precision changes, or GPU execution.
+- Target-local engines, layer-assignment logs, platform manifest, benchmark JSON, and `tegrastats`
+  captures belong under ignored `outputs/`.
+- x86 output must be labeled as compatibility evidence, not DLA execution.
 
-## Verification Available on x86
+## Tests
 
 ```bash
 python3 -m unittest discover -s 20a_jetson_orin_xavier_dla_deployment/tests -v
@@ -66,3 +85,9 @@ python3 20a_jetson_orin_xavier_dla_deployment/check_platform.py
 Full acceptance remains pending until a Jetson target builds both engines, records layer assignment,
 runs at least 100 measured samples per backend, captures `tegrastats`, and repeats detection-quality
 validation. The x86 check must never be presented as DLA execution evidence.
+
+## Checkpoints
+
+1. Plan a reproducible Jetson-native or aarch64 cross-compiled TensorRT deployment.
+2. Evaluate DLA compatibility, GPU fallback, power mode, clocks, thermals, and platform version coupling.
+3. Record which validation is possible on x86 and which evidence requires target Jetson hardware.

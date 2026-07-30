@@ -44,6 +44,33 @@ def docker_image_rows(path: Path) -> str:
     return "\n".join(rows)
 
 
+def choose_precision(
+    gates: dict[str, str], fp16_throughput: float, int8_throughput: float
+) -> tuple[str, str]:
+    if gates["INT8"] == "PASS" and int8_throughput > fp16_throughput:
+        return (
+            "INT8 is the current deployment choice because it passes the declared quality gate "
+            "and outperforms matched FP16.",
+            "confirm INT8 behavior on the target deployment hardware",
+        )
+    if gates["FP16"] == "PASS":
+        if gates["INT8"] == "PASS":
+            return (
+                "FP16 is the current deployment choice: INT8 passes the declared quality gate "
+                "but is slower than matched FP16.",
+                "investigate the Q/DQ INT8 performance regression",
+            )
+        return (
+            "FP16 is the current deployment choice; INT8 remains blocked by the declared fixed-"
+            "dataset accuracy gate.",
+            "improve INT8 calibration, mixed precision, or QAT",
+        )
+    return (
+        "FP32 remains the deployment baseline because reduced precision fails.",
+        "investigate FP16/INT8 numerical drift",
+    )
+
+
 def main() -> int:
     report10 = read(ROOT / "reports/10a_end_to_end_validation.md")
     report12 = read(ROOT / "reports/12a_precision_performance.md")
@@ -57,28 +84,9 @@ def main() -> int:
     gates = {name: row(quality, name)[-1] for name in ("FP32", "FP16", "INT8")}
     fp16_throughput = float(fp16[-1])
     int8_throughput = float(int8[-1])
-    if gates["INT8"] == "PASS" and int8_throughput > fp16_throughput:
-        precision_decision = (
-            "INT8 is the current deployment choice because it passes the declared quality gate "
-            "and outperforms matched FP16."
-        )
-        precision_next = "confirm INT8 behavior on the target deployment hardware"
-    elif gates["FP16"] == "PASS":
-        if gates["INT8"] == "PASS":
-            precision_decision = (
-                "FP16 is the current deployment choice: INT8 passes the declared quality gate "
-                "but is slower than matched FP16."
-            )
-            precision_next = "investigate the Q/DQ INT8 performance regression"
-        else:
-            precision_decision = (
-                "FP16 is the current deployment choice; INT8 remains blocked by the declared "
-                "fixed-dataset accuracy gate."
-            )
-            precision_next = "improve INT8 calibration, mixed precision, or QAT"
-    else:
-        precision_decision = "FP32 remains the deployment baseline because reduced precision fails."
-        precision_next = "investigate FP16/INT8 numerical drift"
+    precision_decision, precision_next = choose_precision(
+        gates, fp16_throughput, int8_throughput
+    )
     single = re.search(
         r"\| (\d+) \| (\d+) \| (\d+) \| (\d+) \| ([0-9.]+) \| "
         r"([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \|",

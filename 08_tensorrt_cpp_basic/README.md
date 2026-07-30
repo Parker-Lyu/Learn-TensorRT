@@ -1,26 +1,8 @@
 # 08 - TensorRT C++ Basic
 
-This lesson writes the first complete TensorRT C++ path: parse ONNX, build a serialized engine,
-deserialize it with the runtime API, allocate tensor buffers, bind tensor addresses, and enqueue one
-inference.
+## Purpose
 
-Goal: understand the minimal TensorRT C++ runtime flow without hiding ownership or build steps.
-
-Topics:
-
-- TensorRT logger
-- Builder, network definition, builder config, and workspace memory pool
-- ONNX parser through `nvonnxparser`
-- TensorRT 10 strongly typed network creation
-- Strict FP32 builds by default, with optional TF32 kernel math
-- TensorRT timing cache reuse for tactic selection
-- Runtime creation and engine deserialization
-- Execution context creation
-- Tensor names, tensor modes, shapes, data types, and memory locations
-- CUDA device buffers, pinned host buffers, stream, and events
-- Host-to-device input copy, `enqueueV3`, and device-to-host output copy
-
-## Why This Matters
+- Write a minimal TensorRT C++ runtime program.
 
 Lesson 06 used `trtexec` to prove that the ONNX model can become a TensorRT engine. Lesson 07
 focused on RAII resource lifetime. This lesson connects both ideas in a compact C++ program:
@@ -38,19 +20,6 @@ ONNX file
 The code still uses a synthetic zero input. Real image preprocessing and YOLO postprocessing arrive
 in later lessons; here the learning target is the TensorRT API sequence and the ownership model.
 
-## Directory Layout
-
-- `CMakeLists.txt`: target-based C++17 build that links CUDA Runtime, TensorRT, and `nvonnxparser`.
-- `include/tensorrt_basic.hpp`: small public config/report API.
-- `src/tensorrt_basic.cpp`: engine building, serialization, deserialization, tensor buffer
-  allocation, copy/enqueue/copy flow, and output checksum.
-- `src/main.cpp`: command-line parsing and console report.
-- `outputs/`: generated `.engine` and timing cache files from this lesson. This folder is ignored
-  by git.
-
-The reusable logic is built as `tensorrt_cpp_basic_lib`; the runnable artifact is
-`tensorrt_cpp_basic`.
-
 ## Prerequisites
 
 Generate the static ONNX model from lesson 05:
@@ -64,6 +33,55 @@ For the dynamic-shape experiment, also generate:
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 ```
+
+## Deliverables
+
+- `tensorrt_cpp_basic_lib` reusable C++ library
+- `tensorrt_cpp_basic` engine-build/load and inference executable
+- Generated engine and timing cache in the ignored output directory
+
+## Directory Layout
+
+- `CMakeLists.txt`: target-based C++17 build that links CUDA Runtime, TensorRT, and `nvonnxparser`.
+- `include/tensorrt_basic.hpp`: small public config/report API.
+- `src/tensorrt_basic.cpp`: engine building, serialization, deserialization, tensor buffer
+  allocation, copy/enqueue/copy flow, and output checksum.
+- `src/main.cpp`: command-line parsing and console report.
+- `outputs/`: generated `.engine` and timing cache files from this lesson. This folder is ignored
+  by git.
+
+The reusable logic is built as `tensorrt_cpp_basic_lib`; the runnable artifact is
+`tensorrt_cpp_basic`.
+
+## Code Notes
+
+The build path creates:
+
+```text
+IBuilder -> INetworkDefinition -> nvonnxparser::IParser -> IBuilderConfig -> IHostMemory
+```
+
+When building from ONNX, the lesson attaches an `ITimingCache` to `IBuilderConfig`. If the cache file
+already exists, TensorRT can reuse compatible tactic measurements; after a successful build the cache
+is serialized back to disk. Timing caches are machine- and stack-sensitive, so keep them local to the
+GPU, driver, CUDA, TensorRT version, model shape, and precision experiment that produced them.
+
+The runtime path then creates:
+
+```text
+IRuntime -> ICudaEngine -> IExecutionContext
+```
+
+The lesson intentionally deserializes the engine bytes even when the same process just built them.
+That keeps the runtime flow identical to later applications that load a prebuilt engine artifact.
+
+Dynamic ONNX inputs need an optimization profile before building and runtime dimensions before
+buffer allocation. This lesson uses one supplied shape as min/opt/max to keep the API visible
+without introducing profile tuning yet. The builder owns the profile returned by
+`createOptimizationProfile`, so the code keeps that ownership boundary explicit.
+
+The network is created with `kSTRONGLY_TYPED`. The default build also clears `BuilderFlag::kTF32` so
+the FP32 reference does not silently use TensorFloat-32 math.
 
 ## Build
 
@@ -128,7 +146,7 @@ Tune workspace and measurement count:
 ./build/tensorrt_cpp_basic --workspace-mib 4096 --warmup 3 --iterations 10
 ```
 
-## Output
+## Outputs
 
 The program prints:
 
@@ -164,36 +182,6 @@ C++ TensorRT basic flow completed successfully.
 Exact engine size, timing, and checksum can change with TensorRT version, GPU, tactic selection,
 precision mode, and ONNX export settings.
 
-## Code Notes
-
-The build path creates:
-
-```text
-IBuilder -> INetworkDefinition -> nvonnxparser::IParser -> IBuilderConfig -> IHostMemory
-```
-
-When building from ONNX, the lesson attaches an `ITimingCache` to `IBuilderConfig`. If the cache file
-already exists, TensorRT can reuse compatible tactic measurements; after a successful build the cache
-is serialized back to disk. Timing caches are machine- and stack-sensitive, so keep them local to the
-GPU, driver, CUDA, TensorRT version, model shape, and precision experiment that produced them.
-
-The runtime path then creates:
-
-```text
-IRuntime -> ICudaEngine -> IExecutionContext
-```
-
-The lesson intentionally deserializes the engine bytes even when the same process just built them.
-That keeps the runtime flow identical to later applications that load a prebuilt engine artifact.
-
-Dynamic ONNX inputs need an optimization profile before building and runtime dimensions before
-buffer allocation. This lesson uses one supplied shape as min/opt/max to keep the API visible
-without introducing profile tuning yet. The builder owns the profile returned by
-`createOptimizationProfile`, so the code keeps that ownership boundary explicit.
-
-The network is created with `kSTRONGLY_TYPED`. The default build also clears `BuilderFlag::kTF32` so
-the FP32 reference does not silently use TensorFloat-32 math.
-
 ## Checkpoints
 
 - Run the default FP32 build, then run `--load-engine` and compare startup time.
@@ -205,16 +193,3 @@ the FP32 reference does not silently use TensorFloat-32 math.
 - Run the dynamic ONNX command without `--input-shape`, then add it back and explain the error.
 - In `src/tensorrt_basic.cpp`, trace the order in which builder/parser objects, runtime objects, and
   CUDA buffers are created.
-
-Acceptance criteria:
-
-- A C++ executable builds a strongly typed TensorRT 10 engine from ONNX using the ONNX parser.
-- The serialized engine is written to `outputs/`.
-- A TensorRT timing cache is strictly validated, read before engine build, and written after a
-  successful engine build.
-- The engine is deserialized through `IRuntime`.
-- The program creates an execution context, validates TensorRT 10 IO types/formats, allocates IO
-  buffers, binds tensor addresses by name,
-  copies input data to the device, enqueues inference, copies outputs back, and reports a checksum.
-- Builder, parser, runtime, engine, context, buffer, event, and stream lifetimes are explicit and
-  exception-safe.

@@ -1,10 +1,24 @@
 # 12 - YOLOv8 INT8 Quantization Engineering
 
+## Purpose
+
 This lesson uses `nvcr.io/nvidia/pytorch:25.11-py3` with TensorRT 10.14.1.48 and CUDA 13.0 to
 produce a reproducible YOLOv8 deployment decision. The primary workflow is post-training
 quantization with explicit ONNX `QuantizeLinear`/`DequantizeLinear` (Q/DQ) nodes. Every precision
 conclusion uses the same data, preprocessing contract, postprocessing, evaluator, and predeclared
 quality thresholds.
+
+## Prerequisites
+
+- Complete lessons 05, 06, and 10 and prepare the pinned course container.
+- Download the documented COCO data before running dataset-level evaluation.
+
+## Deliverables
+
+- Versioned experiment, environment, quality, calibration, and dataset contracts
+- ModelOpt export, TensorRT build, precision-audit, validation, and benchmark tools
+- Reference-bundle, preprocessing-parity, evaluator, manifest, and contract tests
+- `docs/reproduction.md` end-to-end reproduction procedure
 
 ## Learning Goals
 
@@ -18,7 +32,14 @@ quality thresholds.
 5. Benchmark only candidates that pass the quality gates, using matched runtime and measurement
    settings.
 
-## Execution Order
+## Quality Contract
+
+`configs/quality_contract.json` fixes the input shape, postprocessing behavior, metric
+implementation, and thresholds. Do not change thresholds after seeing the result. Any change to a
+manifest, model, preprocessing contract, evaluator, runtime identity, or engine requires rebuilding
+and reevaluating every affected artifact.
+
+## Run
 
 Run all GPU commands from the repository root inside the course baseline container. If the
 development container does not exist yet, build and enter it with NVIDIA Container Toolkit:
@@ -57,22 +78,21 @@ python3 12_yolov8_int8_quantization_engineering/modelopt/inspect_precision.py
 must pass gates relative to both PyTorch FP32 and TensorRT FP16; a failing candidate is excluded
 from the performance recommendation.
 
-The committed [`reports/12_int8_quantization.md`](../reports/12_int8_quantization.md) is concise
-evidence from one complete TensorRT 10.14 reproduction. It demonstrates how the quality gates,
-Engine Inspector output, and matched performance measurements support a deployment decision.
-Learners must regenerate every local artifact on their own GPU, driver, and container environment.
+The generated `reports/12_int8_quantization.md` is concise local evidence from one complete
+TensorRT 10.14 reproduction. It demonstrates how the quality gates, Engine Inspector output, and
+matched performance measurements support a deployment decision. The root `reports/` directory is
+ignored; learners must regenerate the report and every supporting artifact on their own GPU,
+driver, and container environment.
 
-## Quality Contract
+## Outputs
 
-`configs/quality_contract.json` fixes the input shape, postprocessing behavior, metric
-implementation, and thresholds. Do not change thresholds after seeing the result. Any change to a
-manifest, model, preprocessing contract, evaluator, runtime identity, or engine requires rebuilding
-and reevaluating every affected artifact.
+- Environment-specific engines, timing caches, predictions, and intermediate evidence are written
+  under ignored `outputs/`.
+- The generated `reports/12_int8_quantization.md` is also ignored and must be regenerated for the current environment.
 
-## Outputs And Tests
+## Tests
 
-Engines, timing caches, predictions, performance samples, and intermediate reports are generated
-under the ignored `outputs/` directory. Run the CPU-only unit tests with:
+Run both CPU-only suites from the repository root:
 
 ```bash
 PYTHONPATH=12_yolov8_int8_quantization_engineering \
@@ -81,6 +101,11 @@ PYTHONPATH=12_yolov8_int8_quantization_engineering \
 python3 -m unittest discover -s 12_yolov8_int8_quantization_engineering/modelopt -p 'test_*.py' -v
 ```
 
-TensorRT, CUDA, PyTorch, and ModelOpt versions are recorded by `configs/environments.json`. Without
-the pinned container and an accessible GPU, only static checks and runtime-independent tests can be
-completed; do not claim engine validation from those checks.
+These tests validate contracts and runtime-independent logic. They do not replace TensorRT, CUDA,
+PyTorch, ModelOpt, engine, or dataset-level validation in the pinned GPU container.
+
+## Checkpoints
+
+1. Build matched FP32 and FP16 references before evaluating ModelOpt explicit-Q/DQ INT8.
+2. Enforce immutable dataset, preprocessing, evaluator, environment, and quality contracts.
+3. Audit actual TensorRT layer precision and make a deployment decision from saved quality and performance evidence.

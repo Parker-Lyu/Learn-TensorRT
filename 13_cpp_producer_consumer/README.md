@@ -1,11 +1,24 @@
 # 13 - C++ Producer-Consumer Pipeline
 
+## Purpose
+
 This lesson builds the concurrency foundation used by camera and video inference systems. One
 thread repeatedly reads encoded image frames, while another thread simulates a slower inference
 stage. A reusable bounded queue makes overload and shutdown behavior explicit.
 
 The lesson is CPU-only on purpose: queue correctness can be tested quickly and with
 ThreadSanitizer before CUDA streams and TensorRT execution are introduced in later lessons.
+
+## Prerequisites
+
+- Complete `01_hello_world`; lesson 03 is useful for the image-processing extension.
+- No GPU or TensorRT engine is required because this lesson intentionally tests concurrency on CPU.
+
+## Deliverables
+
+- Reusable bounded queue and `producer_consumer_pipeline` library
+- `cpp_producer_consumer` executable
+- Queue, overload, cancellation, failure, and lifecycle tests
 
 ## Learning Goals
 
@@ -45,14 +58,26 @@ both threads have joined.
 - `src/main.cpp`: CLI and statistics output.
 - `tests/test_producer_consumer.cpp`: CPU-only queue, overload, shutdown, failure, and stress tests.
 
-## Build and Run
+
+## Build
+
+Configure and build from the repository root inside the pinned development container:
+
+```bash
+cmake -S 13_cpp_producer_consumer -B 13_cpp_producer_consumer/build
+cmake --build 13_cpp_producer_consumer/build --parallel
+```
+
+The generated build directory is ignored.
+
+## Run
+
+Run the commands from the repository root:
 
 From this lesson directory:
 
 ```bash
-cmake -S . -B build
-cmake --build build -j
-./build/cpp_producer_consumer
+./13_cpp_producer_consumer/build/cpp_producer_consumer
 ```
 
 The default locates the repository's `assets/img.jpeg` from the executable,
@@ -60,7 +85,7 @@ produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four f
 the newest frames:
 
 ```bash
-./build/cpp_producer_consumer \
+./13_cpp_producer_consumer/build/cpp_producer_consumer \
   --frames 100 \
   --queue-capacity 4 \
   --producer-delay-ms 10 \
@@ -71,20 +96,20 @@ the newest frames:
 Run with one or more custom images by repeating `--image`:
 
 ```bash
-./build/cpp_producer_consumer --image ../assets/img.jpeg
+./13_cpp_producer_consumer/build/cpp_producer_consumer --image assets/img.jpeg
 ```
 
 Use `--help` for every option. `--fail-producer-at` and `--fail-consumer-at` are deliberate failure
 injection hooks for observing exception propagation and clean shutdown.
 
-## Overload Experiments
+### Overload Experiments
 
 Run the same workload with each policy:
 
 ```bash
-./build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy block
-./build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-newest
-./build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-oldest
+./13_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy block
+./13_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-newest
+./13_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-oldest
 ```
 
 - `block` preserves every frame and maximizes completed work, but slows acquisition and couples the
@@ -97,10 +122,15 @@ Run the same workload with each policy:
 Increasing queue capacity absorbs short bursts but cannot fix a sustained throughput mismatch. If
 input remains faster than inference, a larger queue mainly increases memory use and latency.
 
+## Outputs
+
+- The executable reports produced, processed, dropped, queue-peak, and timing statistics to standard output.
+- Build and sanitizer artifacts remain under ignored build directories.
+
 ## Tests
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir 13_cpp_producer_consumer/build --output-on-failure
 ```
 
 The tests cover zero capacity, FIFO drain behavior, both dropping policies, wakeup of blocked
@@ -110,9 +140,9 @@ explicit stop, and producer/consumer exception propagation.
 For ThreadSanitizer, use a separate build directory:
 
 ```bash
-cmake -S . -B build-tsan -DENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-tsan -j
-ctest --test-dir build-tsan --output-on-failure
+cmake -S 13_cpp_producer_consumer -B 13_cpp_producer_consumer/build-tsan -DENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build 13_cpp_producer_consumer/build-tsan -j
+ctest --test-dir 13_cpp_producer_consumer/build-tsan --output-on-failure
 ```
 
 ThreadSanitizer is a CPU-only concurrency check. Run it separately from CUDA/TensorRT programs;
@@ -126,12 +156,3 @@ sanitizer and driver runtimes can otherwise produce unrelated diagnostics.
 3. Inject a consumer failure while using the blocking policy and verify the producer does not hang.
 4. Replace the simulated inference sleep with a CPU image operation while keeping queue ownership
    and shutdown behavior unchanged.
-
-## Acceptance Criteria
-
-- A producer thread reads image frames into a bounded queue and a consumer processes them.
-- Queue capacity and overload policy are configurable and observable in reported statistics.
-- Drain/discard close behavior is documented, rejects new pushes, and wakes all waiters.
-- Worker failures reach the owner, and all started threads are joined before returning.
-- Overload and repeated lifecycle tests keep queue depth bounded.
-- CPU-only tests can be run under ThreadSanitizer.

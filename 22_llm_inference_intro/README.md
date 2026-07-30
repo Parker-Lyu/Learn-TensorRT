@@ -1,14 +1,27 @@
 # 22 - LLM Inference Introduction
 
+## Purpose
+
 This awareness elective runs a deterministic two-layer autoregressive Transformer locally. It is
 small enough to inspect, but still performs tokenization, causal attention, prefill, token-by-token
 decode, and real KV-cache growth.
 
+## Prerequisites
+
+- Use the pinned development container or another Python environment with the documented NumPy dependency.
+- No pretrained model download or GPU is required.
+
+## Deliverables
+
+- Deterministic inspectable autoregressive Transformer
+- Controlled benchmark and report generator
+- Correctness tests and generated LLM inference report
+
+## Run
+
 ```bash
-cd 22_llm_inference_intro
-python3 -m unittest discover -s tests -v
-python3 benchmark.py
-python3 generate_report.py
+python3 22_llm_inference_intro/benchmark.py
+python3 22_llm_inference_intro/generate_report.py
 ```
 
 The fixed revision is derived from the committed architecture and seed. The benchmark holds output
@@ -22,3 +35,23 @@ Mention TensorRT-LLM for optimized NVIDIA deployment, vLLM for paged-attention s
 llama.cpp for portable quantized local inference, and OpenVINO GenAI for Intel-oriented deployment.
 FP16/INT8/INT4 reduce memory differently; weight-only quantization shrinks weights but does not by
 itself shrink every activation or KV-cache tensor.
+
+## Outputs
+
+- `outputs/llm_benchmark.json` contains machine-readable measurements.
+- `outputs/llm_benchmark.md` is the generated, environment-specific summary.
+
+## Tests
+
+Run the Python tests from the repository root:
+
+```bash
+PYTHONPATH=22_llm_inference_intro \
+python3 -m unittest discover -s 22_llm_inference_intro/tests -v
+```
+
+## Checkpoints
+
+1. Trace tokenization, causal attention, prefill, decode, and KV-cache growth in a small autoregressive model.
+2. Measure TTFT, time per output token, throughput, and memory across controlled input-length and batch experiments.
+3. Explain how LLM inference bottlenecks and batching semantics differ from YOLO inference.

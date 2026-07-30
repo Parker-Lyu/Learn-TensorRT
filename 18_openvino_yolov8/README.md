@@ -1,12 +1,25 @@
 # 18 - OpenVINO YOLOv8 on CPU
 
+## Purpose
+
 This elective runs the same lesson 05 YOLOv8n ONNX model on an Intel/CPU-oriented runtime and
 compares synchronous and asynchronous OpenVINO execution with lesson 12a TensorRT GPU evidence.
 
 OpenVINO is isolated from the pinned TensorRT container packages in a lesson-local dependency
 directory. The course pins `openvino==2025.4.1`; do not replace it with an unrecorded upgrade.
 
-## Environment
+## Prerequisites
+
+- Generate lesson 05's static ONNX model.
+- Generate the lesson 06 TensorRT comparison evidence if a GPU-versus-CPU report is required.
+
+## Deliverables
+
+- `run_openvino.py` CPU inference and measurement CLI
+- `generate_comparison.py` TensorRT/OpenVINO comparison generator
+- Metric tests and a documented local dependency setup
+
+## Setup
 
 The reference environment for lessons 00–17 remains the pinned TensorRT development container.
 Do not run `pip install openvino` globally there: pip may replace NumPy, packaging, or other packages
@@ -48,7 +61,7 @@ Clean the lesson environment with:
 rm -rf 18_openvino_yolov8/.deps 18_openvino_yolov8/outputs
 ```
 
-## Run and Compare
+## Run
 
 Complete the lesson 05 export and validation first. The comparison step also requires the generated
 `12a_precision_performance_report/outputs/performance.json` from checkpoint 12a; run that
@@ -79,7 +92,7 @@ PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
   -niter 100
 ```
 
-## Interpretation
+### Interpretation
 
 - Synchronous latency describes one request at a time.
 - Async throughput describes a saturated CPU and includes queueing behavior; it is not directly
@@ -92,3 +105,25 @@ PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
 FP16 or INT8 CPU comparisons should only be added when the selected CPU and OpenVINO configuration
 actually execute those precisions and detection-quality regression is rerun. Do not infer precision
 from model file names or configuration requests alone.
+
+## Outputs
+
+- OpenVINO measurements and the generated CPU/GPU comparison are written under ignored `outputs/`.
+- Results remain tied to the recorded CPU, GPU, runtime, model, and synchronization methodology.
+
+## Tests
+
+Run the Python tests from the repository root:
+
+```bash
+PYTHONNOUSERSITE=1 PYTHONPATH=18_openvino_yolov8/.deps \
+python3 -m unittest discover -s 18_openvino_yolov8/tests -v
+```
+
+Run `Setup` first. These tests import the pinned lesson-local OpenVINO installation.
+
+## Checkpoints
+
+1. Run the same YOLO ONNX model through OpenVINO on CPU.
+2. Measure latency and throughput under a recorded CPU and software environment.
+3. Explain when an OpenVINO CPU deployment is preferable to TensorRT GPU deployment.

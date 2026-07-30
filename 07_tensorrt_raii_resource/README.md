@@ -1,24 +1,11 @@
 # 07 - TensorRT RAII Resource
 
-This lesson turns the TensorRT engine artifact from lesson 06 into a small C++ runtime loader with
-explicit resource ownership.
+## Purpose
 
-Goal: make TensorRT and CUDA C++ code safe enough to grow toward long-running inference services.
-
-Topics:
-
-- RAII for CUDA streams, CUDA events, device buffers, and pinned host buffers
-- `std::unique_ptr` with a custom TensorRT deleter
-- TensorRT runtime, engine, and execution context ownership
-- Name-based TensorRT IO APIs: `getNbIOTensors`, `getIOTensorName`, `setTensorAddress`, `enqueueV3`
-- Exception-safe initialization when file loading, deserialization, allocation, or enqueue fails
-- Move-only resource classes
-- Dynamic input shape setup for engines that need runtime dimensions
-- Deterministic failure injection after engine read, runtime/engine/context creation, first buffer,
-  stream creation, or immediately before enqueue
-- Repeated create/destroy checks with host RSS and CUDA device-memory snapshots
-
-## Why This Matters
+- Make TensorRT C++ code exception-safe and long-running-service friendly.
+- Industrial camera systems and edge inference services often run 24x7.
+- A small host memory leak, CUDA memory leak, or forgotten TensorRT object can become a production incident.
+- RAII proves that resources are released even when early returns or exceptions happen.
 
 TensorRT inference code is resource-management code before it is model code:
 
@@ -37,18 +24,6 @@ in a demo and still fail after hours of production traffic. RAII makes the clean
 once a C++ object owns a resource, its destructor releases that resource even when initialization
 fails halfway through.
 
-## Directory Layout
-
-- `CMakeLists.txt`: target-based C++17 build file that links TensorRT and CUDA Runtime.
-- `include/tensorrt_raii.hpp`: small public API for configuring and running the smoke inference.
-- `src/tensorrt_raii.cpp`: TensorRT logger, smart-pointer deleter, CUDA RAII wrappers, tensor buffer
-  allocation with TensorRT 10 data-type and vectorization checks, address binding, and enqueue timing.
-- `src/main.cpp`: command-line parsing and concise reporting.
-- `tests/config_tests.cpp`: focused validation of failure-stage configuration.
-
-The reusable logic is built as `tensorrt_raii_lib`, with a thin executable named
-`tensorrt_raii_resource` on top.
-
 ## Prerequisites
 
 Generate at least one engine with lesson 06:
@@ -65,6 +40,47 @@ The default executable path expects:
 
 Serialized TensorRT engines are machine-local artifacts. Rebuild them inside the target container
 and on the target GPU/software stack.
+
+## Deliverables
+
+- `tensorrt_raii_lib` reusable C++ library
+- `tensorrt_raii_resource` executable
+- `tensorrt_raii_config_tests` focused configuration and failure-path tests
+
+## Directory Layout
+
+- `CMakeLists.txt`: target-based C++17 build file that links TensorRT and CUDA Runtime.
+- `include/tensorrt_raii.hpp`: small public API for configuring and running the smoke inference.
+- `src/tensorrt_raii.cpp`: TensorRT logger, smart-pointer deleter, CUDA RAII wrappers, tensor buffer
+  allocation with TensorRT 10 data-type and vectorization checks, address binding, and enqueue timing.
+- `src/main.cpp`: command-line parsing and concise reporting.
+- `tests/config_tests.cpp`: focused validation of failure-stage configuration.
+
+The reusable logic is built as `tensorrt_raii_lib`, with a thin executable named
+`tensorrt_raii_resource` on top.
+
+## Code Notes
+
+`TensorRtPtr<T>` wraps TensorRT interfaces in `std::unique_ptr` so runtime, engine, and context
+lifetimes are explicit. The execution context is destroyed before the engine, and the engine before
+the runtime, because local variables unwind in reverse construction order.
+
+`DeviceBuffer`, `PinnedHostBuffer`, `CudaStream`, and `CudaEvent` are move-only classes. They can be
+stored in vectors or returned from helper functions, but they cannot be accidentally copied.
+
+Tensor addresses are bound by name through `setTensorAddress`. This avoids the fragile mental
+mapping between binding index, optimization profile, and tensor name that older TensorRT examples
+often expose too early.
+
+The lesson intentionally zero-fills input buffers and only checks that enqueue succeeds. Real image
+preprocessing and output postprocessing arrive in later lessons; this lesson keeps the focus on
+resource lifetime boundaries.
+
+`run_repeated_lifecycle_test` performs three priming cycles before recording memory. CUDA context,
+TensorRT runtime, and host allocator caches may initialize lazily, so including early cycles would confuse one-time
+initialization with per-cycle growth. For stronger evidence, run the executable under
+`compute-sanitizer --tool memcheck`; host-side AddressSanitizer is also useful but does not diagnose
+CUDA allocations.
 
 ## Build
 
@@ -125,7 +141,7 @@ Valid stages are `engine-read`, `runtime`, `engine`, `context`, `first-buffer`, 
 `enqueue`. A failed memory-stability gate returns a nonzero status. The tolerance accounts for host
 allocator and driver caching; it is an explicit test parameter, not a claimed leak detector.
 
-## Output
+## Outputs
 
 The program prints:
 
@@ -152,28 +168,13 @@ Smoke inference completed successfully.
 Exact tensor names and timing depend on the exported ONNX graph, TensorRT version, GPU, precision,
 and engine build settings.
 
-## Code Notes
+## Tests
 
-`TensorRtPtr<T>` wraps TensorRT interfaces in `std::unique_ptr` so runtime, engine, and context
-lifetimes are explicit. The execution context is destroyed before the engine, and the engine before
-the runtime, because local variables unwind in reverse construction order.
+Run the configured CTest suite:
 
-`DeviceBuffer`, `PinnedHostBuffer`, `CudaStream`, and `CudaEvent` are move-only classes. They can be
-stored in vectors or returned from helper functions, but they cannot be accidentally copied.
-
-Tensor addresses are bound by name through `setTensorAddress`. This avoids the fragile mental
-mapping between binding index, optimization profile, and tensor name that older TensorRT examples
-often expose too early.
-
-The lesson intentionally zero-fills input buffers and only checks that enqueue succeeds. Real image
-preprocessing and output postprocessing arrive in later lessons; this lesson keeps the focus on
-resource lifetime boundaries.
-
-`run_repeated_lifecycle_test` performs three priming cycles before recording memory. CUDA context,
-TensorRT runtime, and host allocator caches may initialize lazily, so including early cycles would confuse one-time
-initialization with per-cycle growth. For stronger evidence, run the executable under
-`compute-sanitizer --tool memcheck`; host-side AddressSanitizer is also useful but does not diagnose
-CUDA allocations.
+```bash
+ctest --test-dir 07_tensorrt_raii_resource/build --output-on-failure
+```
 
 ## Checkpoints
 
@@ -187,17 +188,3 @@ CUDA allocations.
   resource it owns.
 - Run all failure stages with `--repeat 100`. Confirm that each iteration is counted as an expected
   failure and that the memory gate passes.
-
-Acceptance criteria:
-
-- A C++ executable loads a serialized TensorRT engine from lesson 06.
-- TensorRT runtime, engine, and context are managed by smart pointers.
-- CUDA stream, event, device buffer, and pinned host buffer ownership is managed by RAII classes.
-- The program allocates one buffer per TensorRT IO tensor, including TensorRT 10 data types, rejects
-  unsupported vectorized IO formats explicitly, and binds addresses by tensor name.
-- Initialization remains exception-safe if file IO, deserialization, CUDA allocation, or enqueue
-  fails.
-- Injected setup failures release resources acquired at earlier stages.
-- Repeated successful and injected-failure cycles do not exceed the declared host/device memory
-  growth tolerance.
-- You can explain why this matters for 24x7 camera inference services.

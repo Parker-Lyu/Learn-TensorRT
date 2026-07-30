@@ -1,27 +1,14 @@
 # 06a - Polygraphy Precision Alignment
 
-This lesson uses Polygraphy to compare ONNX Runtime and TensorRT outputs with one exact same
-preprocessed YOLOv8n input tensor.
+## Purpose
 
-Goal: create a repeatable accuracy-debug workflow for deciding whether backend differences are
-acceptable numerical drift or a deployment bug.
-
-Scope: this is a single-input tensor alignment lesson. It proves that one controlled ONNX Runtime
-run and one controlled TensorRT run are using comparable artifacts and producing numerically similar
-raw model outputs. It is not a dataset-level accuracy regression test and it does not replace
-detection-quality validation on many images.
-
-Topics:
-
-- Polygraphy model inspection
-- ONNX Runtime versus TensorRT comparison
-- Saving input and output tensors
-- FP32 and FP16 single-input drift analysis
-- Absolute and relative tolerance selection
-- First-mismatch debugging workflow
-- Reproducible command logs for benchmark reports
-
-## Why This Matters
+- Learn a repeatable single-input precision-debug workflow when ONNX Runtime and TensorRT outputs
+  disagree.
+- Real deployment work is not finished when an engine builds successfully.
+- Senior candidates should be able to prove where numerical drift starts instead of guessing
+  whether preprocessing, export, precision mode, or TensorRT parsing caused the issue.
+- A one-image tensor comparison is a debugging gate, not a dataset-level release criterion. Later
+  lessons extend it into multi-image drift statistics and decoded detection-quality comparison.
 
 TensorRT deployment is not finished when an engine builds. The engine must still produce outputs
 that match the validated ONNX model closely enough for the target task.
@@ -51,20 +38,6 @@ single tensor alignment
 Lesson 12 extends this idea when comparing FP32, FP16, and INT8 engines. Lesson 24 should include
 both this precision-alignment note and later accuracy-regression evidence.
 
-## Directory Layout
-
-- `load_npy_input.py`: Polygraphy data loader that feeds the lesson 05 NCHW `.npy` tensor.
-- `align_precision.py`: runs Polygraphy inspection and inference commands, saves logs, and writes a
-  compact precision report.
-- `polygraphy_cli_compat.py`: local launcher that keeps Polygraphy working with the repository's
-  NumPy 2.x environment without changing system packages.
-- `outputs/`: generated runner outputs, logs, JSON reports, and Markdown notes. This folder is
-  ignored by git.
-- `../assets/img.jpeg`: canonical image used to generate the controlled lesson 05 input tensor.
-- `../05_torch_to_onnx/outputs/yolov8n.onnx`: validated ONNX model from lesson 05.
-- `../06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: default serialized TensorRT engine
-  from lesson 06.
-
 ## Prerequisites
 
 Run the lesson 05 export and validation first:
@@ -80,96 +53,25 @@ Build at least one TensorRT engine with lesson 06:
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 ```
 
-## Input Tensor
+## Deliverables
 
-This lesson directly reuses the controlled input tensor saved by lesson 05 from `assets/img.jpeg`:
+- `align_precision.py` controlled comparison workflow
+- Saved Polygraphy logs and backend outputs
+- `precision_report.json` and generated precision-alignment note
 
-```text
-05_torch_to_onnx/outputs/input_nchw_float32.npy
-```
+## Directory Layout
 
-`align_precision.py` passes this `.npy` file to Polygraphy through `load_npy_input.py` and
-`--data-loader-script`. The tensor remains in NumPy's binary format; no intermediate input JSON is
-generated.
-
-Use a different input tensor when experimenting with another preprocessed sample:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py \
-  --input-npy path/to/input_nchw_float32.npy \
-  --skip-trt
-```
-
-Override the input tensor name if the ONNX inspection report shows a different name:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py --input-name images --skip-trt
-```
-
-## Smoke Test ONNX Runtime
-
-Run only the ONNX Runtime side when you want to verify Polygraphy setup before using TensorRT:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py --skip-trt
-```
-
-This writes:
-
-- `outputs/inspect_onnx.log`
-- `outputs/run_onnxrt.log`
-- `outputs/onnxrt_outputs.json`
-- `outputs/precision_report.json`
-- `outputs/precision_alignment_note.md`
-
-## Compare ONNX Runtime And TensorRT
-
-Compare the lesson 05 ONNX model against the lesson 06 FP32 engine:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py
-```
-
-The default comparison uses:
-
-```text
-ONNX:   05_torch_to_onnx/outputs/yolov8n.onnx
-Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
-Input:  05_torch_to_onnx/outputs/input_nchw_float32.npy
-```
-
-The command writes:
-
-- `outputs/inspect_onnx.log`
-- `outputs/inspect_engine.log`
-- `outputs/run_onnxrt.log`
-- `outputs/compare_onnxrt_trt.log`
-- `outputs/onnxrt_outputs.json`
-- `outputs/trt_compare_outputs.json`
-- `outputs/precision_report.json`
-- `outputs/precision_alignment_note.md`
-
-Use a different engine, for example the FP16 engine from lesson 06:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --rtol 1e-2 \
-  --atol 1e-2 \
-  --keep-going
-```
-
-`--keep-going` is useful for FP16 or INT8 experiments because Polygraphy may return a nonzero status
-when tolerance fails, but the mismatch evidence is still valuable.
-
-Let Polygraphy build a temporary TensorRT engine from ONNX when a serialized engine is not available:
-
-```bash
-python3 06a_polygraphy_precision_alignment/align_precision.py --trt-mode build
-```
-
-The serialized lesson 06 engine is preferred for normal course work because it compares the exact
-artifact that later C++ lessons will load.
+- `load_npy_input.py`: Polygraphy data loader that feeds the lesson 05 NCHW `.npy` tensor.
+- `align_precision.py`: runs Polygraphy inspection and inference commands, saves logs, and writes a
+  compact precision report.
+- `polygraphy_cli_compat.py`: local launcher that keeps Polygraphy working with the repository's
+  NumPy 2.x environment without changing system packages.
+- `outputs/`: generated runner outputs, logs, JSON reports, and Markdown notes. This folder is
+  ignored by git.
+- `../assets/img.jpeg`: canonical image used to generate the controlled lesson 05 input tensor.
+- `../05_torch_to_onnx/outputs/yolov8n.onnx`: validated ONNX model from lesson 05.
+- `../06_trtexec_engine/outputs/yolov8n_static_fp32.engine`: default serialized TensorRT engine
+  from lesson 06.
 
 ## Tolerance Notes
 
@@ -215,27 +117,6 @@ FP16 or INT8 drift acceptable.
 
 `precision_alignment_note.md` is the short human-readable note that should feed the final benchmark
 report.
-
-## Checkpoints
-
-- Run `--skip-trt` and confirm Polygraphy can execute the ONNX model with the saved input tensor.
-- Compare FP32 ONNX Runtime and FP32 TensorRT output, then explain the largest mismatch.
-- Repeat with the FP16 engine and explain why a different tolerance may be reasonable.
-- Intentionally set `--rtol 1e-8 --atol 1e-8` and inspect the generated mismatch evidence.
-- Confirm the ONNX model and TensorRT engine came from the same export before debugging
-  postprocessing.
-- Save the final `precision_alignment_note.md` as evidence for lesson 24.
-- Explain why a single-input allclose result is useful for debugging but insufficient for release
-  approval.
-
-Acceptance criteria:
-
-- Polygraphy can run the YOLO ONNX model with ONNX Runtime.
-- Polygraphy can run the same model or engine with TensorRT.
-- ONNX Runtime and TensorRT outputs are compared using the same input tensor.
-- Any mismatch is summarized with max error, mean error, tolerance, and likely cause.
-- The final note states that this is single-input evidence and points to later multi-image
-  detection-quality validation before deployment approval.
 
 ## Polygraphy Command Reference
 
@@ -376,3 +257,111 @@ Common logging options:
   reproducible debug record.
 - `--log-format no-colors`: removes terminal color codes from logs, making them easier to search and
   include in reports.
+
+## Run
+
+### Input Tensor
+
+This lesson directly reuses the controlled input tensor saved by lesson 05 from `assets/img.jpeg`:
+
+```text
+05_torch_to_onnx/outputs/input_nchw_float32.npy
+```
+
+`align_precision.py` passes this `.npy` file to Polygraphy through `load_npy_input.py` and
+`--data-loader-script`. The tensor remains in NumPy's binary format; no intermediate input JSON is
+generated.
+
+Use a different input tensor when experimenting with another preprocessed sample:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py \
+  --input-npy path/to/input_nchw_float32.npy \
+  --skip-trt
+```
+
+Override the input tensor name if the ONNX inspection report shows a different name:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py --input-name images --skip-trt
+```
+
+### Smoke Test ONNX Runtime
+
+Run only the ONNX Runtime side when you want to verify Polygraphy setup before using TensorRT:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py --skip-trt
+```
+
+This writes:
+
+- `outputs/inspect_onnx.log`
+- `outputs/run_onnxrt.log`
+- `outputs/onnxrt_outputs.json`
+- `outputs/precision_report.json`
+- `outputs/precision_alignment_note.md`
+
+Compare the lesson 05 ONNX model against the lesson 06 FP32 engine:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py
+```
+
+The default comparison uses:
+
+```text
+ONNX:   05_torch_to_onnx/outputs/yolov8n.onnx
+Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Input:  05_torch_to_onnx/outputs/input_nchw_float32.npy
+```
+
+The command writes:
+
+- `outputs/inspect_onnx.log`
+- `outputs/inspect_engine.log`
+- `outputs/run_onnxrt.log`
+- `outputs/compare_onnxrt_trt.log`
+- `outputs/onnxrt_outputs.json`
+- `outputs/trt_compare_outputs.json`
+- `outputs/precision_report.json`
+- `outputs/precision_alignment_note.md`
+
+Use a different engine, for example the FP16 engine from lesson 06:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --rtol 1e-2 \
+  --atol 1e-2 \
+  --keep-going
+```
+
+`--keep-going` is useful for FP16 or INT8 experiments because Polygraphy may return a nonzero status
+when tolerance fails, but the mismatch evidence is still valuable.
+
+Let Polygraphy build a temporary TensorRT engine from ONNX when a serialized engine is not available:
+
+```bash
+python3 06a_polygraphy_precision_alignment/align_precision.py --trt-mode build
+```
+
+The serialized lesson 06 engine is preferred for normal course work because it compares the exact
+artifact that later C++ lessons will load.
+
+## Outputs
+
+- The runnable commands above produce the files and console evidence described in `Deliverables`.
+- Generated build and runtime artifacts remain in the lesson's ignored build or output directory.
+
+## Checkpoints
+
+- Run `--skip-trt` and confirm Polygraphy can execute the ONNX model with the saved input tensor.
+- Compare FP32 ONNX Runtime and FP32 TensorRT output, then explain the largest mismatch.
+- Repeat with the FP16 engine and explain why a different tolerance may be reasonable.
+- Intentionally set `--rtol 1e-8 --atol 1e-8` and inspect the generated mismatch evidence.
+- Confirm the ONNX model and TensorRT engine came from the same export before debugging
+  postprocessing.
+- Save the final `precision_alignment_note.md` as evidence for lesson 24.
+- Explain why a single-input allclose result is useful for debugging but insufficient for release
+  approval.

@@ -1,23 +1,8 @@
 # 06 - trtexec Engine
 
-This lesson builds TensorRT engines from the simplified ONNX models created in lesson 05 and records
-benchmark evidence before any TensorRT C++ runtime code is introduced.
+## Purpose
 
-Goal: turn validated, simplified ONNX graphs into reproducible TensorRT engine artifacts and
-benchmark reports.
-
-Topics:
-
-- `trtexec --onnx`
-- FP32 and FP16 engine builds
-- Static shape engines
-- Dynamic shape optimization profiles
-- Workspace memory pool
-- Layer profiling
-- Engine serialization
-- Timing cache reuse
-
-## Why This Matters
+- Learn TensorRT engine construction before writing C++ code.
 
 `trtexec` is the quickest honest boundary test between ONNX export and TensorRT runtime integration.
 It answers three questions before C++ code adds more moving parts:
@@ -32,15 +17,6 @@ validated simplified ONNX
 
 If `trtexec` cannot parse or benchmark the model, a custom C++ loader will not fix the problem.
 This lesson also creates engine files that later lessons can load with TensorRT C++ APIs.
-
-## Directory Layout
-
-- `build_and_benchmark.py`: builds FP32 and FP16 engines with `trtexec` and writes logs/JSON files.
-- `summarize_results.py`: converts `trtexec` logs into a compact Markdown benchmark summary.
-- `outputs/`: generated `.engine`, log, timing, layer, profile, manifest, and summary files. This
-  folder is ignored by git.
-- `../05_torch_to_onnx/outputs/yolov8n.onnx`: simplified static ONNX model from lesson 05.
-- `../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`: simplified dynamic ONNX model from lesson 05.
 
 ## Prerequisites
 
@@ -66,7 +42,22 @@ The dynamic engine build is skipped if the dynamic ONNX file is not present.
 For the normal course path, generate both lesson 05 ONNX files first so lesson 06 builds the static
 and dynamic engines from the same simplified model handoff.
 
-## Build And Benchmark
+## Deliverables
+
+- `build_and_benchmark.py` engine-build and benchmark driver
+- `summarize_results.py` evidence summarizer
+- Ignored engines, timing cache, logs, profiles, timing samples, manifest, and benchmark summary
+
+## Directory Layout
+
+- `build_and_benchmark.py`: builds FP32 and FP16 engines with `trtexec` and writes logs/JSON files.
+- `summarize_results.py`: converts `trtexec` logs into a compact Markdown benchmark summary.
+- `outputs/`: generated `.engine`, log, timing, layer, profile, manifest, and summary files. This
+  folder is ignored by git.
+- `../05_torch_to_onnx/outputs/yolov8n.onnx`: simplified static ONNX model from lesson 05.
+- `../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`: simplified dynamic ONNX model from lesson 05.
+
+## Run
 
 Run from the repository root:
 
@@ -132,7 +123,7 @@ First-time engine builds can take several minutes because TensorRT selects tacti
 timing cache. Later runs on the same machine can be faster because `outputs/trtexec_timing.cache`
 is reused.
 
-## Dynamic Shape Profile
+### Dynamic Shape Profile
 
 The default dynamic profile assumes YOLOv8 input tensor name `images`:
 
@@ -156,7 +147,7 @@ python3 06_trtexec_engine/build_and_benchmark.py \
 The benchmark result is for the shape passed to `--shapes`. The profile range only describes the
 shapes the engine is allowed to run.
 
-## Summarize
+### Summarize
 
 Create a Markdown benchmark report:
 
@@ -173,65 +164,7 @@ The report is written to:
 The summary table includes engine size, throughput, end-to-end latency, GPU compute time, H2D/D2H
 transfer time, build status, and runtime identity parsed from the generated evidence.
 
-## Checkpoints
-
-- Compare `static_fp32` and `static_fp16` engine size and GPU compute time.
-- Open the `*_layers.json` files and find the first convolution layer.
-- Explain why end-to-end latency can differ from GPU compute time.
-- Re-run the script and observe that `trtexec_timing.cache` can reduce tactic selection work.
-- Build the dynamic ONNX engine and explain the difference between `--minShapes`, `--optShapes`,
-  `--maxShapes`, and `--shapes`.
-
-Acceptance criteria:
-
-- Static FP32 and FP16 `.engine` files are generated from the simplified static ONNX under
-  `outputs/`.
-- Full `trtexec` logs and JSON timing/layer/profile artifacts are recorded.
-- The manifest records TensorRT, CUDA Toolkit, GPU, driver, and pinned container identity.
-- `outputs/benchmark_summary.md` records latency, throughput, GPU compute time, transfer time, and
-  engine size.
-- You can compare FP32 and FP16 results using measured evidence.
-- If the simplified dynamic ONNX model is present, a dynamic-profile FP16 engine is generated and
-  benchmarked.
-
-## Appendix: trtexec Arguments
-
-`build_and_benchmark.py` builds each engine by assembling a `trtexec` command. These flags define
-the model input, serialized engine output, profiling evidence, benchmark duration, and dynamic-shape
-profile.
-
-| Argument | Purpose | Why this lesson uses it |
-| --- | --- | --- |
-| `trtexec` | TensorRT command-line build and benchmark tool. | Gives a direct ONNX-to-engine boundary test before adding C++ runtime code. |
-| `--onnx=<path>` | Input ONNX graph to parse. | Uses the simplified ONNX artifacts from lesson 05. |
-| `--saveEngine=<path>` | Writes the serialized TensorRT engine. | Produces `.engine` files that later C++ lessons can load. |
-| `--memPoolSize=workspace:<MiB>` | Sets the TensorRT workspace memory pool. | Controls how much temporary GPU memory TensorRT can use while selecting tactics. Larger values can enable faster tactics but use more memory. |
-| `--timingCacheFile=<path>` | Reads and writes TensorRT tactic timing data. | Makes repeated builds faster and more reproducible on the same GPU, driver, CUDA, and TensorRT stack. |
-| `--profilingVerbosity=detailed` | Stores detailed layer metadata in the engine/profile output. | Makes layer inspection more useful when diagnosing performance. |
-| `--dumpLayerInfo` | Prints TensorRT layer information. | Captures the optimized network structure in the log and exported layer file. |
-| `--dumpProfile` | Prints per-layer runtime profiling data. | Shows which layers consume time during benchmark runs. |
-| `--separateProfileRun` | Runs profiling separately from the main timing loop. | Keeps profiling overhead from distorting the primary benchmark timing. |
-| `--exportTimes=<path>` | Writes benchmark timing samples as JSON. | Provides machine-readable latency evidence for summaries and later reports. |
-| `--exportLayerInfo=<path>` | Writes layer information as JSON. | Preserves the optimized TensorRT layer inventory for inspection. |
-| `--exportProfile=<path>` | Writes per-layer profile results as JSON. | Preserves layer timing data for comparison across precision modes and hardware. |
-| `--warmUp=<ms>` | Runs inference before measurement starts. | Reduces first-run noise from lazy initialization, clock ramp-up, and cache effects. |
-| `--duration=<sec>` | Sets benchmark measurement time. | Longer runs give more stable latency and throughput numbers. Short runs are useful for smoke tests. |
-| `--avgRuns=<n>` | Averages timing over groups of inference runs. | Smooths short-run jitter before reporting each timing sample. |
-| `--percentile=50,90,95,99` | Reports selected latency percentiles. | Shows both typical latency and tail latency instead of only an average. |
-| `--noTF32` | Disables TF32 for the strict FP32 reference engine. | TensorRT 10 enables TF32 by default; disabling it prevents a supposedly FP32 alignment baseline from silently using TF32 math. |
-| `--fp16` | Allows FP16 tactics and FP16 engine layers where supported. | Builds the FP16 comparison engine and usually improves throughput on modern NVIDIA GPUs. |
-| `--minShapes=<name:shape>` | Minimum shape allowed by a dynamic optimization profile. | Defines the smallest input shape the dynamic engine must support. |
-| `--optShapes=<name:shape>` | Shape TensorRT optimizes most heavily for a dynamic profile. | Tells TensorRT the expected/common shape, usually the main benchmark shape. |
-| `--maxShapes=<name:shape>` | Maximum shape allowed by a dynamic optimization profile. | Defines the largest input shape the dynamic engine must support. |
-| `--shapes=<name:shape>` | Actual input shape used for this benchmark run. | Measures one concrete shape inside the dynamic profile range. |
-
-Dynamic-shape flags are required only for `dynamic_fp16`. Static engines have fixed input dimensions
-from the ONNX graph, so they do not need `--minShapes`, `--optShapes`, `--maxShapes`, or `--shapes`.
-
-Treat serialized TensorRT engines as machine-local artifacts. Keep the ONNX model and rebuild the
-`.engine` files on each target machine so tactics match its GPU and software stack.
-
-## Review: Generated trtexec Commands
+### Review: Generated trtexec Commands
 
 By default, `build_and_benchmark.py` generates the following `trtexec` commands. The paths below
 are shown relative to the repository root; the script resolves them to absolute paths at runtime.
@@ -335,3 +268,55 @@ Key arguments:
 - `--minShapes` / `--optShapes` / `--maxShapes`: Declare the minimum, preferred, and maximum shapes
   in the dynamic optimization profile.
 - `--shapes`: Selects the concrete benchmark shape, which must fall inside the profile range.
+
+## Outputs
+
+- The runnable commands above produce the files and console evidence described in `Deliverables`.
+- Generated build and runtime artifacts remain in the lesson's ignored build or output directory.
+
+## Checkpoints
+
+- Compare `static_fp32` and `static_fp16` engine size and GPU compute time.
+- Open the `*_layers.json` files and find the first convolution layer.
+- Explain why end-to-end latency can differ from GPU compute time.
+- Re-run the script and observe that `trtexec_timing.cache` can reduce tactic selection work.
+- Build the dynamic ONNX engine and explain the difference between `--minShapes`, `--optShapes`,
+  `--maxShapes`, and `--shapes`.
+
+
+## Appendix: trtexec Arguments
+
+`build_and_benchmark.py` builds each engine by assembling a `trtexec` command. These flags define
+the model input, serialized engine output, profiling evidence, benchmark duration, and dynamic-shape
+profile.
+
+| Argument | Purpose | Why this lesson uses it |
+| --- | --- | --- |
+| `trtexec` | TensorRT command-line build and benchmark tool. | Gives a direct ONNX-to-engine boundary test before adding C++ runtime code. |
+| `--onnx=<path>` | Input ONNX graph to parse. | Uses the simplified ONNX artifacts from lesson 05. |
+| `--saveEngine=<path>` | Writes the serialized TensorRT engine. | Produces `.engine` files that later C++ lessons can load. |
+| `--memPoolSize=workspace:<MiB>` | Sets the TensorRT workspace memory pool. | Controls how much temporary GPU memory TensorRT can use while selecting tactics. Larger values can enable faster tactics but use more memory. |
+| `--timingCacheFile=<path>` | Reads and writes TensorRT tactic timing data. | Makes repeated builds faster and more reproducible on the same GPU, driver, CUDA, and TensorRT stack. |
+| `--profilingVerbosity=detailed` | Stores detailed layer metadata in the engine/profile output. | Makes layer inspection more useful when diagnosing performance. |
+| `--dumpLayerInfo` | Prints TensorRT layer information. | Captures the optimized network structure in the log and exported layer file. |
+| `--dumpProfile` | Prints per-layer runtime profiling data. | Shows which layers consume time during benchmark runs. |
+| `--separateProfileRun` | Runs profiling separately from the main timing loop. | Keeps profiling overhead from distorting the primary benchmark timing. |
+| `--exportTimes=<path>` | Writes benchmark timing samples as JSON. | Provides machine-readable latency evidence for summaries and later reports. |
+| `--exportLayerInfo=<path>` | Writes layer information as JSON. | Preserves the optimized TensorRT layer inventory for inspection. |
+| `--exportProfile=<path>` | Writes per-layer profile results as JSON. | Preserves layer timing data for comparison across precision modes and hardware. |
+| `--warmUp=<ms>` | Runs inference before measurement starts. | Reduces first-run noise from lazy initialization, clock ramp-up, and cache effects. |
+| `--duration=<sec>` | Sets benchmark measurement time. | Longer runs give more stable latency and throughput numbers. Short runs are useful for smoke tests. |
+| `--avgRuns=<n>` | Averages timing over groups of inference runs. | Smooths short-run jitter before reporting each timing sample. |
+| `--percentile=50,90,95,99` | Reports selected latency percentiles. | Shows both typical latency and tail latency instead of only an average. |
+| `--noTF32` | Disables TF32 for the strict FP32 reference engine. | TensorRT 10 enables TF32 by default; disabling it prevents a supposedly FP32 alignment baseline from silently using TF32 math. |
+| `--fp16` | Allows FP16 tactics and FP16 engine layers where supported. | Builds the FP16 comparison engine and usually improves throughput on modern NVIDIA GPUs. |
+| `--minShapes=<name:shape>` | Minimum shape allowed by a dynamic optimization profile. | Defines the smallest input shape the dynamic engine must support. |
+| `--optShapes=<name:shape>` | Shape TensorRT optimizes most heavily for a dynamic profile. | Tells TensorRT the expected/common shape, usually the main benchmark shape. |
+| `--maxShapes=<name:shape>` | Maximum shape allowed by a dynamic optimization profile. | Defines the largest input shape the dynamic engine must support. |
+| `--shapes=<name:shape>` | Actual input shape used for this benchmark run. | Measures one concrete shape inside the dynamic profile range. |
+
+Dynamic-shape flags are required only for `dynamic_fp16`. Static engines have fixed input dimensions
+from the ONNX graph, so they do not need `--minShapes`, `--optShapes`, `--maxShapes`, or `--shapes`.
+
+Treat serialized TensorRT engines as machine-local artifacts. Keep the ONNX model and rebuild the
+`.engine` files on each target machine so tactics match its GPU and software stack.

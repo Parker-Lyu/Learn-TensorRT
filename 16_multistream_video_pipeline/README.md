@@ -1,23 +1,21 @@
 # 16 - Multi-Stream Video Pipeline
 
+## Purpose
+
 This lesson scales the single-stream design to independent capture threads and bounded queues,
 global scheduling, dynamic micro-batches, out-of-order async completion, and identity-safe result
 dispatch.
 
-## Build and Run
+## Prerequisites
 
-```bash
-cmake -S . -B build
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-./build/multistream_video_pipeline
-```
+- Complete lessons 13 and 15.
+- The default synthetic sources need no camera or video file.
 
-The default uses two camera-like synthetic streams with different rates. Real files are repeatable:
+## Deliverables
 
-```bash
-./build/multistream_video_pipeline --input camera-a.mp4 --input camera-b.mp4
-```
+- Reusable multi-stream scheduler and pipeline library
+- Runnable multi-source executable
+- Identity, fairness, overload, shutdown, and failure-policy tests
 
 ## Architecture
 
@@ -39,7 +37,32 @@ The default source policy isolates a failed source: its queue closes while healt
 whole result. Inference failure always stops all streams because shared result correctness can no
 longer be guaranteed.
 
-## Metrics and Experiments
+## Build
+
+Configure and build from the repository root inside the pinned development container:
+
+```bash
+cmake -S 16_multistream_video_pipeline -B 16_multistream_video_pipeline/build
+cmake --build 16_multistream_video_pipeline/build --parallel
+```
+
+The generated build directory is ignored.
+
+## Run
+
+Run the commands from the repository root:
+
+```bash
+./16_multistream_video_pipeline/build/multistream_video_pipeline
+```
+
+The default uses two camera-like synthetic streams with different rates. Real files are repeatable:
+
+```bash
+./16_multistream_video_pipeline/build/multistream_video_pipeline --input camera-a.mp4 --input camera-b.mp4
+```
+
+### Metrics and Experiments
 
 The program reports total throughput and per-stream captured, processed, dropped, queue peak, FPS,
 and capture-to-result P50/P90/P99 latency.
@@ -49,3 +72,23 @@ and capture-to-result P50/P90/P99 latency.
 3. Run `--fail-inference-batch 2` and verify a nonzero exit without blocked capture threads.
 4. Inspect the integrity test: every output identity must be unique and belong to its source even
    when batches complete out of order.
+
+## Outputs
+
+- The executable reports total throughput and per-stream capture, processing, dropping, queue, FPS,
+  and percentile-latency metrics.
+- The current deterministic worker produces scheduling evidence, not TensorRT detection output.
+
+## Tests
+
+Run the configured CTest suite:
+
+```bash
+ctest --test-dir 16_multistream_video_pipeline/build --output-on-failure
+```
+
+## Checkpoints
+
+1. Schedule and batch frames from multiple independently bounded streams.
+2. Preserve stream and frame identity through batching and out-of-order result completion.
+3. Compare fairness, throughput, latency, and freshness under overload and source failures.

@@ -1,26 +1,9 @@
 # 10 - YOLOv8 TensorRT C++
 
-This lesson builds the first end-to-end C++ YOLOv8 TensorRT deployment artifact.
+## Purpose
 
-Goal: accept an image and TensorRT engine, run preprocessing, inference, postprocessing, and
-visualization in reusable C++ modules.
-
-Topics:
-
-- OpenCV letterbox preprocessing
-- TensorRT runtime deserialization
-- Reusable CUDA device and pinned-host buffers, stream, and event timing
-- YOLOv8 output decode
-- Class-aware NMS
-- Coordinate scaling back to the original image
-- Visualization
-- CLI arguments
-- Cold-start and steady-state latency sampling
-- Header-only NVTX3 ranges for Nsight Systems (CUDA 13; no removed `nvToolsExt` library)
-- Library targets for reusable preprocessing, inference, postprocessing, and visualization
-- Focused tests for preprocessing and postprocessing edge cases
-
-## Why This Matters
+- Build the main portfolio artifact: end-to-end YOLOv8n TensorRT C++ inference.
+- Begin converging lesson code into reusable preprocessing, inference, and postprocessing modules.
 
 Lesson 09 made the Python reference easy to inspect. This lesson turns the same pipeline into the
 C++ shape used by deployment services:
@@ -35,6 +18,17 @@ image
 
 The code is intentionally split before the program grows into camera streams, batching, async
 pipelines, and service-style reporting.
+
+## Prerequisites
+
+- Build a compatible lesson 06 TensorRT engine.
+- Use `assets/img.jpeg` as the default input image and the pinned development container for building.
+
+## Deliverables
+
+- Reusable preprocessing, TensorRT runner, postprocessing, and visualization libraries
+- `yolov8_trt_cpp` command-line executable
+- `yolov8_cpp_tests` focused test target and saved inference outputs
 
 ## Directory Layout
 
@@ -132,15 +126,3 @@ The tests cover:
 - Compare the first warmup sample with measured steady-state `gpu_compute` samples.
 - Trace the ownership path in `src/tensorrt_runner.cpp`: runtime, engine, context, stream, events,
   and buffers.
-
-Acceptance criteria:
-
-- The program accepts image and engine paths.
-- It saves an output image with detection boxes.
-- It uses `getNbIOTensors`, `getIOTensorName`, `setTensorAddress`, and `enqueueV3` rather than
-  deprecated binding-index APIs.
-- It reports host enqueue, GPU compute, transfers, preprocessing, postprocessing, and total latency.
-- It can separate first-inference behavior from repeated steady-state samples.
-- Reusable preprocessing, inference, postprocessing, and visualization code is not trapped inside
-  `main`.
-- Focused tests cover representative invalid input and boundary cases.

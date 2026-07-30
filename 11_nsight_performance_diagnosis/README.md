@@ -1,23 +1,10 @@
 # 11 - Nsight Performance Diagnosis
 
-This lesson profiles the lesson 10 C++ YOLOv8 TensorRT artifact without confusing first-inference
-startup behavior with steady-state latency.
+## Purpose
 
-Goal: use repeated in-process measurements, a model-only `trtexec` reference, NVTX ranges, and an
-Nsight Systems timeline to explain where request latency is spent.
-
-Topics:
-
-- warmup versus measured iterations
-- P50/P90/P99 latency reporting
-- host `enqueueV3` time versus GPU compute time
-- per-request CPU, transfer, GPU, and unaccounted latency shares
-- `trtexec` model-only comparison
-- Nsight Systems command-line capture and text statistics
-- NVTX-guided CPU/GPU timeline reading
-- synchronization gaps and GPU starvation
-
-## Why This Matters
+- Replace guesswork with timeline-based performance diagnosis.
+- Profiling immediately after the first C++ pipeline gives you a baseline before optimization.
+- High-end deployment roles expect evidence: latency tables, profiler traces, and bottleneck explanations.
 
 A new TensorRT execution context can have an expensive first inference. Launching a new process for
 every sample repeatedly measures that cold path and can produce a false bottleneck diagnosis.
@@ -37,19 +24,6 @@ enable Nsight's optional `--cuda-memory-usage` mode: with the pinned CUDA 13.0/N
 that mode crashes during TensorRT execution-context teardown, while ordinary CUDA tracing records
 the allocation APIs needed by this lesson without changing application behavior.
 
-## Runnable Artifact
-
-- `profile_yolov8_cpp.py`: builds lesson 10, runs an in-process steady-state benchmark, loads the
-  matching lesson 06 `trtexec` timing JSON when available, captures Nsight Systems with the image-specific HPC-X preload removed, and writes JSON
-  and Markdown reports.
-- `tests/test_profile_yolov8_cpp.py`: focused tests for percentile, schema-validation, composition,
-  and diagnosis behavior.
-
-Generated files go to `outputs/`, which is ignored by git.
-`diagnosis_summary.json` records the TensorRT/CUDA/GPU/driver/container identity plus the profiled
-engine and image SHA-256 values so later checkpoints
-can reject diagnosis evidence collected from a different engine.
-
 ## Prerequisites
 
 Complete lessons 06 and 10 first:
@@ -60,6 +34,45 @@ cmake -S 10_yolov8_trt_cpp -B 10_yolov8_trt_cpp/build
 cmake --build 10_yolov8_trt_cpp/build
 nsys --version
 ```
+
+## Deliverables
+
+- `profile_yolov8_cpp.py` strict Nsight Systems capture workflow
+- Ignored capture, SQLite, statistics, environment, and summary artifacts
+- CPU-only tests for command construction and evidence gates
+
+## Runnable Artifact
+
+- `profile_yolov8_cpp.py`: builds lesson 10, runs an in-process steady-state benchmark, loads the
+  matching lesson 06 `trtexec` timing JSON when available, captures Nsight Systems with the
+  image-specific HPC-X preload removed, and writes JSON
+  and Markdown reports.
+- `tests/test_profile_yolov8_cpp.py`: focused tests for percentile, schema-validation, composition,
+  and diagnosis behavior.
+
+Generated files go to `outputs/`, which is ignored by git.
+`diagnosis_summary.json` records the TensorRT/CUDA/GPU/driver/container identity plus the profiled
+engine and image SHA-256 values so later checkpoints
+can reject diagnosis evidence collected from a different engine.
+
+## Reading The Timeline
+
+Open the report:
+
+```bash
+nsys-ui outputs/nsys/yolov8_trt_cpp.nsys-rep
+```
+
+Use the NVTX ranges to navigate:
+
+- `warmup_iteration_0`: compare first-inference GPU work with later iterations.
+- `measured_iteration_*`: inspect representative steady-state requests.
+- `preprocess` and `postprocess`: identify CPU-heavy regions.
+- `h2d_submit`, `tensorrt_enqueue_host`, and `d2h_submit_and_wait`: relate CUDA API submission and
+  synchronization to the CUDA HW row.
+
+Then verify whether H2D, TensorRT kernels, and D2H execute in order, whether the CPU creates gaps,
+and whether synchronization leaves the GPU idle between requests.
 
 ## Run
 
@@ -127,25 +140,6 @@ The latency table includes:
 composition. Engine deserialization, image decoding, visualization, file writing, and process
 startup are outside the steady-state total.
 
-## Reading The Timeline
-
-Open the report:
-
-```bash
-nsys-ui outputs/nsys/yolov8_trt_cpp.nsys-rep
-```
-
-Use the NVTX ranges to navigate:
-
-- `warmup_iteration_0`: compare first-inference GPU work with later iterations.
-- `measured_iteration_*`: inspect representative steady-state requests.
-- `preprocess` and `postprocess`: identify CPU-heavy regions.
-- `h2d_submit`, `tensorrt_enqueue_host`, and `d2h_submit_and_wait`: relate CUDA API submission and
-  synchronization to the CUDA HW row.
-
-Then verify whether H2D, TensorRT kernels, and D2H execute in order, whether the CPU creates gaps,
-and whether synchronization leaves the GPU idle between requests.
-
 ## Tests
 
 ```bash
@@ -164,23 +158,14 @@ minimum lead required before the report declares one category dominant.
 - Find one measured iteration in Nsight and account for its CPU work, copies, kernels, and gaps.
 - Try one optimization and cite before-and-after reports and timelines.
 
-Acceptance criteria:
-
-- Cold first-inference behavior is separated from steady-state samples.
-- P50/P90/P99 are generated from repeated in-process measurements.
-- Host enqueue time is not mislabeled as GPU compute time.
-- Nsight captures contain named NVTX iteration and pipeline ranges.
-- The report compares the application with a model-only reference when timing JSON is available.
-- Any bottleneck claim is presented as a heuristic and checked against timeline evidence.
-- The default command fails if capture, SQLite export, or text-statistics generation fails;
-  `--skip-nsys` is the explicit CPU/report-only smoke path.
 
 ## Appendix: Commands Executed By The Default Run
 
 The following commands are the important subprocesses used by the default run. Run them from
 `11_nsight_performance_diagnosis/` so the relative paths resolve as shown. The script locates
 `nsys` through `PATH` and removes the development image's `LD_PRELOAD` only from Nsight
-subprocesses because that HPC-X preload conflicts with Nsight library injection; in the pinned development container it resolved to
+subprocesses because that HPC-X preload conflicts with Nsight library injection; in the pinned
+development container it resolved to
 `/usr/local/cuda/bin/nsys`.
 
 Start the complete workflow:

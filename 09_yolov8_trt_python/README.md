@@ -1,23 +1,8 @@
 # 09 - YOLOv8 TensorRT Python
 
-This lesson builds a Python reference pipeline around the TensorRT engine artifacts from lesson 06.
+## Purpose
 
-Goal: run end-to-end YOLOv8 inference in Python so preprocessing, output decode, NMS, and
-visualization can be debugged quickly before the C++ deployment version.
-
-Topics:
-
-- TensorRT 10 name-based Python runtime APIs (`num_io_tensors`, `set_tensor_address`,
-  `execute_async_v3`)
-- CUDA buffers through `cuda-python` Runtime API
-- NumPy/OpenCV letterbox preprocessing
-- YOLOv8 output decode
-- Class-aware NMS
-- Coordinate mapping back to the original image
-- Visualization and JSON reporting
-- Optional Ultralytics reference check
-
-## Why This Matters
+- Build a fast debugging reference before the full C++ implementation.
 
 Python is the fastest place to inspect model outputs and postprocessing math:
 
@@ -50,6 +35,12 @@ The default command expects:
 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
 assets/img.jpeg
 ```
+
+## Deliverables
+
+- `infer_yolov8_trt.py` inference CLI
+- Saved detection JSON and annotated image under `outputs/`
+- Documented TensorRT engine prerequisite
 
 ## Run
 
@@ -107,13 +98,3 @@ Exact detections and latency depend on the engine precision, GPU, TensorRT versi
 - Lower `--confidence` to `0.05` and observe why NMS is needed.
 - Compare static FP32 and static FP16 engines.
 - Run `--reference` and compare the top class and approximate box with Ultralytics.
-
-Acceptance criteria:
-
-- The script runs inference on `assets/img.jpeg` with a TensorRT engine.
-- It saves an annotated detection image and JSON report.
-- YOLOv8 decode, NMS, and coordinate scaling are implemented in local Python code.
-- Tensor addresses are bound by name and inference runs through `execute_async_v3`; deprecated
-  binding-index APIs are not used.
-- Device-to-host copies are synchronized before host output buffers are read.
-- Optional Ultralytics reference output can be recorded for debugging.

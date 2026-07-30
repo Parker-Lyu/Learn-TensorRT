@@ -1,10 +1,24 @@
 # 24 - Final Portfolio Case Study
 
+## Purpose
+
 This lesson assembles the validated YOLOv8n deployment into a reproducible portfolio report and an
 optional multi-stage delivery image. It consumes generated evidence from lessons 05, 10a, 12a,
 17a, 14, and 21; it never treats an absent engine or failed GPU check as a successful deployment.
 
-## Reproduce the evidence
+## Prerequisites
+
+- Complete the checkpoint reports and only the elective evidence that will be presented.
+- Build the required lesson 10, 14, and 21 artifacts in the pinned development environment.
+
+## Deliverables
+
+- `generate_case_study.py` evidence-driven report generator
+- Local verification tools and focused report tests
+- Multi-stage runtime `Dockerfile` and engine-delivery helper
+- `reports/24_final_portfolio_case_study.md` generated case study
+
+## Generate the Report
 
 Run these commands from the repository root **inside the pinned `learn-tensorrt:25.11`
 development environment**. The existing development container is sufficient; this lesson does not
@@ -39,7 +53,6 @@ Then collect the matrix and render the report:
 ```bash
 python3 24_final_portfolio_case_study/run_local_checks.py
 python3 24_final_portfolio_case_study/generate_case_study.py
-python3 -m unittest discover -s 24_final_portfolio_case_study/tests -v
 ```
 
 The report is written to `reports/24_final_portfolio_case_study.md`; raw local-check output is
@@ -48,7 +61,7 @@ return code, duration, GPU/driver/compute capability, CUDA Toolkit, TensorRT, co
 and host CPU metadata. A missing GPU or engine remains a failed check and is not silently replaced
 with a CPU-only claim.
 
-## Delivery image
+### Delivery image
 
 The optional image uses `nvcr.io/nvidia/pytorch:25.11-py3` as the reproducible TensorRT 10.14/CUDA
 13.0 builder and `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` as the CUDA runtime base. It copies
@@ -74,7 +87,23 @@ docker run --rm --gpus all -v "$PWD/24_final_portfolio_case_study/outputs:/outpu
 The serialized engine is GPU- and TensorRT-build specific. Rebuild it in the target environment
 when the deployment GPU, driver, CUDA, or TensorRT runtime changes.
 
-## Learning checkpoints
+## Outputs
+
+- `outputs/local_checks.json`, platform manifests, and image-size evidence are ignored generated artifacts.
+- `reports/24_final_portfolio_case_study.md` is ignored and regenerated from the current evidence.
+
+## Tests
+
+Run the Python tests from the repository root:
+
+```bash
+python3 -m unittest discover -s 24_final_portfolio_case_study/tests -v
+```
+
+The unit tests validate report inputs, precision-decision logic, local-check coverage, and the
+multi-stage Dockerfile without requiring ignored reports to exist in a clean clone.
+
+## Checkpoints
 
 - Trace each report number to its generated raw artifact and recorded platform identity.
 - Explain why static engine packaging is separate from the dynamic batching and C ABI lessons.

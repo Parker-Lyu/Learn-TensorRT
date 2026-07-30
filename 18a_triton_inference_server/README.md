@@ -1,10 +1,23 @@
 # 18a - Triton Inference Server
 
+## Purpose
+
 This server-inference elective packages lesson 14's dynamic TensorRT plan in a Triton model
 repository, enables dynamic batching, sends real preprocessed YOLOv8 input, and measures client
 latency under concurrency.
 
-## Environment Boundary
+## Prerequisites
+
+- Build lesson 14's dynamic-batch TensorRT engine on the server GPU environment.
+- Docker, NVIDIA Container Toolkit, and the pinned Triton server container are required for runtime acceptance.
+
+## Deliverables
+
+- `prepare_model_repository.py` reproducible repository generator
+- Validated client and load-test tooling
+- Metrics utilities, configuration checks, and focused tests
+
+## Setup
 
 The reference server is `nvcr.io/nvidia/tritonserver:25.11-py3`. Build lesson 14's plan with
 TensorRT 10.14 in the pinned `nvcr.io/nvidia/pytorch:25.11-py3` development environment, then load
@@ -18,7 +31,7 @@ python3 -m pip install --target 18a_triton_inference_server/.deps \
   -r 18a_triton_inference_server/requirements-client.txt
 ```
 
-## Prepare and Start
+## Run
 
 ```bash
 python3 18a_triton_inference_server/prepare_model_repository.py
@@ -32,7 +45,7 @@ docker run --rm --gpus all --network host \
 Confirm `/v2/health/ready` and the model-ready endpoint before benchmarking. The model configuration
 declares max batch 4, preferred batches 2 and 4, and a 5 ms maximum queue delay.
 
-## Client and Load Test
+### Client and Load Test
 
 ```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=18a_triton_inference_server/.deps \
@@ -50,11 +63,16 @@ when concurrent requests arrive within the queue-delay window and the larger GPU
 time than it waits. It hurts latency-sensitive traffic when the queue delay dominates the batch
 efficiency gain.
 
-## Verification
+## Outputs
+
+- The generated model repository, client JSON, and Prometheus captures remain under ignored local output paths.
+- Static checks are not server-runtime evidence.
+
+## Tests
+
+### Verification
 
 Build lesson 14's engine before preparing the repository. Static tests do not replace a server run.
-
-## Static Checks
 
 ```bash
 python3 -m unittest discover -s 18a_triton_inference_server/tests -v
@@ -64,3 +82,9 @@ python3 18a_triton_inference_server/prepare_model_repository.py
 These checks validate only the model repository and metrics logic. Acceptance requires the pinned
 Triton container, GPU health checks, successful model loading, client results at concurrency 1 and
 4, and saved Prometheus evidence.
+
+## Checkpoints
+
+1. Prepare a reproducible Triton TensorRT model repository and send validated client requests.
+2. Measure concurrency, dynamic batching, queue delay, compute time, throughput, and client latency.
+3. Explain how model instances and batching configuration affect GPU utilization and latency targets.

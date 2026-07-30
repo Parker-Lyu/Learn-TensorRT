@@ -1,14 +1,23 @@
+import importlib.util
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+MODULE_PATH = ROOT / "24_final_portfolio_case_study/generate_case_study.py"
+SPEC = importlib.util.spec_from_file_location("generate_case_study", MODULE_PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader
+SPEC.loader.exec_module(MODULE)
 
 
 class CaseStudyTests(unittest.TestCase):
-    def test_checkpoint_reports_exist(self):
+    def test_checkpoint_reports_are_generated_inputs_not_tracked_fixtures(self):
+        ignore_lines = (ROOT / ".gitignore").read_text().splitlines()
+        self.assertIn("reports/", ignore_lines)
+        source = MODULE_PATH.read_text()
         for name in ("10a_end_to_end_validation.md", "12a_precision_performance.md",
                      "17a_pipeline_performance.md"):
-            self.assertTrue((ROOT / "reports" / name).is_file())
+            self.assertIn(f'ROOT / "reports/{name}"', source)
 
     def test_dockerfile_is_multistage(self):
         text = (ROOT / "24_final_portfolio_case_study/Dockerfile").read_text()
@@ -27,16 +36,15 @@ class CaseStudyTests(unittest.TestCase):
         self.assertIn("23_cpp_interview_katas", text)
         self.assertIn("CMAKE_BUILD_TYPE=Release", text)
 
-    def test_precision_report_no_longer_uses_smoke_evidence(self):
-        text = (ROOT / "reports/12a_precision_performance.md").read_text()
-        self.assertIn("5000 fixed", text)
-        self.assertNotIn("smoke", text.lower())
-
     def test_case_study_uses_quality_and_performance_for_precision_choice(self):
-        text = (ROOT / "reports/24_final_portfolio_case_study.md").read_text()
-        self.assertIn("FP16 is the current deployment choice", text)
-        self.assertIn("INT8 passes the declared quality gate but is slower", text)
-        self.assertNotIn("INT8 is the current deployment candidate", text)
+        decision, next_step = MODULE.choose_precision(
+            {"FP32": "PASS", "FP16": "PASS", "INT8": "PASS"},
+            fp16_throughput=600.0,
+            int8_throughput=500.0,
+        )
+        self.assertIn("FP16 is the current deployment choice", decision)
+        self.assertIn("INT8 passes the declared quality gate", decision)
+        self.assertIn("performance regression", next_step)
 
 
 if __name__ == "__main__": unittest.main()

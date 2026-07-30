@@ -1,23 +1,8 @@
 # 05 - Torch To ONNX
 
-This lesson exports YOLOv8n from PyTorch to a simplified ONNX graph and validates that ONNX Runtime
-produces the same raw model output as PyTorch for the same preprocessed tensor.
+## Purpose
 
-Goal: build a trustworthy, TensorRT-ready ONNX artifact before using `trtexec` and TensorRT C++
-runtime code.
-
-Topics:
-
-- Ultralytics YOLO export
-- ONNX opset
-- Static shape and dynamic shape
-- ONNX Runtime validation
-- `onnxsim` or Ultralytics graph simplification
-- Netron graph inspection
-- Input and output tensor names
-- Raw output comparison before NMS
-
-## Why This Matters
+- Export YOLOv8n to ONNX and validate the exported graph.
 
 TensorRT starts from an ONNX graph. If the ONNX model is already wrong, the TensorRT engine will
 only make the wrong result faster.
@@ -35,6 +20,17 @@ YOLOv8n .pt weights
 The comparison happens before postprocessing so later lessons can separate model-export problems
 from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bugs.
 
+## Prerequisites
+
+- Complete `00_environment_check` in the pinned development container.
+- Use `assets/yolov8n.pt` and `assets/img.jpeg` as the default model and validation input.
+
+## Deliverables
+
+- `export_yolov8_onnx.py`, `inspect_onnx.py`, and `validate_onnx_runtime.py`
+- Generated static and dynamic ONNX models in the ignored output directory
+- Saved input, raw outputs, graph inspection, and validation report artifacts
+
 ## Directory Layout
 
 - `export_yolov8_onnx.py`: downloads or uses `assets/yolov8n.pt`, then exports simplified ONNX
@@ -47,7 +43,26 @@ from YOLO decode, NMS, coordinate mapping, TensorRT precision, or C++ buffer bug
 - `../assets/yolov8n.pt`: shared YOLOv8n weights used by later lessons.
 - `../assets/img.jpeg`: shared sample image.
 
-## Export
+## Expected Report Fields
+
+`validation_report.json` records:
+
+- weights path
+- ONNX path
+- image path
+- letterbox scale and padding
+- ONNX Runtime input/output names
+- output shape and dtype
+- max absolute error
+- mean absolute error
+- P99 absolute error
+- index and values at the largest mismatch
+- `np.allclose` result
+
+These fields become the first accuracy-alignment evidence before Polygraphy and TensorRT enter the
+project.
+
+## Run
 
 Run the lesson commands from its directory:
 
@@ -103,7 +118,7 @@ The default weights path is:
 If it is missing, the script downloads the official YOLOv8n weights into the root `assets` folder so
 later lessons can reuse the same file.
 
-## Inspect
+### Inspect
 
 Check the simplified static model and write a JSON report:
 
@@ -141,7 +156,7 @@ python3 inspect_onnx.py \
   --report outputs/onnx_dynamic_inspection.json
 ```
 
-## Validate
+### Validate
 
 Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 
@@ -183,24 +198,10 @@ python3 validate_onnx_runtime.py --rtol 1e-3 --atol 1e-3
 The command exits with status `2` if the outputs are not close enough. That is intentional: a failed
 validation should stop the deployment chain until the mismatch is understood.
 
-## Expected Report Fields
+## Outputs
 
-`validation_report.json` records:
-
-- weights path
-- ONNX path
-- image path
-- letterbox scale and padding
-- ONNX Runtime input/output names
-- output shape and dtype
-- max absolute error
-- mean absolute error
-- P99 absolute error
-- index and values at the largest mismatch
-- `np.allclose` result
-
-These fields become the first accuracy-alignment evidence before Polygraphy and TensorRT enter the
-project.
+- The runnable commands above produce the files and console evidence described in `Deliverables`.
+- Generated build and runtime artifacts remain in the lesson's ignored build or output directory.
 
 ## Checkpoints
 
@@ -214,16 +215,6 @@ project.
 - Intentionally use a loose and a strict tolerance in validation and explain the difference between
   acceptable float drift and a real export bug.
 
-Acceptance criteria:
-
-- Simplified `outputs/yolov8n.onnx` and `outputs/yolov8n_dynamic.onnx` are generated.
-- Input and output tensor names are recorded.
-- ONNX checker passes.
-- Static and dynamic inspection reports show the expected static tensor shapes and dynamic
-  `batch`/`height`/`width` axes.
-- ONNX Runtime output from the simplified static ONNX is compared with PyTorch output on the same
-  image tensor.
-- The validation report explains the numerical difference and tolerance.
 
 ## Appendix: Interpreting PyTorch And ONNX FP32 Differences
 
@@ -272,7 +263,7 @@ These are experience-based ranges, not acceptance guarantees. A single `0.01` er
 `500` may be harmless, while `0.01` on a score near `0.001` is large. Numerically sensitive models,
 different operators, and different CPU backends may require justified model-specific limits.
 
-For the committed lesson evidence, the raw output shape is `[1, 84, 8400]` and the report records
+For the saved lesson evidence, the raw output shape is `[1, 84, 8400]` and the report records
 approximately:
 
 ```text

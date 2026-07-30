@@ -29,8 +29,9 @@ beginning, not quick demo shortcuts.
   to inspect in the lesson's `output/` directory instead.
 - Transient build products, TensorRT engines, profiling captures, generated images, and local
   benchmark outputs should go to ignored output directories.
-- Curated reports, small test fixtures, manifests, and reproducibility metadata may be committed
-  when they are intentional lesson deliverables.
+- Files under the root `reports/` directory are generated local evidence and must remain ignored.
+  Small test fixtures, manifests, and reproducibility metadata outside that directory may be
+  committed when they are intentional lesson deliverables.
 
 ## Lesson Modules
 
