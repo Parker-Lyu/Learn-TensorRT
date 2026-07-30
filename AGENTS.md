@@ -53,25 +53,33 @@ beginning, not quick demo shortcuts.
 - Treat `docs/learning_roadmap.md` as the course-level contract. A lesson README must implement the
   roadmap's purpose, deliverables, and acceptance boundary without silently expanding or narrowing
   them.
-- Use these learner-facing sections in this order when they apply:
+- Use these learner-facing sections in this order:
   1. `Purpose`
   2. `Prerequisites`
   3. `Deliverables`
-  4. `Build` for compiled lessons or `Setup` for dependency preparation
-  5. `Run` for executable lessons or `Generate the Report` for reporting checkpoints
-  6. `Outputs`
-  7. `Tests`
-  8. `Checkpoints`
+  4. Optional `Setup` for lesson-specific dependency, data, or environment preparation
+  5. Optional `Build` when the lesson compiles C++, CUDA, a plugin, or another native artifact
+  6. `Run` for executable lessons or `Generate the Report` for reporting checkpoints
+  7. `Outputs`
+  8. Optional `Tests` when automated checks exist
+  9. `Checkpoints`
 - `Purpose`, `Prerequisites`, `Deliverables`, the primary execution section, `Outputs`, and
-  `Checkpoints` are expected in every lesson README. Use `None` with a brief explanation when a
-  prerequisite, build step, generated output, or automated test genuinely does not exist; do not
-  invent an empty command merely to satisfy the format.
+  `Checkpoints` are expected in every lesson README. Use `None` with a brief explanation only when a
+  required section genuinely has no content. Omit an optional `Setup`, `Build`, or `Tests` section
+  when it does not apply; do not invent an empty command merely to satisfy the format.
+- `Setup` is determined by lesson-specific preparation, not by implementation language. A Python
+  lesson that uses only dependencies from the baseline container does not need `Setup`; a compiled
+  lesson may use both `Setup` and `Build` when it first prepares additional dependencies or data.
 - Keep lesson-specific explanations under descriptive optional headings such as `Design`, `Data
   Flow`, `Experiments`, `Failure Semantics`, `Troubleshooting`, or `Appendix`. These headings do not
   replace the standard execution sections.
 - Put commands in the section that owns them: dependency and cross-lesson preparation under
   `Prerequisites` or `Setup`, compilation under `Build`, the main learner workflow under `Run`, and
   automated checks under `Tests`.
+- When `Tests` is present, provide exact runnable commands, describe what they cover, and state any
+  GPU, container, sanitizer, server, or target-hardware limitation. Keep tests optional at the
+  README-format level, but add them whenever the lesson contains reusable logic for which focused
+  automated verification is practical.
 - `Outputs` must distinguish committed deliverables from ignored, environment-specific generated
   artifacts. Never imply that an engine, benchmark, server run, sanitizer run, or target-hardware
   result exists unless it was actually produced.

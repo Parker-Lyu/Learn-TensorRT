@@ -136,8 +136,9 @@ Every lesson description uses the same five-part contract:
 
 Elective lessons also carry a `Track` label. A lesson may add concise design notes when a sequence,
 reference architecture, or constrained implementation scope is part of the lesson itself. The
-roadmap defines the course contract; each lesson README provides the aligned prerequisites, build,
-run, output, test, and learner-checkpoint instructions for reproducing that contract.
+roadmap defines the course contract; each lesson README provides aligned prerequisites, execution,
+output, and learner-checkpoint instructions, plus setup, build, and test instructions when they
+apply.
 
 The deliverables below describe artifacts that exist in the repository. Acceptance criteria are
 completion gates, not blanket claims that every GPU-, server-, or target-hardware-dependent run has
