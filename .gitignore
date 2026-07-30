@@ -3,6 +3,7 @@ build/
 cmake-build-*/
 build_check/
 outputs*/
+reports/*
 
 # Downloaded COCO data is local; the canonical hashed manifest is reproducibility metadata.
 assets/coco/data/*

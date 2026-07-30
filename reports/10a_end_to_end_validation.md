@@ -37,7 +37,7 @@ LOGO=ubuntu-logo
 [OK] OS release
 
 -- Kernel --
-Linux 12d253bce62b 7.0.0-28-generic #28~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 15:50:57 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+Linux bd2fc3c23a5b 7.0.0-28-generic #28~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 15:50:57 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
 [OK] Kernel
 
 -- Working directory --
@@ -60,16 +60,16 @@ CUDA_VERSION=13.0.2.006
 ========== GPU ==========
 
 -- nvidia-smi --
-Fri Jul 24 10:46:51 2026
+Thu Jul 30 10:00:26 2026
 +-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
+| NVIDIA-SMI 595.84                 Driver Version: 595.84         CUDA Version: 13.2     |
 +-----------------------------------------+------------------------+----------------------+
 | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
 | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
 |   0  NVIDIA GeForce RTX 4090        Off |   00000000:01:00.0  On |                  Off |
-|  0%   42C    P8             12W /  500W |    1069MiB /  24564MiB |     19%      Default |
+|  0%   40C    P8             18W /  500W |     872MiB /  24564MiB |      4%      Default |
 |                                         |                        |                  N/A |
 +-----------------------------------------+------------------------+----------------------+
 
@@ -96,7 +96,7 @@ Build cuda_13.0.r13.0/compiler.36424714_0
 
 -- trtexec version --
 &&&& RUNNING TensorRT.trtexec [TensorRT v101401] [b48] # trtexec --version
-[07/24/2026-10:46:52] [I] TF32 is enabled by default. Add --noTF32 flag to further improve accuracy with some performance cost.
+[07/30/2026-10:00:26] [I] TF32 is enabled by default. Add --noTF32 flag to further improve accuracy with some performance cost.
 === Model Options ===
   --onnx=<file>               ONNX model
 
@@ -149,9 +149,14 @@ Python 3.12.3
 -- Required Python package imports --
 torch: 2.10.0a0+b558c986e8.nv25.11
 modelopt: 0.37.0
-Creating new Ultralytics Settings v0.0.6 file ✅
-View Ultralytics Settings with 'yolo settings' or at '/home/ubuntu/.config/Ultralytics/settings.json'
-Update
+ultralytics: 8.3.225
+onnx: 1.21.0
+onnxruntime: 1.23.2
+onnxslim: 0.1.94
+onnxsim: v0.6.5
+[OK] Required Python package imports
+
+-- Optional Python package avai
 ... (truncated; see saved log)
 ```
 
@@ -187,8 +192,8 @@ same source image and serialized engine.
 | Metric | Value |
 | --- | ---: |
 | Shape match | pass |
-| Max absolute error | 0.0012512207 |
-| Mean absolute error | 1.0139775e-06 |
+| Max absolute error | 0.0014648438 |
+| Mean absolute error | 1.0059709e-06 |
 | P99 absolute error | 3.0517578e-05 |
 | Tolerance | rtol=0.001, atol=0.001 |
 | Allclose | pass |
@@ -221,13 +226,13 @@ float32 output.
 
 | Stage | Milliseconds |
 | --- | ---: |
-| preprocess | 3.2532172 |
-| h2d | 0.24603776 |
-| enqueue_host | 0.31356042 |
-| gpu_compute | 0.86496096 |
-| d2h | 0.14237664 |
-| postprocess | 1.0284803 |
-| total | 5.9272434 |
+| preprocess | 0.71552421 |
+| h2d | 0.25591168 |
+| enqueue_host | 0.25150033 |
+| gpu_compute | 0.85063968 |
+| d2h | 0.14707744 |
+| postprocess | 0.41205541 |
+| total | 2.7624556 |
 
 Each value is the arithmetic mean of 100 measured samples after
 10 warmup iteration(s). The raw samples remain in the C++ JSON result.
