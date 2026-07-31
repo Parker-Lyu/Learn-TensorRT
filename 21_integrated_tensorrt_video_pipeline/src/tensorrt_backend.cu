@@ -1,4 +1,5 @@
 #include "tensorrt_backend.hpp"
+#include <opencv2/imgproc.hpp>
 #include <NvInfer.h>
 #include <cuda_runtime.h>
 #include <nppi_geometry_transforms.h>
