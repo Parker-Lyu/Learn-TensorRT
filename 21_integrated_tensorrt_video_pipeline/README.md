@@ -14,8 +14,8 @@ do not reuse an undocumented local engine. `assets/img.jpeg` is the default cont
 ## Deliverables
 
 - `integrated_pipeline_core`: CPU-testable immutable metadata, slot lifecycle, accounting, and dispatch.
-- `integrated_tensorrt_video_pipeline`: runnable identity/ownership smoke executable.
-- Focused CPU tests. The asynchronous CUDA/NPP-to-TensorRT backend is the GPU acceptance boundary.
+- `integrated_tensorrt_video_pipeline_gpu`: runnable bounded multi-source NPP/TensorRT/YOLO pipeline.
+- CPU-focused concurrency tests and separately documented GPU integration, consistency, overload, and failure tests.
 
 ## Design
 
@@ -68,15 +68,7 @@ README are committed; engines, measurements, and generated images are not.
 ctest --test-dir 21_integrated_tensorrt_video_pipeline/build --output-on-failure
 ```
 
-These focused tests are CPU-only and force reverse completion to validate slot transitions,
-terminal accounting, metadata propagation, and identity dispatch. GPU integration checks require
-the pinned container, TensorRT engine, and NVIDIA GPU.
-
-## Checkpoints
-
-1. Why is a shared engine safe while a concurrently used execution context is not shared?
-2. Which event releases a slot, and why is `cudaDeviceSynchronize()` not the steady-state answer?
-3. Which work drains at EOS, and which work is discarded or quiesced after abort?
+CPU tests cover queue, scheduler, slot, accounting, metadata, and reverse completion. GPU tests cover NPP/TensorRT batches, independent slots, identity, overload, failure cleanup, and batch consistency; they require the pinned container, lesson 17 engine, and an NVIDIA GPU.
 
 GPU TensorRT smoke (requires the lesson 17 dynamic-profile engine):
 
@@ -129,3 +121,9 @@ losses from the terminal accounting invariant.
 Image paths and video-file paths use the same CLI. Video files are decoded by OpenCV into a
 repeatable per-stream sequence before capture workers begin, so the measured GPU region excludes
 file decode while capture timestamps still cover queue-to-result latency.
+
+## Checkpoints
+
+1. Why is a shared engine safe while a concurrently used execution context is not shared?
+2. Which event releases a slot, and why is `cudaDeviceSynchronize()` not the steady-state answer?
+3. Which work drains at EOS, and which work is discarded or quiesced after abort?
