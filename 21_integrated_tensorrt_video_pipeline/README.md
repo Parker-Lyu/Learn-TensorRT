@@ -97,3 +97,15 @@ per-source identity:
   17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine \
   assets/img.jpeg,assets/img.jpeg 16 4 2
 ```
+
+### Failure Experiments
+
+```bash
+LESSON21_FAIL_SUBMIT_BATCH=1 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg 8 4 2
+LESSON21_FAIL_POSTPROCESS_BATCH=0 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg 8 4 2
+```
+
+Both return nonzero. Capture queues close and join through their owner, while the TensorRT backend
+synchronizes submitted slot streams before destroying CUDA or TensorRT resources.

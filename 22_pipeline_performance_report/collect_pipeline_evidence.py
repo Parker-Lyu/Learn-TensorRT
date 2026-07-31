@@ -158,6 +158,8 @@ def main() -> int:
     faults = {
         "invalid_input": run([integrated_exe, str(engine), "/definitely/missing/image.jpg"]),
         "invalid_engine": run([integrated_exe, "/definitely/missing.engine", str(image)]),
+        "integrated_submit_failure": run(["bash", "-lc", f"LESSON21_FAIL_SUBMIT_BATCH=1 {integrated_exe} {engine} {image} 8 4 2 {integrated_output}/submit-fault"]),
+        "integrated_postprocess_failure": run(["bash", "-lc", f"LESSON21_FAIL_POSTPROCESS_BATCH=0 {integrated_exe} {engine} {image} 8 4 2 {integrated_output}/postprocess-fault"]),
         "capture_failure": run([single_exe, "--synthetic-frames", "20", "--fail-capture-at", "3"]),
         "worker_failure": run([single_exe, "--synthetic-frames", "20", "--fail-worker-at", "3"]),
         "multistream_inference_failure": run([multi_exe, "--fail-inference-batch", "1"]),
