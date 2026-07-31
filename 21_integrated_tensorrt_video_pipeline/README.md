@@ -121,3 +121,11 @@ queue capacity, and synthetic capture interval in milliseconds. A controlled ove
 
 Its terminal invariant is `captured == processed + dropped`, and queue peak must not exceed the
 configured capacity.
+
+A final optional scheduler argument selects `round-robin` (default) or `latest-first`. Latest-first
+discards stale queued frames explicitly and includes them in `dropped`; it never hides freshness
+losses from the terminal accounting invariant.
+
+Image paths and video-file paths use the same CLI. Video files are decoded by OpenCV into a
+repeatable per-stream sequence before capture workers begin, so the measured GPU region excludes
+file decode while capture timestamps still cover queue-to-result latency.
