@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -38,7 +40,33 @@ class BenchmarkTrt10EvidenceTests(unittest.TestCase):
             BENCHMARK.parse_throughput("Throughput: 1 qps\nThroughput: 700.5 qps"), 700.5
         )
 
+    def test_evaluation_gate_controls_int8_eligibility(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engines = {}
+            artifacts = {}
+            for name in ("fp32", "fp16", "int8"):
+                path = root / f"{name}.engine"
+                path.write_bytes(name.encode())
+                engines[name] = path
+                artifacts[f"tensorrt_{name}"] = {"sha256": BENCHMARK.sha256(path)}
+            evaluation = root / "evaluation.json"
+            evaluation.write_text(json.dumps({
+                "schema_version": 1,
+                "artifacts": artifacts,
+                "backends": {"tensorrt_int8": {"passed": False}},
+            }), encoding="utf-8")
+            _, eligible = BENCHMARK.load_evaluation(evaluation, engines)
+            self.assertFalse(eligible)
+
+    def test_trtexec_version_parser_supports_tensorrt_10(self) -> None:
+        original = BENCHMARK.command_output
+        BENCHMARK.command_output = lambda command: "RUNNING [TensorRT v101401]"
+        try:
+            self.assertEqual(BENCHMARK.trtexec_version("trtexec"), "10.14.1")
+        finally:
+            BENCHMARK.command_output = original
+
 
 if __name__ == "__main__":
     unittest.main()
-

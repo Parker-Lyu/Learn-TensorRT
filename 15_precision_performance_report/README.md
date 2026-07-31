@@ -2,23 +2,20 @@
 
 ## Purpose
 
-This checkpoint consumes Lesson 14's TensorRT 10.14 FP32, FP16, and quality-passing Q/DQ INT8
-engines. It records at least 100 synchronized `trtexec` samples, wall-time throughput, detection
-metrics, release-gate state, engine hashes, dataset identity, and TensorRT 10.14 Engine Inspector
-evidence without copying numbers by
-hand.
-
-Run in the pinned course container from the repository root:
+This checkpoint consumes Lesson 14's identity-linked accuracy, canonical performance, dataset, and
+TensorRT Engine Inspector evidence without repeating the GPU measurement. It validates the evidence
+before rendering an application-facing precision and performance decision report.
 
 ## Prerequisites
 
-- Complete lesson 14's reproduction procedure and retain its matched engine, dataset, quality, and inspector evidence.
-- Use the same pinned GPU environment for all compared precision modes.
+- Complete Lesson 14's reproduction procedure and retain its matched dataset, quality, inspector,
+  and canonical performance evidence.
+- Use the shared development environment configured in Course 00.
 
 ## Deliverables
 
-- `collect_performance.py` evidence collector
-- `generate_report.py` report generator and focused tests
+- `generate_report.py` evidence validator and report generator
+- Focused tests for evidence identity, quality-gate, and report-decision behavior
 - `reports/15_precision_performance.md` generated decision report
 
 ## Decision policy
@@ -33,14 +30,14 @@ Run in the pinned course container from the repository root:
 ## Generate the Report
 
 ```bash
-python3 15_precision_performance_report/collect_performance.py
 python3 15_precision_performance_report/generate_report.py
 ```
 
 Complete `14_yolov8_int8_quantization_engineering/docs/reproduction.md` first. The generator rejects
-an INT8 candidate that failed its gate and rejects mismatched manifest, engine, runtime, or sample
-identities. The report also consumes Lesson 14's TensorRT 10.14 Engine Inspector audit. Raw timing
-captures remain in ignored output directories.
+mismatched manifest, engine, runtime, sample, and release-gate identities. A failed INT8 candidate
+must have no INT8 performance measurement; the report records the rejection and uses the available
+FP32/FP16 performance evidence. The report also consumes Lesson 14's TensorRT 10.14 Engine
+Inspector audit. Raw timing captures remain in Lesson 14's ignored output directory.
 
 The generator writes an evidence-backed local report to `reports/15_precision_performance.md`. It
 records TensorRT 10.14.1, the matched engine identities, quality results, and the measured
@@ -49,7 +46,8 @@ GPU, driver, model, dataset, or runtime identity differs.
 
 ## Outputs
 
-- Raw timing captures and `performance.json` are written under ignored `outputs/`.
+- Canonical raw timing captures and `performance.json` are generated under Lesson 14's ignored
+  `outputs/` directory and are not copied into this lesson.
 - The generated `reports/15_precision_performance.md` is ignored and environment-specific.
 
 ## Tests

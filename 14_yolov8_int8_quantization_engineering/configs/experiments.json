@@ -18,16 +18,6 @@
         "high_precision": "fp16",
         "modelopt_config.algorithm": "max"
       }
-    },
-    {
-      "id": "reference_entropy_calibrator",
-      "runtime": "tensorrt_10_14",
-      "method": "implicit_int8_entropy_calibrator_reference",
-      "engine_metadata": {
-        "name": "tensorrt_int8",
-        "build_mode": "implicit-int8-entropy-calibrator-reference",
-        "calibration_algorithm": "entropy"
-      }
     }
   ]
 }

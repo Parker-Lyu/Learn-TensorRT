@@ -34,15 +34,30 @@ def validate_evidence(
     diagnosis: dict,
     manifest: dict,
     manifest_sha256: str,
+    evaluation_sha256: str,
 ) -> None:
     if performance.get("schema_version") != 3:
-        raise ValueError("performance evidence must use schema version 3; recollect lesson 15")
+        raise ValueError("performance evidence must use schema version 3; rerun Lesson 14")
     if evaluation.get("schema_version") != 1:
         raise ValueError("unsupported lesson 14 evaluation schema")
-    if set(performance.get("backends", {})) != set(ENGINE_KEYS):
-        raise ValueError("performance evidence must contain fp32, fp16, and int8")
     if set(ENGINE_KEYS.values()) - set(evaluation.get("backends", {})):
         raise ValueError("evaluation evidence is missing required TensorRT backends")
+    int8_passed = bool(evaluation["backends"]["tensorrt_int8"].get("passed"))
+    gate_identity = performance.get("quality_gate", {})
+    if gate_identity.get("int8_eligible_for_performance") is not int8_passed:
+        raise ValueError("performance evidence does not match the INT8 quality-gate result")
+    if gate_identity.get("evaluation_sha256") != evaluation_sha256:
+        raise ValueError("performance evidence references a different precision evaluation")
+    methodology = performance.get("methodology", {})
+    if methodology.get("inference_streams") != 1 or methodology.get("data_transfers") is not True:
+        raise ValueError("performance evidence does not use the matched transfer/stream methodology")
+    expected_performance = {"fp32", "fp16"} | ({"int8"} if int8_passed else set())
+    actual_performance = set(performance.get("backends", {}))
+    if actual_performance != expected_performance:
+        raise ValueError(
+            "performance evidence must contain FP32/FP16 and contain INT8 only after its "
+            "quality gate passes"
+        )
 
     records = manifest.get("records", [])
     calibration = [record for record in records if record.get("split") == "calibration"]
@@ -66,7 +81,8 @@ def validate_evidence(
     if dataset.get("manifest_sha256") != manifest_sha256:
         raise ValueError("evaluation manifest SHA-256 does not match the selected manifest")
 
-    for performance_key, evaluation_key in ENGINE_KEYS.items():
+    for performance_key in expected_performance:
+        evaluation_key = ENGINE_KEYS[performance_key]
         backend = performance["backends"][performance_key]
         if backend.get("sample_count", 0) < 100:
             raise ValueError(f"{performance_key} performance has fewer than 100 samples")
@@ -84,6 +100,7 @@ def validate_evidence(
             raise ValueError(
                 f"{performance_key} engine differs between performance and accuracy evidence"
             )
+    for evaluation_key in ENGINE_KEYS.values():
         drift = evaluation["backends"][evaluation_key].get("tensor_drift_vs_fp32")
         if not isinstance(drift, dict) or set(drift) != {"max_abs", "mean_abs", "p99_abs"}:
             raise ValueError(f"{evaluation_key} is missing raw tensor drift evidence")
@@ -132,8 +149,11 @@ def render(
     diagnosis: dict,
     manifest: dict,
     manifest_sha256: str,
+    evaluation_sha256: str,
 ) -> str:
-    validate_evidence(performance, evaluation, diagnosis, manifest, manifest_sha256)
+    validate_evidence(
+        performance, evaluation, diagnosis, manifest, manifest_sha256, evaluation_sha256
+    )
     records = manifest["records"]
     calibration_count = sum(record["split"] == "calibration" for record in records)
     validation_count = sum(record["split"] == "validation" for record in records)
@@ -158,6 +178,8 @@ def render(
 
     performance_rows = []
     for key in ("fp32", "fp16", "int8"):
+        if key not in performance["backends"]:
+            continue
         backend = performance["backends"][key]
         latency = backend["latency_ms"]
         performance_rows.append(
@@ -178,7 +200,11 @@ def render(
     )
     diagnosis_heading = "TensorRT 10.14 layer audit"
     fp16_decision = backend_decision(performance, evaluation, "fp16")
-    int8_decision = backend_decision(performance, evaluation, "int8")
+    int8_decision = (
+        backend_decision(performance, evaluation, "int8")
+        if "int8" in performance["backends"]
+        else "INT8 fails the accuracy gate and was not benchmarked."
+    )
     if evaluation["backends"]["tensorrt_int8"]["passed"]:
         fp16_perf = performance["backends"]["fp16"]
         int8_perf = performance["backends"]["int8"]
@@ -227,7 +253,8 @@ Generated from identity-linked JSON artifacts. Overall checkpoint status: **{ove
 
 Latency rows use synchronized `trtexec --exportTimes` measurements. Throughput is the wall-time qps
 reported by `trtexec`, which accounts for its transfer/compute overlap. Performance and accuracy
-evidence are accepted only when their engine SHA-256 values match.
+evidence are accepted only when the measured engines' SHA-256 values match. Failed INT8 candidates
+have no performance row.
 
 ## Detection Quality and Release Gate
 
@@ -259,8 +286,7 @@ FP16-versus-Q/DQ difference to a specific layer or runtime cause.
 ## Reproduction
 
 ```bash
-# Follow 14_yolov8_int8_quantization_engineering/docs/reproduction.md
-python3 15_precision_performance_report/collect_performance.py
+# Follow 14_yolov8_int8_quantization_engineering/docs/reproduction.md first
 python3 15_precision_performance_report/generate_report.py
 ```
 
@@ -284,7 +310,8 @@ claiming an optimization that was not measured.
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--performance", type=Path,
-                        default=ROOT / "15_precision_performance_report/outputs/performance.json")
+                        default=ROOT / "14_yolov8_int8_quantization_engineering/outputs/"
+                        "tensorrt10/performance/performance.json")
     parser.add_argument("--evaluation", type=Path,
                         default=ROOT / "14_yolov8_int8_quantization_engineering/outputs/"
                         "evaluation/precision_evaluation.json")
@@ -303,6 +330,7 @@ def main() -> int:
         load(args.diagnosis),
         load(args.manifest),
         sha256(args.manifest),
+        sha256(args.evaluation),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")

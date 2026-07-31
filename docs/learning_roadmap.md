@@ -693,6 +693,7 @@ Deliverables:
 - Versioned experiment, environment, quality, calibration, and dataset contracts
 - ModelOpt export, TensorRT build, precision-audit, validation, and benchmark tools
 - Reference-bundle, preprocessing-parity, evaluator, manifest, and contract tests
+- Concise generated quantization-run summary and canonical performance evidence for Lesson 15
 - `docs/reproduction.md` end-to-end reproduction procedure
 
 Design notes:
@@ -705,7 +706,6 @@ Design notes:
 4. Export a ModelOpt Q/DQ graph and build a strongly typed TensorRT 10.14 INT8 engine.
 5. Inspect actual layer precision and evaluate mAP50-95, mAP50, precision, and recall.
 6. Compare matched FP32/FP16/INT8 performance only after the INT8 gate passes.
-7. Read the isolated entropy-calibrator API reference as a supplementary implementation.
 
 Acceptance criteria:
 
@@ -739,8 +739,8 @@ Topics:
 
 Deliverables:
 
-- `collect_performance.py` evidence collector
-- `generate_report.py` report generator and focused tests
+- Lesson 14 canonical performance evidence consumed without repeating GPU measurements
+- `generate_report.py` evidence validator, report generator, and focused tests
 - `reports/15_precision_performance.md` generated decision report
 
 Acceptance criteria:

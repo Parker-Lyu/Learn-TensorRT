@@ -20,7 +20,7 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 | Zero-copy-style memory paths and Unified Memory trade-offs | Covered as advanced transfer topic | `04_cuda_memory_stream`, `20_cuda_preprocess_npp` |
 | Explicit-Q/DQ PTQ and INT8 accuracy regression | Covered as core path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
 | Dataset-level detection metrics and regression gates | Covered as core validation path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
-| Mixed precision fallback and sensitive layer rollback | Covered as advanced quantization topic | `14_yolov8_int8_quantization_engineering` |
+| Mixed-precision layer audit and fallback diagnosis | Covered as advanced quantization topic | `14_yolov8_int8_quantization_engineering` |
 | Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |
 | TensorRT custom plugin implementation | Covered as portfolio differentiator | `25_custom_tensorrt_plugin` |
 | TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |

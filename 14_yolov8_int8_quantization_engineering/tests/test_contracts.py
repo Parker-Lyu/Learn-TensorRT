@@ -42,7 +42,7 @@ class ContractTests(unittest.TestCase):
                 "schema_version": 1,
                 "tensorrt_version": "10.14.1.48",
                 "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
-                "calibration_algorithm": "entropy",
+                "calibration_algorithm": "unexpected",
             }), encoding="utf-8")
             experiments = root / "experiments.json"
             experiments.write_text(json.dumps({

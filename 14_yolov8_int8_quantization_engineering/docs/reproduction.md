@@ -48,14 +48,17 @@ Only a candidate with `release_gate.passed=true` is eligible for matched `trtexe
 
 ## 3. Performance evidence
 
-Use `modelopt/benchmark_engines.py` only after the Q/DQ candidate passes the gate. Keep raw
-`trtexec` output under `outputs/`; record GPU, driver, CUDA, TensorRT, warmup, iterations, and
-transfer settings in the generated JSON.
+Run the canonical performance collector after evaluation. It verifies engine identities, always
+measures FP32 and FP16, and measures INT8 only when the INT8 backend passed the quality gate. Keep
+raw `trtexec` output under `outputs/`; the generated JSON records the runtime, GPU, warmup,
+iterations, transfers, and engine identities.
 
 ```bash
 python3 14_yolov8_int8_quantization_engineering/modelopt/benchmark_engines.py
+python3 14_yolov8_int8_quantization_engineering/tools/generate_run_summary.py
 ```
 
-If `release_gate.passed` is false, stop after evaluation and record the candidate rejection; do not
-benchmark a failing INT8 candidate. For the application-facing combined decision report, continue
-with Lesson 15's `collect_performance.py` and `generate_report.py` after this runbook completes.
+If the INT8 backend failed, the performance evidence contains FP32 and FP16 only, and the summary
+records the candidate rejection. For the application-facing combined decision report, run Lesson
+15's `generate_report.py` after this runbook completes; it consumes this same performance evidence
+without repeating the measurement.
