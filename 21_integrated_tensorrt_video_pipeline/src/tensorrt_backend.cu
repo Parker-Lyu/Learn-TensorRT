@@ -1,5 +1,6 @@
 #include "tensorrt_backend.hpp"
 #include <NvInfer.h>
+#include <NvInferVersion.h>
 #include <cuda_runtime.h>
 #include <nppcore.h>
 #include <nppi_geometry_transforms.h>
@@ -27,5 +28,5 @@ struct TensorRtBackend::Impl {
  bool ready(size_t i)const{if(i>=slots.size())throw std::out_of_range("slot");auto e=cudaEventQuery(slots[i].done);if(e==cudaErrorNotReady)return false;check_cuda(e,"query completion");return true;}
  GpuBatchResult collect(size_t i){Slot&s=slots.at(i);check_cuda(cudaEventSynchronize(s.done),"wait completion");GpuBatchResult r{s.metadata,std::move(s.host_output),{},0,0,0};auto d=s.context->getTensorShape(output_name.c_str());for(int j=0;j<d.nbDims;++j)r.output_shape.push_back(d.d[j]);check_cuda(cudaEventElapsedTime(&r.preprocess_ms,s.p0,s.p1),"preprocess time");check_cuda(cudaEventElapsedTime(&r.inference_ms,s.i0,s.i1),"inference time");check_cuda(cudaEventElapsedTime(&r.d2h_ms,s.d0,s.d1),"download time");return r;}
 };
-TensorRtBackend::TensorRtBackend(const std::string&e,size_t n,cv::Size s):impl_(std::make_unique<Impl>(e,n,s)){}TensorRtBackend::~TensorRtBackend()=default;void TensorRtBackend::submit(size_t s,const std::vector<cv::Mat>&i,BatchMetadata m){impl_->submit(s,i,std::move(m));}bool TensorRtBackend::ready(size_t s)const{return impl_->ready(s);}GpuBatchResult TensorRtBackend::collect(size_t s){return impl_->collect(s);}
+TensorRtBackend::TensorRtBackend(const std::string&e,size_t n,cv::Size s):impl_(std::make_unique<Impl>(e,n,s)){}TensorRtBackend::~TensorRtBackend()=default;void TensorRtBackend::submit(size_t s,const std::vector<cv::Mat>&i,BatchMetadata m){impl_->submit(s,i,std::move(m));}bool TensorRtBackend::ready(size_t s)const{return impl_->ready(s);}GpuBatchResult TensorRtBackend::collect(size_t s){return impl_->collect(s);}RuntimeIdentity TensorRtBackend::identity()const{int device=0,runtime=0,driver=0;cudaDeviceProp p{};check_cuda(cudaGetDevice(&device),"identity device");check_cuda(cudaGetDeviceProperties(&p,device),"identity properties");check_cuda(cudaRuntimeGetVersion(&runtime),"identity runtime");check_cuda(cudaDriverGetVersion(&driver),"identity driver");return {p.name,p.major,p.minor,NV_TENSORRT_MAJOR,NV_TENSORRT_MINOR,NV_TENSORRT_PATCH,runtime,driver};}
 }

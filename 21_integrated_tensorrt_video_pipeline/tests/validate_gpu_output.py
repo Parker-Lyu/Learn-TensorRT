@@ -13,3 +13,6 @@ assert metrics["preprocess_ms"]>0 and metrics["inference_ms"]>0
 
 assert metrics["batch_distribution"]=={"4":2}
 assert metrics["per_stream_processed"]=={"0":4,"1":4}
+assert metrics["environment"]["tensorrt"].startswith("10.14")
+assert metrics["environment"]["cuda_runtime"] >= 13000
+assert metrics["environment"]["gpu"]
