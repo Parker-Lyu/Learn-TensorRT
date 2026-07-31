@@ -32,9 +32,7 @@ execution, and build-system fundamentals.
 
 Read [`docs/learning_roadmap.md`](docs/learning_roadmap.md) first. Use
 [`docs/coverage_matrix.md`](docs/coverage_matrix.md) to map the core and elective topics to
-production deployment skills. The dated
-[`docs/roadmap_alignment_audit.md`](docs/roadmap_alignment_audit.md) distinguishes implemented
-content from partial lessons and pending runtime acceptance.
+production deployment skills.
 
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
