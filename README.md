@@ -65,21 +65,21 @@ from the job descriptions you are targeting instead of completing every elective
 | Checkpoint 1 | `12_end_to_end_validation_report` | Reproducible functional and architecture evidence |
 | Optimization | `13_nsight_performance_diagnosis`, `14_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
 | Checkpoint 2 | `15_precision_performance_report` | Application-ready precision and performance report |
-| Pipeline | `16_cpp_producer_consumer` through `20_cuda_preprocess_npp` | Dynamic TensorRT batching plus CPU-testable asynchronous/multi-stream orchestration and CUDA preprocessing |
-| Checkpoint 3 | `21_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
+| Pipeline | `16_cpp_producer_consumer` through `21_integrated_tensorrt_video_pipeline` | Bounded asynchronous/multi-stream orchestration integrated with CUDA/NPP preprocessing and real TensorRT execution |
+| Checkpoint 3 | `22_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
 
 
 ### Elective Tracks
 
 | Track | Lessons |
 | --- | --- |
-| Server inference | `23_triton_inference_server`, `28_cpp_shared_library_python_binding` |
-| Edge CV | `26_deepstream_gstreamer_multistream`, `27_jetson_orin_xavier_dla_deployment` |
-| Advanced TensorRT | `24_onnx_graph_surgery_plugin`, `25_custom_tensorrt_plugin` |
-| CPU and Intel | `22_openvino_yolov8` |
-| LLM awareness | `29_llm_inference_intro` |
-| Ongoing interview practice | `30_cpp_interview_katas` |
-| Final synthesis | `31_final_portfolio_case_study` |
+| Server inference | `24_triton_inference_server`, `29_cpp_shared_library_python_binding` |
+| Edge CV | `27_deepstream_gstreamer_multistream`, `28_jetson_orin_xavier_dla_deployment` |
+| Advanced TensorRT | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` |
+| CPU and Intel | `23_openvino_yolov8` |
+| LLM awareness | `30_llm_inference_intro` |
+| Ongoing interview practice | `31_cpp_interview_katas` |
+| Final synthesis | `32_final_portfolio_case_study` |
 
 
 ## General Build Pattern

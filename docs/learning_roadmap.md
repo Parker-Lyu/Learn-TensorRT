@@ -101,7 +101,7 @@ lesson provides one runnable artifact and one concise README.
 ## Learning Flow
 
 Use the core path in order. After the core path, choose an elective track from the job descriptions
-you are targeting instead of completing every elective sequentially. `30_cpp_interview_katas` runs
+you are targeting instead of completing every elective sequentially. `31_cpp_interview_katas` runs
 alongside the course rather than waiting until the end.
 
 | Path | Sequence | Focus |
@@ -110,15 +110,15 @@ alongside the course rather than waiting until the end.
 | Checkpoint 1 | `12` | Functional validation, architecture evidence, and an English project explanation |
 | Core optimization | `13` through `14` | Nsight diagnosis plus an advanced FP16/INT8 quantization and deployment case study |
 | Checkpoint 2 | `15` | Reproducible precision and performance report; begin targeted applications |
-| Core pipeline | `16` through `20` | Queues, dynamic batching, async video, multi-stream scheduling, and CUDA/NPP preprocessing |
-| Checkpoint 3 | `21` | Pipeline load, latency, throughput, and stability report |
-| Server elective | `23`, `28` | Triton serving and C++/Python integration |
-| Edge CV elective | `26`, `27` | DeepStream, GStreamer, Jetson, and DLA |
-| Advanced TensorRT elective | `24`, `25` | Graph surgery and a runnable TensorRT plugin |
-| CPU/Intel elective | `22` | OpenVINO CPU inference comparison |
-| LLM awareness elective | `29` | Entry-level LLM inference concepts and measurements |
-| Ongoing interview practice | `30` | Deployment-relevant C++ exercises tied to completed lessons |
-| Final synthesis | `31` | Portfolio case study, packaging, resume evidence, and English presentation |
+| Core pipeline | `16` through `21` | Queues, dynamic batching, async/multi-stream scheduling, CUDA/NPP preprocessing, and integrated TensorRT execution |
+| Checkpoint 3 | `22` | Integrated pipeline load, latency, throughput, reliability, and stability report |
+| Server elective | `24`, `29` | Triton serving and C++/Python integration |
+| Edge CV elective | `27`, `28` | DeepStream, GStreamer, Jetson, and DLA |
+| Advanced TensorRT elective | `25`, `26` | Graph surgery and a runnable TensorRT plugin |
+| CPU/Intel elective | `23` | OpenVINO CPU inference comparison |
+| LLM awareness elective | `30` | Entry-level LLM inference concepts and measurements |
+| Ongoing interview practice | `31` | Deployment-relevant C++ exercises tied to completed lessons |
+| Final synthesis | `32` | Portfolio case study, packaging, resume evidence, and English presentation |
 
 ## Course Plan
 
@@ -994,53 +994,114 @@ Acceptance criteria:
 - A benchmark compares CPU preprocessing and GPU/NPP preprocessing.
 - Transfer time is measured separately from preprocessing and inference time.
 
-### `21_pipeline_performance_report`
+### `21_integrated_tensorrt_video_pipeline`
 
 Purpose:
 
-- Prove that the pipeline remains measurable, bounded, and cleanly stoppable under realistic load.
-- Compare latency, throughput, fairness, and freshness instead of reporting average FPS alone.
+- Integrate the queue, dynamic batching, asynchronous scheduling, multi-stream identity handling,
+  CUDA/NPP preprocessing, TensorRT execution, YOLO postprocessing, and result dispatch developed
+  in lessons 16 through 20 into one runnable pipeline.
+- Establish a correct, bounded, and observable TensorRT system without making production
+  performance or long-duration stability claims. Those claims belong to lesson 22.
 
 Learning outcomes:
 
-- Generate reproducible load, latency, throughput, fairness, memory, and stability evidence for lessons 16 through 20.
-- Evaluate overload and failure policies with soak, restart, sanitizer, and fault-injection results.
-- Explain the measured trade-offs among batching efficiency, per-stream fairness, and real-time freshness.
+- Compose CPU-testable scheduling and identity logic with a real asynchronous CUDA/TensorRT backend.
+- Explain why every concurrently submitted batch needs its own execution context, CUDA stream,
+  lifecycle completion event, tensor addresses, and reusable buffers.
+- Preserve stream/frame identity and letterbox metadata through dynamic batching and completion in
+  any order.
+- Bound both CPU queues and GPU in-flight work, and implement drain versus abort shutdown semantics.
+- Separate host queueing/staging time from CUDA event timing for H2D, preprocessing, TensorRT,
+  D2H, and CPU postprocessing.
 
 Topics:
 
-- Single-stream and multi-stream load evidence
-- Capture-to-result latency, throughput, fairness, and freshness
-- Queue, dropped-frame, host-memory, and device-memory metrics
-- Soak, restart, fault-injection, sanitizer, and shutdown evidence
-- Machine-readable report generation
+- Repeatable synthetic, image-sequence, and video-file sources; per-source bounded queues.
+- Global round-robin/latest-first scheduling and timeout-based micro-batching (batch 1--4).
+- Device-view interfaces that compose lesson 20 preprocessing directly into TensorRT input buffers.
+- One shared engine and one context/stream/buffer/event set per in-flight slot.
+- Slot lifecycle (`Free`, `Reserved`, `Submitted`, `Completing`, `Failed`) and ownership rules.
+- Event-driven completion collection, YOLO decode/NMS, coordinate restoration, and identity-safe
+  dispatch.
+- Explicit accounting for captured, admitted, evicted, submitted, completed, failed, and aborted
+  frames; structured per-stage metrics.
+- Normal end-of-stream drain and failure abort. Already submitted CUDA work is quiesced, not claimed
+  to be cancellable.
 
 Deliverables:
 
-- `collect_pipeline_evidence.py` load and reliability evidence collector
-- `generate_report.py` report generator and focused tests
-- `reports/21_pipeline_performance.md` generated checkpoint report
+- `integrated_pipeline_core` library for frame metadata, bounded queues, batch assembly, slot state,
+  identity dispatch, and metrics; all core logic has CPU-only tests.
+- `integrated_tensorrt_backend` library with asynchronous CUDA/NPP preprocessing and TensorRT
+  `enqueueV3()` using slot-local resources. It reuses earlier lesson algorithms through explicit
+  asynchronous device-view adapters rather than synchronous host round trips.
+- `integrated_tensorrt_video_pipeline` executable for repeatable synthetic/image/video sources,
+  configurable queue and slot policies, structured detections, and saved annotated samples.
 
 Acceptance criteria:
 
-- Frame timestamps cover capture-to-result latency rather than inference latency alone.
-- The report explains the tested overload policy and demonstrates that memory and queue growth are
-  bounded.
-- Results show the trade-off between batch efficiency, per-stream fairness, and real-time freshness.
-- The pipeline exits without deadlock when input ends, a producer fails, or shutdown is requested.
-- Host RSS and device memory do not show unexplained monotonic growth across the soak and repeated
-  start/stop tests.
-- Applicable sanitizer runs finish without unresolved memory, race, or CUDA access errors.
-- Injected failures return explicit errors and match the documented isolate-or-stop policy.
-- Benchmark results are generated from saved measurements and extend rather than duplicate the
-  earlier precision report.
+- A batch-size-1 GPU run performs preprocessing, TensorRT inference, YOLO decoding/NMS,
+  coordinate restoration, and writes identity-bearing detections.
+- Batch sizes 1, 2, and 4 use the same dynamic-profile engine; empty/oversized/profile-invalid
+  shapes and insufficient capacities are rejected before enqueue.
+- Two distinct slots can have overlapping submitted work. The normal path does not use
+  `cudaDeviceSynchronize()` to serialize each batch; slot reuse waits for its lifecycle event and
+  output collection.
+- CPU tests force reverse-order completion and prove dispatch uses metadata, not completion order.
+  GPU tests prove concurrent slot ownership but do not assume the GPU naturally completes out of order.
+- Normal EOS drains accepted work. Abort stops new submissions, discards unsubmitted work, safely
+  quiesces submitted slots, joins workers, and releases CUDA/TensorRT resources without deadlock.
+- Structured output records stage timings, environment identity, batch distribution, queue peaks,
+  explicit overload counters, and capture-to-result latency with documented clock domains.
+- Preprocessing and batched detections are compared with CPU/single-image references using stated
+  numerical tolerances. This lesson does not claim soak, restart, sanitizer, Nsight, or production
+  performance evidence.
+
+### `22_pipeline_performance_report`
+
+Purpose:
+
+- Generate reproducible performance and reliability evidence from the integrated executable in
+  lesson 21, while retaining CPU-only evidence from lessons 16--20 as supporting diagnostics.
+- Compare latency, throughput, fairness, freshness, batching efficiency, memory bounds, and failure
+  behavior instead of reporting average FPS alone.
+
+Learning outcomes:
+
+- Run controlled single- and multi-stream load, overload, fault-injection, soak, restart, and
+  sanitizer campaigns against a recorded TensorRT/CUDA environment.
+- Explain trade-offs among batch efficiency, queueing latency, fairness, and real-time freshness.
+- Produce machine-readable evidence and a generated report that clearly marks unavailable gates.
+
+Topics:
+
+- Integrated pipeline load matrix and capture-to-result latency percentiles.
+- Batch-size distribution, queue/drop accounting, host RSS and device-memory sampling.
+- Fault injection, normal drain, abort shutdown, repeated restart, sanitizer and optional Nsight
+  evidence.
+- Report schema, environment provenance, incomplete-gate handling, and reproducibility.
+
+Deliverables:
+
+- `collect_pipeline_evidence.py` invoking lesson 21 and collecting raw load/reliability evidence.
+- `generate_report.py`, focused tests, and ignored `reports/22_pipeline_performance.md`.
+
+Acceptance criteria:
+
+- Evidence is generated from saved measurements produced by lesson 21, not simulated worker delay.
+- The report documents tested policies and demonstrates bounded queues/in-flight work where measured.
+- Latency uses capture timestamps through result dispatch; failures and shutdown outcomes are explicit.
+- Formal soak, restart, sanitizer, Nsight, and target-hardware gates are marked incomplete when the
+  required environment or duration was not actually run.
+
 
 ## Elective Tracks
 
 Choose electives from target job descriptions. The lesson numbers are stable identifiers, not a
 requirement to complete these lessons in numerical order.
 
-### `22_openvino_yolov8`
+### `23_openvino_yolov8`
 
 **Track:** CPU and Intel deployment.
 
@@ -1074,7 +1135,7 @@ Acceptance criteria:
 - The generated comparison records OpenVINO CPU and TensorRT GPU latency with their distinct
   hardware and runtime identities.
 
-### `23_triton_inference_server`
+### `24_triton_inference_server`
 
 **Track:** server inference and AI platform roles.
 
@@ -1115,7 +1176,7 @@ Acceptance criteria:
 - A benchmark compares at least two concurrency levels and dynamic batching configurations.
 - The report includes throughput, client P50/P90/P99 latency, server queue time, and GPU utilization.
 
-### `24_onnx_graph_surgery_plugin`
+### `25_onnx_graph_surgery_plugin`
 
 **Track:** advanced TensorRT and unsupported-operator deployment.
 
@@ -1154,7 +1215,7 @@ Acceptance criteria:
 - The lesson documentation traces plugin registration, build-time shape/type negotiation, runtime
   `enqueue`, serialization, and engine deserialization.
 
-### `25_custom_tensorrt_plugin`
+### `26_custom_tensorrt_plugin`
 
 **Track:** advanced TensorRT and unsupported-operator deployment.
 
@@ -1206,7 +1267,7 @@ Acceptance criteria:
 - A small C++ or Python runtime example loads the plugin-backed engine and runs inference.
 - The plugin output is numerically checked against a CPU/Python reference.
 
-### `26_deepstream_gstreamer_multistream`
+### `27_deepstream_gstreamer_multistream`
 
 **Track:** edge CV and multi-stream video analytics.
 
@@ -1244,7 +1305,7 @@ Acceptance criteria:
 - A TensorRT engine is used through DeepStream configuration.
 - At least two video streams are processed concurrently.
 
-### `27_jetson_orin_xavier_dla_deployment`
+### `28_jetson_orin_xavier_dla_deployment`
 
 **Track:** edge CV and embedded NVIDIA deployment.
 
@@ -1292,7 +1353,7 @@ Acceptance criteria:
 - If no Jetson target is available, the lesson still records the exact commands and expected
   validation steps for future hardware verification.
 
-### `28_cpp_shared_library_python_binding`
+### `29_cpp_shared_library_python_binding`
 
 **Track:** server inference integration and reusable deployment libraries.
 
@@ -1330,7 +1391,7 @@ Acceptance criteria:
 - A Python script loads the library and runs inference.
 - The exposed API uses simple inputs and structured outputs.
 
-### `29_llm_inference_intro`
+### `30_llm_inference_intro`
 
 **Track:** LLM inference awareness for general deployment interviews.
 
@@ -1384,7 +1445,7 @@ Acceptance criteria:
 
 ## Ongoing Interview Practice
 
-### `30_cpp_interview_katas`
+### `31_cpp_interview_katas`
 
 Purpose:
 
@@ -1435,7 +1496,7 @@ Acceptance criteria:
 
 ## Final Synthesis
 
-### `31_final_portfolio_case_study`
+### `32_final_portfolio_case_study`
 
 Purpose:
 
@@ -1460,7 +1521,7 @@ Deliverables:
 - `generate_case_study.py` evidence-driven report generator
 - Local verification tools and focused report tests
 - Multi-stage runtime `Dockerfile` and engine-delivery helper
-- `reports/31_final_portfolio_case_study.md` generated case study
+- `reports/32_final_portfolio_case_study.md` generated case study
 
 Acceptance criteria:
 
@@ -1541,7 +1602,7 @@ should be able to answer:
 - How do you choose between fairness and latest-frame freshness?
 - What metrics do you report for each stream?
 
-After `24_onnx_graph_surgery_plugin` and `25_custom_tensorrt_plugin`, you should be able to answer:
+After `25_onnx_graph_surgery_plugin` and `26_custom_tensorrt_plugin`, you should be able to answer:
 
 - What do you do when TensorRT does not support an ONNX operator?
 - When should you rewrite PyTorch code instead of writing a plugin?
@@ -1557,7 +1618,7 @@ After `13_nsight_performance_diagnosis` and `20_cuda_preprocess_npp`, you should
 - When is GPU preprocessing worth the added complexity?
 - How do you compare two optimization attempts fairly?
 
-After `15_precision_performance_report` and `21_pipeline_performance_report`, you should be able to answer:
+After `15_precision_performance_report` and `22_pipeline_performance_report`, you should be able to answer:
 
 - How were warmup, synchronization, sample count, and percentile latency defined?
 - How do you prevent calibration/validation leakage and enforce a predeclared accuracy gate?
@@ -1568,14 +1629,14 @@ After `15_precision_performance_report` and `21_pipeline_performance_report`, yo
 - Which failures were injected, which sanitizers were applicable, and what does a 30-minute soak test
   still not prove?
 
-After `23_triton_inference_server` and `28_cpp_shared_library_python_binding`, you should be able to answer:
+After `24_triton_inference_server` and `29_cpp_shared_library_python_binding`, you should be able to answer:
 
 - How does Triton discover, configure, and version a TensorRT model?
 - How do dynamic batching, queue delay, concurrency, and model instances interact?
 - Which latency is measured by the client, and which components are measured by the server?
 - How do you expose a C++ TensorRT engine to Python safely?
 
-After `26_deepstream_gstreamer_multistream` and `27_jetson_orin_xavier_dla_deployment`, you should be able to answer:
+After `27_deepstream_gstreamer_multistream` and `28_jetson_orin_xavier_dla_deployment`, you should be able to answer:
 
 - What is a GStreamer pipeline?
 - What does `nvstreammux` do?
@@ -1583,7 +1644,7 @@ After `26_deepstream_gstreamer_multistream` and `27_jetson_orin_xavier_dla_deplo
 - What changes when deploying on Jetson instead of a desktop GPU?
 - What constraints determine whether a layer can run on DLA?
 
-After `29_llm_inference_intro`, you should be able to answer:
+After `30_llm_inference_intro`, you should be able to answer:
 
 - What are prefill and decode?
 - What is KV cache?
@@ -1593,7 +1654,7 @@ After `29_llm_inference_intro`, you should be able to answer:
 - How did input length and batch or concurrency affect measured throughput, latency, and memory use?
 - What problems do TensorRT-LLM, OpenVINO GenAI, vLLM, and llama.cpp try to solve?
 
-After `31_final_portfolio_case_study`, you should be able to answer:
+After `32_final_portfolio_case_study`, you should be able to answer:
 
 - What is the best latency you achieved on the recorded RTX 4090 platform?
 - How much faster is FP16 than FP32?

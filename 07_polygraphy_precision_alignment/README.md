@@ -35,7 +35,7 @@ single tensor alignment
   -> dataset-level detection quality report
 ```
 
-Lesson 14 extends this idea when comparing FP32, FP16, and INT8 engines. Lesson 31 should include
+Lesson 14 extends this idea when comparing FP32, FP16, and INT8 engines. Lesson 32 should include
 both this precision-alignment note and later accuracy-regression evidence.
 
 ## Prerequisites

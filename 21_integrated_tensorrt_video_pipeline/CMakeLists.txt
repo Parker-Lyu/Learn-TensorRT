@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.18)
+project(lesson21_integrated_tensorrt_video_pipeline LANGUAGES CXX)
+
+add_library(integrated_pipeline_core src/pipeline_core.cpp)
+target_include_directories(integrated_pipeline_core PUBLIC include)
+target_compile_features(integrated_pipeline_core PRIVATE cxx_std_17)
+set_target_properties(integrated_pipeline_core PROPERTIES CXX_EXTENSIONS OFF)
+
+add_executable(integrated_tensorrt_video_pipeline src/main.cpp)
+target_link_libraries(integrated_tensorrt_video_pipeline PRIVATE integrated_pipeline_core)
+target_compile_features(integrated_tensorrt_video_pipeline PRIVATE cxx_std_17)
+set_target_properties(integrated_tensorrt_video_pipeline PROPERTIES CXX_EXTENSIONS OFF)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(integrated_pipeline_core_tests tests/test_pipeline_core.cpp)
+  target_link_libraries(integrated_pipeline_core_tests PRIVATE integrated_pipeline_core)
+  target_compile_features(integrated_pipeline_core_tests PRIVATE cxx_std_17)
+  set_target_properties(integrated_pipeline_core_tests PROPERTIES CXX_EXTENSIONS OFF)
+  add_test(NAME integrated_pipeline_core_tests COMMAND integrated_pipeline_core_tests)
+endif()
