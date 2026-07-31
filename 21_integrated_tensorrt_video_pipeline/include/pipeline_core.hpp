@@ -122,6 +122,7 @@ public:
         if (discard) { discarded_ += values_.size(); values_.clear(); }
         not_empty_.notify_all(); not_full_.notify_all();
     }
+    bool empty() const { std::lock_guard<std::mutex> l(mutex_); return values_.empty(); }
     std::size_t evicted() const { std::lock_guard<std::mutex> l(mutex_); return evicted_; }
     std::size_t discarded() const { std::lock_guard<std::mutex> l(mutex_); return discarded_; }
     std::size_t peak() const { std::lock_guard<std::mutex> l(mutex_); return peak_; }
