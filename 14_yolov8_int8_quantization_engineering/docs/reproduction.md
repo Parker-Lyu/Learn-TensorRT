@@ -2,7 +2,8 @@
 
 ## 0. Fixed data and preprocessing
 
-Run in `nvcr.io/nvidia/pytorch:25.11-py3` from the repository root:
+Run from the repository root in the shared development environment configured in Course 00. Do not
+create a lesson-specific container.
 
 ```bash
 python3 assets/coco/prepare_coco.py
@@ -54,3 +55,7 @@ transfer settings in the generated JSON.
 ```bash
 python3 14_yolov8_int8_quantization_engineering/modelopt/benchmark_engines.py
 ```
+
+If `release_gate.passed` is false, stop after evaluation and record the candidate rejection; do not
+benchmark a failing INT8 candidate. For the application-facing combined decision report, continue
+with Lesson 15's `collect_performance.py` and `generate_report.py` after this runbook completes.
