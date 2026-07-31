@@ -67,3 +67,14 @@ the pinned container, TensorRT engine, and NVIDIA GPU.
 1. Why is a shared engine safe while a concurrently used execution context is not shared?
 2. Which event releases a slot, and why is `cudaDeviceSynchronize()` not the steady-state answer?
 3. Which work drains at EOS, and which work is discarded or quiesced after abort?
+
+GPU TensorRT smoke (requires the lesson 17 dynamic-profile engine):
+
+```bash
+./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_gpu_smoke \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg 1
+# Repeat with 2 and 4 to exercise the same optimization profile.
+```
+
+The smoke executable reports the real TensorRT output element count and checksum. It is a
+backend-level correctness smoke test, not a latency benchmark.
