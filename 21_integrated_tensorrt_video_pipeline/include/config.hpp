@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,7 @@ struct PipelineConfig {
     std::chrono::seconds duration{0};
     bool repeat_source{false};
     std::chrono::seconds metrics_interval{5};
+    std::size_t maximum_detection_records{std::numeric_limits<std::size_t>::max()};
 };
 
 PipelineConfig parse_config(int argc, char** argv);

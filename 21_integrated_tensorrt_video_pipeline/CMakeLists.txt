@@ -103,6 +103,19 @@ if(BUILD_TESTING AND LESSON21_ENABLE_CUDA AND EXISTS "${LESSON21_TEST_ENGINE}")
   set_tests_properties(integrated_gpu_invalid_source PROPERTIES WILL_FAIL TRUE)
 endif()
 if(BUILD_TESTING AND LESSON21_ENABLE_CUDA AND EXISTS "${LESSON21_TEST_ENGINE}")
+  set(LESSON21_BOUNDED_METRICS_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bounded-metrics-output")
+  add_test(NAME integrated_gpu_bounded_metrics
+    COMMAND integrated_tensorrt_video_pipeline_gpu "${LESSON21_TEST_ENGINE}"
+            "${LESSON21_TEST_IMAGE}" 1200 4 2 "${LESSON21_BOUNDED_METRICS_OUTPUT}")
+  set_tests_properties(integrated_gpu_bounded_metrics PROPERTIES
+    FIXTURES_SETUP gpu_bounded_metrics_output TIMEOUT 30)
+  add_test(NAME integrated_gpu_bounded_metrics_accounting
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/validate_bounded_metrics.py"
+            "${LESSON21_BOUNDED_METRICS_OUTPUT}")
+  set_tests_properties(integrated_gpu_bounded_metrics_accounting PROPERTIES
+    FIXTURES_REQUIRED gpu_bounded_metrics_output)
+endif()
+if(BUILD_TESTING AND LESSON21_ENABLE_CUDA AND EXISTS "${LESSON21_TEST_ENGINE}")
   add_test(NAME integrated_gpu_submit_failure COMMAND integrated_tensorrt_video_pipeline_gpu "${LESSON21_TEST_ENGINE}" "${LESSON21_TEST_IMAGE}" 8 4 2 "${CMAKE_CURRENT_BINARY_DIR}/submit-failure")
   set_tests_properties(integrated_gpu_submit_failure PROPERTIES WILL_FAIL TRUE ENVIRONMENT "LESSON21_FAIL_SUBMIT_BATCH=1" TIMEOUT 10)
   add_test(NAME integrated_gpu_postprocess_failure COMMAND integrated_tensorrt_video_pipeline_gpu "${LESSON21_TEST_ENGINE}" "${LESSON21_TEST_IMAGE}" 8 4 2 "${CMAKE_CURRENT_BINARY_DIR}/postprocess-failure")

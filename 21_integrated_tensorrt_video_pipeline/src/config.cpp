@@ -20,7 +20,8 @@ std::string usage() {
     return "usage: integrated_tensorrt_video_pipeline_gpu ENGINE SOURCE[,SOURCE...] "
            "[FRAMES=16] [BATCH=4] [SLOTS=2] [OUTPUT] [block|drop-oldest] "
            "[QUEUE_CAPACITY=4] [CAPTURE_INTERVAL_MS=0] [round-robin|latest-first] "
-           "[--duration-seconds N] [--repeat-source] [--metrics-interval-seconds N]";
+           "[--duration-seconds N] [--repeat-source] [--metrics-interval-seconds N] "
+           "[--max-detection-records N]";
 }
 
 PipelineConfig parse_config(int argc, char** argv) {
@@ -72,6 +73,8 @@ PipelineConfig parse_config(int argc, char** argv) {
         } else if (option == "--metrics-interval-seconds" && index < argc) {
             config.metrics_interval = std::chrono::seconds(
                 positive(argv[index++], "metrics interval"));
+        } else if (option == "--max-detection-records" && index < argc) {
+            config.maximum_detection_records = positive(argv[index++], "maximum detection records");
         } else {
             throw std::invalid_argument("unknown or incomplete option: " + option);
         }

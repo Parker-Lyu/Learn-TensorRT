@@ -353,7 +353,7 @@ def main() -> int:
     soak_command = [str(executable), str(engine), str(image), "16", "4", "2",
                     str(soak_output), "block", "4", "0", "round-robin",
                     "--duration-seconds", str(duration_seconds), "--repeat-source",
-                    "--metrics-interval-seconds", "1"]
+                    "--metrics-interval-seconds", "1", "--max-detection-records", "1024"]
     soak = monitored_run(soak_command, args.sample_interval_seconds,
                          timeout=duration_seconds + 60)
     soak["metrics"] = read_metrics(soak_output)

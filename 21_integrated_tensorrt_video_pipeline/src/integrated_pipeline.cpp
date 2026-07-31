@@ -44,8 +44,8 @@ int run_integrated_pipeline(const PipelineConfig& config) {
     TensorRtBackend backend(config.engine_path, config.slot_count, {640, 640});
     FrameScheduler scheduler(sources(config), config.queue_capacity, config.overload_policy,
                              config.capture_interval, config.scheduling_policy);
-    ResultWriter writer(config.output_directory);
-    PipelineMetrics metrics;
+    ResultWriter writer(config.output_directory, config.maximum_detection_records);
+    PipelineMetrics metrics(config.output_directory);
     const RuntimeIdentity identity = backend.identity();
     std::ofstream snapshots(config.output_directory / "metrics_snapshots.jsonl");
     if (!snapshots) throw std::runtime_error("cannot open metrics snapshot output");

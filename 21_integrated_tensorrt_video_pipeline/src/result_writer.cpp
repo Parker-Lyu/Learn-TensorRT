@@ -11,8 +11,10 @@
 
 namespace lesson21 {
 
-ResultWriter::ResultWriter(const std::filesystem::path& output_directory)
-    : output_directory_(output_directory) {
+ResultWriter::ResultWriter(const std::filesystem::path& output_directory,
+                           std::size_t maximum_detection_records)
+    : output_directory_(output_directory),
+      maximum_detection_records_(maximum_detection_records) {
     std::filesystem::create_directories(output_directory_);
     detections_.open(output_directory_ / "detections.jsonl");
     if (!detections_) throw std::runtime_error("cannot open detections output");
@@ -52,6 +54,11 @@ double ResultWriter::write(const GpuBatchResult& result,
             }
             annotation_written_ = true;
         }
+        if (detection_records_written_ >= maximum_detection_records_) {
+            frame_latencies_ms.push_back(std::chrono::duration<double, std::milli>(
+                Clock::now() - result.metadata.frames[index].captured_at).count());
+            continue;
+        }
         detections_ << "{\"stream_id\":" << result.metadata.frames[index].stream_id
                     << ",\"frame_id\":" << result.metadata.frames[index].frame_id
                     << ",\"batch_id\":" << result.metadata.batch_id << ",\"detections\":[";
@@ -64,6 +71,7 @@ double ResultWriter::write(const GpuBatchResult& result,
                         << value.box.x2 << ',' << value.box.y2 << "]}";
         }
         detections_ << "]}\n";
+        ++detection_records_written_;
         frame_latencies_ms.push_back(std::chrono::duration<double, std::milli>(
             Clock::now() - result.metadata.frames[index].captured_at).count());
     }

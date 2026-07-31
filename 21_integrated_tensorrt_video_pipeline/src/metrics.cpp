@@ -16,23 +16,63 @@ double percentile(std::vector<double> values, double quantile) {
 
 }  // namespace
 
+PipelineMetrics::PipelineMetrics(const std::filesystem::path& output_directory) {
+    std::filesystem::create_directories(output_directory);
+    raw_batch_samples_.open(output_directory / "batch_timing_samples.jsonl");
+    if (!raw_batch_samples_) throw std::runtime_error("cannot open raw batch timing output");
+}
+
+void PipelineMetrics::add_bounded(std::vector<double>& values, double value,
+                                  std::uint64_t observation_count) {
+    if (values.size() < kLatencyReservoirSize) {
+        values.push_back(value);
+        return;
+    }
+    // A deterministic rolling reservoir bounds service memory while retaining recent steady-state
+    // behavior. Exact per-batch evidence is streamed separately to JSONL.
+    values[static_cast<std::size_t>(observation_count % kLatencyReservoirSize)] = value;
+}
+
+void PipelineMetrics::write_raw_sample(const BatchTimingSample& sample) {
+    raw_batch_samples_ << "{\"batch_id\":" << sample.batch_id
+        << ",\"batch_size\":" << sample.batch_size
+        << ",\"queue_wait_ms\":" << sample.queue_wait_ms
+        << ",\"batch_fill_wait_ms\":" << sample.batch_fill_wait_ms
+        << ",\"host_staging_ms\":" << sample.host_staging_ms
+        << ",\"capacity_growth_ms\":" << sample.capacity_growth_ms
+        << ",\"h2d_ms\":" << sample.h2d_ms
+        << ",\"gpu_preprocess_ms\":" << sample.gpu_preprocess_ms
+        << ",\"tensorrt_ms\":" << sample.tensorrt_ms
+        << ",\"d2h_ms\":" << sample.d2h_ms
+        << ",\"cpu_postprocess_ms\":" << sample.cpu_postprocess_ms << "}\n";
+}
+
 void PipelineMetrics::record_batch(const GpuBatchResult& result, double queue_wait_ms,
                                    double batch_fill_wait_ms, double cpu_postprocess_ms,
                                    const std::vector<double>& frame_latencies_ms) {
     const std::size_t batch_size = result.metadata.frames.size();
     submitted_ += batch_size;
     completed_ += batch_size;
+    host_staging_total_ms_ += result.host_staging_ms;
+    h2d_total_ms_ += result.h2d_ms;
+    preprocess_total_ms_ += result.preprocess_ms;
+    inference_total_ms_ += result.inference_ms;
+    d2h_total_ms_ += result.d2h_ms;
+    postprocess_total_ms_ += cpu_postprocess_ms;
     ++batch_distribution_[batch_size];
-    batches_.push_back({result.metadata.batch_id, batch_size, queue_wait_ms, batch_fill_wait_ms,
-                        result.host_staging_ms, result.capacity_growth_ms, result.h2d_ms,
-                        result.preprocess_ms, result.inference_ms, result.d2h_ms,
-                        cpu_postprocess_ms});
+    const BatchTimingSample sample{
+        result.metadata.batch_id, batch_size, queue_wait_ms, batch_fill_wait_ms,
+        result.host_staging_ms, result.capacity_growth_ms, result.h2d_ms,
+        result.preprocess_ms, result.inference_ms, result.d2h_ms, cpu_postprocess_ms};
+    write_raw_sample(sample);
+    if (batches_.size() < kRetainedBatchSamples) batches_.push_back(sample);
+    else batches_[static_cast<std::size_t>(result.metadata.batch_id % kRetainedBatchSamples)] = sample;
     for (std::size_t index = 0; index < batch_size; ++index) {
         const std::size_t stream = result.metadata.frames[index].stream_id;
-        ++per_stream_completed_[stream];
+        const std::uint64_t stream_count = ++per_stream_completed_[stream];
         if (index < frame_latencies_ms.size()) {
-            latencies_.push_back(frame_latencies_ms[index]);
-            per_stream_latencies_[stream].push_back(frame_latencies_ms[index]);
+            add_bounded(latencies_, frame_latencies_ms[index], ++latency_observations_);
+            add_bounded(per_stream_latencies_[stream], frame_latencies_ms[index], stream_count);
         }
     }
 }
@@ -46,19 +86,10 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
     if (!output) throw std::runtime_error("cannot write metrics: " + path.string());
     const std::uint64_t failed = captured >= completed_ + evicted + aborted
         ? captured - completed_ - evicted - aborted : 0;
-    double host_staging_total = 0.0;
-    double h2d_total = 0.0;
-    double preprocess_total = 0.0;
-    double inference_total = 0.0;
-    double d2h_total = 0.0;
-    double postprocess_total = 0.0;
-    for (const BatchTimingSample& sample : batches_) {
-        host_staging_total += sample.host_staging_ms;
-        h2d_total += sample.h2d_ms;
-        preprocess_total += sample.gpu_preprocess_ms;
-        inference_total += sample.tensorrt_ms;
-        d2h_total += sample.d2h_ms;
-        postprocess_total += sample.cpu_postprocess_ms;
+    std::uint64_t total_batches = 0;
+    for (const auto& [size, count] : batch_distribution_) {
+        static_cast<void>(size);
+        total_batches += count;
     }
     output << std::fixed << std::setprecision(6);
     output << "{\"schema_version\":2,\"clock_domains\":{"
@@ -76,15 +107,15 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
            << ",\"aborted\":" << aborted
            << ",\"queue_peak\":" << queue_peak
            << ",\"slots\":" << config.slot_count
-           << ",\"batches\":" << batches_.size()
+           << ",\"batches\":" << total_batches
            << ",\"overload_policy\":\"" << config.overload_name << "\""
            << ",\"scheduling_policy\":\"" << config.scheduling_name << "\""
-           << ",\"host_staging_ms\":" << host_staging_total
-           << ",\"h2d_ms\":" << h2d_total
-           << ",\"preprocess_ms\":" << preprocess_total
-           << ",\"inference_ms\":" << inference_total
-           << ",\"d2h_ms\":" << d2h_total
-           << ",\"cpu_postprocess_ms\":" << postprocess_total
+           << ",\"host_staging_ms\":" << host_staging_total_ms_
+           << ",\"h2d_ms\":" << h2d_total_ms_
+           << ",\"preprocess_ms\":" << preprocess_total_ms_
+           << ",\"inference_ms\":" << inference_total_ms_
+           << ",\"d2h_ms\":" << d2h_total_ms_
+           << ",\"cpu_postprocess_ms\":" << postprocess_total_ms_
            << ",\"p50_ms\":" << percentile(latencies_, 0.50)
            << ",\"p90_ms\":" << percentile(latencies_, 0.90)
            << ",\"p99_ms\":" << percentile(latencies_, 0.99)
@@ -101,7 +132,9 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
         first = false;
         output << '"' << size << "\":" << count;
     }
-    output << "},\"per_stream_processed\":{";
+    output << "},\"batch_sample_storage\":{\"raw_jsonl\":\"batch_timing_samples.jsonl\","
+           << "\"retained_in_metrics\":" << kRetainedBatchSamples
+           << "},\"per_stream_processed\":{";
     first = true;
     for (const auto& [stream, count] : per_stream_completed_) {
         if (!first) output << ',';
