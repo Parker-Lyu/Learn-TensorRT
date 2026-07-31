@@ -124,3 +124,102 @@ PyTorch, ModelOpt, engine, or dataset-level validation in the pinned GPU contain
 1. Build matched FP32 and FP16 references before evaluating ModelOpt explicit-Q/DQ INT8.
 2. Enforce immutable dataset, preprocessing, evaluator, environment, and quality contracts.
 3. Audit actual TensorRT layer precision and make a deployment decision from saved quality and performance evidence.
+
+## Appendix: Default TensorRT Engine Build Commands
+
+With no command-line arguments, `modelopt/build_engines.py` invokes `trtexec` three times in FP32,
+FP16, and INT8-candidate order. The script resolves every artifact path to an absolute path. The
+following commands show the same argument vectors in a portable form; run them from the repository
+root and let the shell expand `REPO_ROOT`:
+
+```bash
+REPO_ROOT="$(pwd)"
+mkdir -p \
+  "${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references" \
+  "${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate"
+
+trtexec \
+  --onnx="${REPO_ROOT}/05_torch_to_onnx/outputs/yolov8n.onnx" \
+  --saveEngine="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp32.engine" \
+  --stronglyTyped \
+  --builderOptimizationLevel=3 \
+  --skipInference \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --exportLayerInfo="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp32.layers.json" \
+  --timingCacheFile="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/trt10_reference.timing.cache"
+
+trtexec \
+  --onnx="${REPO_ROOT}/05_torch_to_onnx/outputs/yolov8n.onnx" \
+  --saveEngine="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp16.engine" \
+  --fp16 \
+  --builderOptimizationLevel=3 \
+  --skipInference \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --exportLayerInfo="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/yolov8n_trt10_fp16.layers.json" \
+  --timingCacheFile="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/references/trt10_reference.timing.cache"
+
+trtexec \
+  --onnx="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/qdq/yolov8n_qdq_fp16.onnx" \
+  --saveEngine="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/yolov8n_qdq_int8.engine" \
+  --stronglyTyped \
+  --builderOptimizationLevel=3 \
+  --skipInference \
+  --profilingVerbosity=detailed \
+  --dumpLayerInfo \
+  --exportLayerInfo="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/yolov8n_qdq_int8.layers.json" \
+  --timingCacheFile="${REPO_ROOT}/14_yolov8_int8_quantization_engineering/outputs/tensorrt10/candidate/qdq_int8.timing.cache"
+```
+
+The wrapper creates the destination directories and redirects each command's combined standard
+output and error stream to its corresponding `*.build.log`. It also rejects TensorRT versions other
+than `10.14.1.48`, verifies the expected engine I/O contract, and writes artifact hashes and command
+metadata. Running the raw commands alone therefore does not reproduce those surrounding checks or
+metadata files.
+
+### Wrapper Parameters
+
+The no-argument invocation uses all three parser defaults:
+
+| Parameter | Default | Effect |
+| --- | --- | --- |
+| `--output-dir` | `outputs/tensorrt10` under this lesson | Selects the artifact root. The wrapper resolves it to an absolute path before constructing commands. |
+| `--trtexec` | `trtexec` | Selects the executable. Supply an explicit path when `trtexec` is not on `PATH`. |
+| `--only` | `all` | Builds all three engines. `fp32`, `fp16`, or `int8` builds only that engine; a partial run does not write `references/reference_builds.json`. |
+
+### `trtexec` Parameters Used
+
+| Parameter | Engines | Purpose |
+| --- | --- | --- |
+| `--onnx` | All | Selects the source graph. FP32 and FP16 share the Lesson 05 graph; the INT8 candidate uses the ModelOpt explicit-Q/DQ graph. |
+| `--saveEngine` | All | Serializes the environment-specific TensorRT engine to the indicated ignored output path. |
+| `--stronglyTyped` | FP32, INT8 candidate | Makes tensor types part of the network contract. For the Q/DQ graph, ONNX Q/DQ operators, rather than a blanket builder precision flag, define the quantized regions. |
+| `--fp16` | FP16 | Enables FP16 tactic selection on the ordinary ONNX graph. It permits, but does not force, every layer to execute in FP16. |
+| `--builderOptimizationLevel=3` | All | Uses the same builder-search level for comparable engine builds. |
+| `--skipInference` | All | Builds and saves the engine without running the `trtexec` inference benchmark. Benchmarking is a separate matched workflow in this lesson. |
+| `--profilingVerbosity=detailed` | All | Retains detailed layer metadata for later inspection. |
+| `--dumpLayerInfo` | All | Requests layer information in the build output. |
+| `--exportLayerInfo` | All | Writes machine-readable layer information to the corresponding `*.layers.json` file. |
+| `--timingCacheFile` | All | Loads and updates a timing cache. FP32 and FP16 intentionally share the reference cache; the Q/DQ candidate has a separate cache. |
+
+### Important `trtexec` Parameters Not Used
+
+These omissions are intentional for the fixed Lesson 14 contract, not general recommendations for
+every TensorRT build:
+
+| Parameter or group | Why it is absent here | When it becomes important |
+| --- | --- | --- |
+| `--int8` and `--calib` | The candidate is a strongly typed explicit-Q/DQ graph. Its quantization scales are embedded in ONNX, so this build does not perform implicit builder calibration. Adding `--int8` is not the mechanism that makes this candidate INT8. | A supported weakly typed INT8 workflow or a builder-calibration workflow with an appropriate calibration cache. |
+| `--minShapes`, `--optShapes`, `--maxShapes`, and `--shapes` | The course graphs have the fixed input contract `[1, 3, 640, 640]`; no optimization profile or runtime shape needs to be supplied. | Dynamic batch sizes or spatial dimensions. Define all profile bounds deliberately, then benchmark the relevant runtime shapes. |
+| `--memPoolSize` | The lesson leaves TensorRT memory-pool limits at their defaults. | Constrained deployment targets or controlled comparisons where the builder workspace limit must be explicit. |
+| `--precisionConstraints`, `--layerPrecisions`, and `--layerOutputTypes` | The strongly typed builds take types from the graph, while the FP16 reference deliberately allows TensorRT to choose tactics without per-layer overrides. | Precision-debugging experiments or weakly typed networks that require selected layers to retain a particular precision. |
+| `--inputIOFormats` and `--outputIOFormats` | The lesson uses the ONNX/default linear FP32 I/O contract recorded by the wrapper. Quantization is internal to the Q/DQ graph. | Applications with a deliberately different boundary type or tensor format. Update preprocessing, bindings, and validation together. |
+| `--tacticSources` | The lesson accepts the TensorRT 10.14 default tactic sources. | Reproducibility investigations, plugin constraints, or target environments that require an explicit tactic-source policy. |
+| `--hardwareCompatibilityLevel` and `--versionCompatible` | Engines are built for the current pinned TensorRT/GPU environment and are treated as environment-specific artifacts. | A delivery lesson with an explicit compatibility target and validation matrix; these flags do not make an engine universally portable. |
+| `--useCudaGraph`, `--noDataTransfers`, `--useSpinWait`, `--warmUp`, `--duration`, and `--iterations` | `--skipInference` disables `trtexec` benchmarking, and Lesson 14 uses `modelopt/benchmark_engines.py` for matched measurements. | Direct `trtexec` performance experiments, where the complete measurement protocol must be recorded. |
+
+There is no separate FP32-enabling flag in the first command: FP32 tensor types come from the
+ordinary ONNX graph under `--stronglyTyped`. Likewise, the name `yolov8n_qdq_int8.engine` describes
+the quantized candidate; it does not imply that every layer executes in INT8. Use the exported layer
+information and `modelopt/inspect_precision.py` to verify the actual per-layer precision mix.
