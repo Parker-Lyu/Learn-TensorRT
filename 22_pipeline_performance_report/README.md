@@ -60,3 +60,17 @@ python3 -m unittest discover -s 22_pipeline_performance_report/tests -v
 1. Generate reproducible load, latency, throughput, fairness, memory, and stability evidence for lessons 16 through 21.
 2. Evaluate overload and failure policies with soak, restart, sanitizer, and fault-injection results.
 3. Explain the measured trade-offs among batching efficiency, per-stream fairness, and real-time freshness.
+
+On kernels where the default container blocks `personality(2)` and GCC ThreadSanitizer reports
+`unexpected memory mapping`, run the already-built CPU-only test in a disposable container with
+only the seccomp restriction relaxed, then save its machine-readable result as
+`22_pipeline_performance_report/outputs/tsan.json`. The collector consumes that ignored evidence:
+
+```bash
+docker run --rm --security-opt seccomp=unconfined \
+  -v "$PWD:/workspace/Learn-TensorRT" -w /workspace/Learn-TensorRT \
+  learn-tensorrt:25.11 \
+  bash -lc 'setarch x86_64 -R 16_cpp_producer_consumer/build-tsan/producer_consumer_tests'
+```
+
+Do not mark TSAN complete unless that command actually returns zero without a sanitizer report.

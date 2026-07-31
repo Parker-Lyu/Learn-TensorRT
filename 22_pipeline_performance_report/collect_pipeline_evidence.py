@@ -172,11 +172,15 @@ def main() -> int:
                                   "--error-exitcode", "99", cuda_test]),
     }
     tsan_path = ROOT / "16_cpp_producer_consumer/build-tsan/producer_consumer_tests"
-    sanitizer["thread_sanitizer"] = (
-        run([str(tsan_path)]) if tsan_path.is_file()
-        else {"command": [str(tsan_path)], "returncode": None,
-              "stdout": "", "stderr": "TSAN build not found"}
-    )
+    tsan_evidence = ROOT / "22_pipeline_performance_report/outputs/tsan.json"
+    if tsan_evidence.is_file():
+        sanitizer["thread_sanitizer"] = json.loads(tsan_evidence.read_text(encoding="utf-8"))
+    else:
+        sanitizer["thread_sanitizer"] = (
+            run([str(tsan_path)]) if tsan_path.is_file()
+            else {"command": [str(tsan_path)], "returncode": None,
+                  "stdout": "", "stderr": "TSAN build not found"}
+        )
 
     evidence = {"schema_version": 2, "platform": platform_identity(),
                 "integrated_pipeline": integrated, "single_stream": single, "multi_stream": multi,
