@@ -1,169 +1,228 @@
 #!/usr/bin/env python3
-"""Render checkpoint 22 from collected evidence and lesson 20 CSV plus lesson 21 integration records."""
+"""Generate the Lesson 22 report without turning absent evidence into a pass."""
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
+PASS = "PASS"
+FAIL = "FAIL"
+INCOMPLETE = "INCOMPLETE"
+NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
-def load_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+@dataclass(frozen=True)
+class Gate:
+    status: str
+    reason: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {"status": self.status, "reason": self.reason}
 
 
-def evaluate(evidence: dict) -> dict:
-    single = evidence.get("integrated_pipeline", evidence["single_stream"])["metrics"]
-    multi = evidence["multi_stream"]["metrics"]
-    return {
-        "bounded_single": single["queue_peak"] <= 4,
-        "single_accounting": single["captured"] == single["processed"] + single["dropped"],
-        "bounded_multi": all(stream["queue_peak"] <= 4 for stream in multi["streams"]),
-        "restart_100": evidence["restarts"]["requested"] >= 100 and evidence["restarts"]["failures"] == 0,
-        "soak_30_minutes": evidence["soak"]["requested_minutes"] >= 30 and evidence["soak"]["failures"] == 0,
-        "fault_matrix": all(item["expected_nonzero"] for item in evidence["faults"].values()),
-        "compute_sanitizer": evidence["sanitizers"]["compute_memcheck"]["returncode"] == 0,
-        "thread_sanitizer": evidence["sanitizers"]["thread_sanitizer"]["returncode"] == 0,
-    }
+def load_json(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("evidence root must be an object")
+    return value
 
 
-def render(evidence: dict, cuda_rows: list[dict]) -> str:
+def nested(value: Any, *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            return default
+        value = value[key]
+    return value
+
+
+def checked(description: str, predicate: Callable[[], bool]) -> Gate:
+    try:
+        passed = predicate()
+    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError) as error:
+        return Gate(INCOMPLETE, f"malformed evidence: {error}")
+    return Gate(PASS if passed else FAIL, description)
+
+
+def available(description: str, predicate: Callable[[], bool], *required: Any) -> Gate:
+    if any(value is None for value in required):
+        return Gate(INCOMPLETE, f"missing evidence: {description}")
+    return checked(description, predicate)
+
+
+def run_passed(run: Any) -> bool:
+    return isinstance(run, dict) and run.get("returncode") == 0
+
+
+def accounting_passed(metrics: Any) -> bool:
+    if not isinstance(metrics, dict):
+        return False
+    captured = int(metrics["captured"])
+    terminal = sum(int(metrics.get(name, 0)) for name in
+                   ("completed", "evicted", "failed", "aborted"))
+    # Accept schema-v2 names only as an explicit migration aid; schema gate remains incomplete.
+    if not any(name in metrics for name in ("completed", "evicted", "failed", "aborted")):
+        terminal = int(metrics["processed"]) + int(metrics["dropped"])
+    return captured == terminal
+
+
+def evaluate(evidence: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Return required gates. Missing/malformed evidence is INCOMPLETE, never an exception."""
+    gates: dict[str, Gate] = {}
+
+    version = evidence.get("schema_version")
+    gates["schema_v3"] = available(
+        "schema_version must equal 3", lambda: int(version) == 3, version)
+
+    platform = evidence.get("platform")
+    gates["environment"] = available(
+        "container, GPU, TensorRT, CUDA runtime/driver, and timestamp are required",
+        lambda: all(nested(platform, key) not in (None, "") for key in
+                    ("development_image", "gpu", "compute_capability", "driver",
+                     "tensorrt", "cuda_runtime", "cuda_driver", "collected_at")),
+        platform)
+
+    batches = nested(evidence, "load_matrix", "batches")
+    for size in (1, 2, 4):
+        run = nested(batches, str(size))
+        gates[f"real_batch_{size}"] = available(
+            f"real Lesson 21 batch {size} run must succeed",
+            lambda run=run, size=size: run_passed(run) and
+            int(nested(run, "metrics", "batch_distribution", str(size), default=0)) > 0,
+            run)
+
+    overlap = nested(evidence, "load_matrix", "two_slot_overlap")
+    gates["two_slot_overlap"] = available(
+        "two distinct slots must be submitted before collection",
+        lambda: run_passed(overlap) and bool(overlap["overlap_observed"]), overlap)
+
+    references = evidence.get("reference_checks")
+    for name in ("batch_vs_single", "cpu_vs_cuda_preprocess"):
+        item = nested(references, name)
+        gates[name] = available(
+            f"{name} must pass its recorded tolerance",
+            lambda item=item: run_passed(item) and bool(item["within_tolerance"]), item)
+
+    multi = evidence.get("multi_stream")
+    streams = nested(multi, "metrics", "streams")
+    gates["real_multi_stream"] = available(
+        "primary multi-stream evidence must come from Lesson 21 and contain two streams",
+        lambda: run_passed(multi) and multi["producer"] == "lesson21" and
+        isinstance(streams, list) and len(streams) >= 2 and
+        all("stream_id" in stream and "p50_ms" in stream and "fps" in stream
+            for stream in streams), multi, streams)
+
+    policies = evidence.get("policies")
+    for name in ("block", "drop_oldest", "latest_first"):
+        item = nested(policies, name)
+        gates[f"policy_{name}"] = available(
+            f"{name} policy must succeed, remain bounded, and satisfy terminal accounting",
+            lambda item=item: run_passed(item) and bool(item["bounded"]) and
+            accounting_passed(item["metrics"]), item)
+
+    faults = evidence.get("faults")
+    required_faults = (
+        "source_read", "invalid_shape", "insufficient_capacity", "tensor_address",
+        "enqueue", "postprocess", "abort_pending")
+    gates["integrated_fault_matrix"] = available(
+        "all reproducible Lesson 21 fault hooks must return nonzero and clean up",
+        lambda: all(nested(faults, name, "returncode") not in (None, 0) and
+                    nested(faults, name, "cleanup_complete") is True
+                    for name in required_faults), faults)
+
+    restarts = evidence.get("restarts")
+    gates["restart_100"] = available(
+        "at least 100 Lesson 21 processes must finish without failure",
+        lambda: int(restarts["requested"]) >= 100 and int(restarts["failures"]) == 0,
+        restarts)
+
+    soak = evidence.get("long_lived_soak")
+    gates["soak_30_minutes"] = available(
+        "one Lesson 21 process must run for at least 30 minutes without failure",
+        lambda: bool(soak["single_process"]) and float(soak["actual_seconds"]) >= 1800.0 and
+        int(soak["failures"]) == 0 and run_passed(soak), soak)
+
+    memory = evidence.get("memory_trend")
+    for name in ("host", "device"):
+        item = nested(memory, name)
+        gates[f"{name}_memory_trend"] = available(
+            f"{name} memory post-warmup window growth must remain within threshold",
+            lambda item=item: int(item["sample_count"]) >= 2 and
+            float(item["growth_percent"]) <= float(item["threshold_percent"]), item)
+
+    sanitizers = evidence.get("sanitizers")
+    for gate_name, evidence_name in (("lesson21_compute_memcheck", "compute_memcheck_lesson21"),
+                                     ("lesson21_cpu_tsan", "lesson21_cpu_tsan")):
+        item = nested(sanitizers, evidence_name)
+        gates[gate_name] = available(
+            f"{evidence_name} must start and exit successfully",
+            lambda item=item: bool(item["tool_started"]) and run_passed(item), item)
+
+    return {name: gate.as_dict() for name, gate in gates.items()}
+
+
+def overall_status(gates: dict[str, dict[str, str]]) -> str:
+    statuses = [gate["status"] for gate in gates.values()]
+    if FAIL in statuses:
+        return FAIL
+    if any(status != PASS for status in statuses):
+        return INCOMPLETE
+    return PASS
+
+
+def render(evidence: dict[str, Any]) -> str:
     gates = evaluate(evidence)
-    overall = "PASS" if all(gates.values()) else "INCOMPLETE"
-    single = evidence.get("integrated_pipeline", evidence["single_stream"])["metrics"]
-    multi = evidence["multi_stream"]["metrics"]
-    memory = evidence.get("integrated_pipeline", evidence["single_stream"])
-    gate_rows = "\n".join(
-        f"| {name.replace('_', ' ')} | {'PASS' if passed else 'NOT COMPLETE'} |"
-        for name, passed in gates.items())
-    stream_rows = "\n".join(
-        f"| {int(stream['stream'])} | {int(stream['captured'])} | {int(stream['processed'])} | "
-        f"{int(stream['dropped'])} | {stream['fps']:.2f} | {stream['p50']:.2f} | "
-        f"{stream['p90']:.2f} | {stream['p99']:.2f} |"
-        for stream in multi["streams"]
-    )
-    cuda_table = "\n".join(
-        f"| {row['mode']} | {float(row['cpu_ms']):.3f} | {float(row['host_stage_ms']):.3f} | "
-        f"{float(row['h2d_ms']):.3f} | {float(row['gpu_preprocess_ms']):.3f} | "
-        f"{float(row['d2h_ms']):.3f} | {float(row['mean_abs_error']):.5f} |"
-        for row in cuda_rows
-    )
-    fault_rows = "\n".join(
-        f"| {name} | {item['returncode']} | {'PASS' if item['expected_nonzero'] else 'FAIL'} |"
-        for name, item in evidence["faults"].items()
-    )
+    overall = overall_status(gates)
+    rows = "\n".join(
+        f"| {name.replace('_', ' ')} | {gate['status']} | {gate['reason']} |"
+        for name, gate in gates.items())
+    platform = evidence.get("platform") if isinstance(evidence.get("platform"), dict) else {}
     return f"""# 22 - Pipeline Performance and Reliability Report
 
 Generated from saved measurements. Checkpoint status: **{overall}**.
 
 ## Measurement Environment
 
-- Development image: `{evidence['platform']['development_image']}`
-- GPU / compute capability / driver / memory MiB: `{evidence['platform']['gpu_query']}`
-- TensorRT: `{evidence['platform']['tensorrt_version']}`
+- Development image: `{platform.get('development_image', 'not recorded')}`
+- GPU: `{platform.get('gpu', platform.get('gpu_query', 'not recorded'))}`
+- TensorRT: `{platform.get('tensorrt', platform.get('tensorrt_version', 'not recorded'))}`
+- CUDA runtime / driver: `{platform.get('cuda_runtime', 'not recorded')}` / `{platform.get('cuda_driver', 'not recorded')}`
+- Collected at: `{platform.get('collected_at', 'not recorded')}`
 
-Performance values are valid only for this recorded software and hardware environment.
+Performance values are valid only for the recorded environment. A missing tool, duration, field, or
+hardware result is `INCOMPLETE`; it is never silently treated as a pass.
 
-## Architecture
+## Acceptance Gates
 
-```text
-integrated TensorRT run:
-repeatable sources -> dynamic batches -> bounded slot pool -> NPP -> enqueueV3 -> YOLO/NMS
+| Gate | Status | Evidence requirement |
+| --- | --- | --- |
+{rows}
 
-multi stream:
-capture 0 -> queue 0 --+
-capture 1 -> queue 1 --+-> fair scheduler -> partial batch -> async worker -> ID dispatcher
-capture N -> queue N --+
-```
+## Evidence Summary
 
-The integrated run measures real NPP and TensorRT work. Lessons 18 and 19 provide supporting bounded-queue and fairness evidence. Normal EOS drains;
-cancellation and worker failure discard queued work. Round-robin is the measured fairness policy;
-latest-first remains available when freshness matters more than equal service.
-
-## Integrated TensorRT Load
-
-| Captured | Processed | Dropped | Queue peak | FPS | P50 ms | P90 ms | P99 ms |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| {int(single['captured'])} | {int(single['processed'])} | {int(single['dropped'])} | {int(single['queue_peak'])} | {single['fps']:.2f} | {single['p50_ms']:.2f} | {single['p90_ms']:.2f} | {single['p99_ms']:.2f} |
-
-Capture timestamps flow through the queue and async result collection, so these are end-to-end
-capture-to-result latencies rather than model-only timings.
-
-Host RSS MiB start/peak/end: {memory['host_rss_mib']['start']:.2f} / {memory['host_rss_mib']['peak']:.2f} / {memory['host_rss_mib']['end']:.2f}.
-Device memory MiB start/peak/end: {memory['device_memory_mib']['start']:.2f} / {memory['device_memory_mib']['peak']:.2f} / {memory['device_memory_mib']['end']:.2f}.
-
-## Multi-Stream Fairness
-
-Total throughput: {multi['total_fps']:.2f} frames/s.
-
-| Stream | Captured | Processed | Dropped | FPS | P50 ms | P90 ms | P99 ms |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-{stream_rows}
-
-Round-robin prevents a fast source from monopolizing every batch. Larger batches improve worker
-efficiency but can increase timeout wait and tail latency; latest-first reduces stale work but may
-drop more frames from bursty streams.
-
-## CPU vs CUDA/NPP Preprocessing
-
-| Memory mode | CPU ms | Host stage ms | H2D ms | GPU/NPP ms | D2H ms | Mean abs error |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-{cuda_table}
-
-Mapped memory removes explicit transfers but makes a discrete GPU access host memory across PCIe;
-the measured kernel time must be included before describing it as faster.
-
-## Lifecycle, Faults, and Sanitizers
-
-- Repeated start/stop: {evidence['restarts']['requested']} cycles, {evidence['restarts']['failures']} failures.
-- Soak requested: {evidence['soak']['requested_minutes']:.3f} minutes across {evidence['soak']['cycles']} cycles, {evidence['soak']['failures']} failures.
-
-| Fault | Return code | Expected nonzero |
-| --- | ---: | --- |
-{fault_rows}
-
-| Gate | Status |
-| --- | --- |
-{gate_rows}
-
-ThreadSanitizer output: `{evidence['sanitizers']['thread_sanitizer']['stderr'].strip() or 'no diagnostics'}`.
-A nonzero ThreadSanitizer return code keeps the gate incomplete; never reinterpret a tool startup
-failure as a passing race check.
+- Schema version: `{evidence.get('schema_version', 'missing')}`
+- Restart cycles: `{nested(evidence, 'restarts', 'requested', default='missing')}`
+- Long-lived soak seconds: `{nested(evidence, 'long_lived_soak', 'actual_seconds', default='missing')}`
+- Primary multi-stream producer: `{nested(evidence, 'multi_stream', 'producer', default='missing')}`
 
 ## Reproduction
-
-Smoke collection:
 
 ```bash
 python3 22_pipeline_performance_report/collect_pipeline_evidence.py
 python3 22_pipeline_performance_report/generate_report.py
 ```
 
-Formal checkpoint collection:
+Formal evidence:
 
 ```bash
-python3 22_pipeline_performance_report/collect_pipeline_evidence.py --soak-minutes 30 --restart-cycles 100
+python3 22_pipeline_performance_report/collect_pipeline_evidence.py \\
+  --soak-minutes 30 --restart-cycles 100
 python3 22_pipeline_performance_report/generate_report.py
 ```
-
-## English Summary
-
-The pipeline uses bounded latest-frame queues, timeout-based batching, and explicit drain or discard
-shutdown. Single- and multi-stream measurements report capture-to-result percentiles instead of
-average FPS alone. Identity tests protect stream and frame routing under asynchronous completion.
-CUDA/NPP preprocessing is numerically compared with OpenCV and transfer costs remain separate.
-The checkpoint stays incomplete until the full thirty-minute soak and a runnable ThreadSanitizer
-environment both pass.
-
-## Three-to-Five-Minute Walkthrough
-
-Describe the queue and scheduler diagrams, then show how overload bounds memory while trading frame
-completeness for freshness. Compare total throughput with per-stream tail latency. Explain the
-pageable, pinned, and mapped preprocessing results, then finish with repeated lifecycle, injected
-failures, sanitizer evidence, and any remaining incomplete gates.
 """
 
 
@@ -174,12 +233,12 @@ def main() -> int:
     parser.add_argument("--output", type=Path,
                         default=ROOT / "reports/22_pipeline_performance.md")
     args = parser.parse_args()
-    evidence = load_json(args.evidence)
-    csv_path = ROOT / evidence["cuda_benchmark_csv"]
-    with csv_path.open(newline="", encoding="utf-8") as handle:
-        cuda_rows = list(csv.DictReader(handle))
+    try:
+        evidence = load_json(args.evidence)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        evidence = {"schema_version": None, "load_error": str(error)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(render(evidence, cuda_rows), encoding="utf-8")
+    args.output.write_text(render(evidence), encoding="utf-8")
     print(f"wrote {args.output}")
     return 0
 
