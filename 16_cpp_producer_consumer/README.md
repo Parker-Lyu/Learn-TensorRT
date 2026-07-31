@@ -64,26 +64,20 @@ both threads have joined.
 Configure and build from the repository root inside the pinned development container:
 
 ```bash
-cmake -S 16_cpp_producer_consumer -B 16_cpp_producer_consumer/build-16
-cmake --build 16_cpp_producer_consumer/build-16 --parallel
+cmake -S 16_cpp_producer_consumer -B 16_cpp_producer_consumer/build
+cmake --build 16_cpp_producer_consumer/build --parallel
 ```
 
-The generated build directory is ignored. The lesson-specific `build-16` name avoids reusing a
-CMake cache left behind when lesson directories are renumbered. If CMake reports that the source
-directory does not match the one recorded in `CMakeCache.txt`, remove that stale directory and
-configure again:
-
-```bash
-rm -rf 16_cpp_producer_consumer/build-16
-cmake -S 16_cpp_producer_consumer -B 16_cpp_producer_consumer/build-16
-```
+The generated build directory is ignored.
 
 ## Run
 
 Run the commands from the repository root:
 
+From this lesson directory:
+
 ```bash
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer
+./16_cpp_producer_consumer/build/cpp_producer_consumer
 ```
 
 The default locates the repository's `assets/img.jpeg` from the executable,
@@ -91,7 +85,7 @@ produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four f
 the newest frames:
 
 ```bash
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer \
+./16_cpp_producer_consumer/build/cpp_producer_consumer \
   --frames 100 \
   --queue-capacity 4 \
   --producer-delay-ms 10 \
@@ -102,7 +96,7 @@ the newest frames:
 Run with one or more custom images by repeating `--image`:
 
 ```bash
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer --image assets/img.jpeg
+./16_cpp_producer_consumer/build/cpp_producer_consumer --image assets/img.jpeg
 ```
 
 Use `--help` for every option. `--fail-producer-at` and `--fail-consumer-at` are deliberate failure
@@ -113,9 +107,9 @@ injection hooks for observing exception propagation and clean shutdown.
 Run the same workload with each policy:
 
 ```bash
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy block
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-newest
-./16_cpp_producer_consumer/build-16/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-oldest
+./16_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy block
+./16_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-newest
+./16_cpp_producer_consumer/build/cpp_producer_consumer --frames 100 --queue-capacity 4 --policy drop-oldest
 ```
 
 - `block` preserves every frame and maximizes completed work, but slows acquisition and couples the
@@ -136,7 +130,7 @@ input remains faster than inference, a larger queue mainly increases memory use 
 ## Tests
 
 ```bash
-ctest --test-dir 16_cpp_producer_consumer/build-16 --output-on-failure
+ctest --test-dir 16_cpp_producer_consumer/build --output-on-failure
 ```
 
 The tests cover zero capacity, FIFO drain behavior, both dropping policies, wakeup of blocked
@@ -146,9 +140,9 @@ explicit stop, and producer/consumer exception propagation.
 For ThreadSanitizer, use a separate build directory:
 
 ```bash
-cmake -S 16_cpp_producer_consumer -B 16_cpp_producer_consumer/build-16-tsan -DENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build 16_cpp_producer_consumer/build-16-tsan -j
-ctest --test-dir 16_cpp_producer_consumer/build-16-tsan --output-on-failure
+cmake -S 16_cpp_producer_consumer -B 16_cpp_producer_consumer/build-tsan -DENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build 16_cpp_producer_consumer/build-tsan -j
+ctest --test-dir 16_cpp_producer_consumer/build-tsan --output-on-failure
 ```
 
 ThreadSanitizer is a CPU-only concurrency check. Run it separately from CUDA/TensorRT programs;
