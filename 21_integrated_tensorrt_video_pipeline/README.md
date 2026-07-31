@@ -88,3 +88,12 @@ GPU TensorRT smoke (requires the lesson 17 dynamic-profile engine):
 
 The smoke executable reports the real TensorRT output element count and checksum. It is a
 backend-level correctness smoke test, not a latency benchmark.
+
+Pass comma-separated repeatable image sources to exercise the same batch/slot path with immutable
+per-source identity:
+
+```bash
+./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine \
+  assets/img.jpeg,assets/img.jpeg 16 4 2
+```

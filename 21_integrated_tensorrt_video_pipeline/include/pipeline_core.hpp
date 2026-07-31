@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <utility>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -78,4 +80,54 @@ private:
     std::vector<FrameMetadata> results_;
 };
 
+}  // namespace lesson21
+
+namespace lesson21 {
+enum class OverloadPolicy { Block, DropOldest };
+template <class T> class BoundedQueue {
+public:
+    BoundedQueue(std::size_t capacity, OverloadPolicy policy)
+        : capacity_(capacity), policy_(policy) {
+        if (capacity == 0) throw std::invalid_argument("queue capacity must be positive");
+    }
+    bool push(T value) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (policy_ == OverloadPolicy::Block) {
+            not_full_.wait(lock, [this] { return closed_ || values_.size() < capacity_; });
+            if (closed_) return false;
+        } else if (values_.size() == capacity_) {
+            values_.pop_front(); ++evicted_;
+        }
+        if (closed_) return false;
+        values_.push_back(std::move(value));
+        peak_ = std::max(peak_, values_.size());
+        not_empty_.notify_one();
+        return true;
+    }
+    std::optional<T> pop() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        not_empty_.wait(lock, [this] { return closed_ || !values_.empty(); });
+        if (values_.empty()) return std::nullopt;
+        T value = std::move(values_.front()); values_.pop_front();
+        not_full_.notify_one(); return value;
+    }
+    std::optional<T> try_pop() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (values_.empty()) return std::nullopt;
+        T value = std::move(values_.front()); values_.pop_front();
+        not_full_.notify_one(); return value;
+    }
+    void close(bool discard) {
+        std::lock_guard<std::mutex> lock(mutex_); closed_ = true;
+        if (discard) { discarded_ += values_.size(); values_.clear(); }
+        not_empty_.notify_all(); not_full_.notify_all();
+    }
+    std::size_t evicted() const { std::lock_guard<std::mutex> l(mutex_); return evicted_; }
+    std::size_t discarded() const { std::lock_guard<std::mutex> l(mutex_); return discarded_; }
+    std::size_t peak() const { std::lock_guard<std::mutex> l(mutex_); return peak_; }
+private:
+    const std::size_t capacity_; const OverloadPolicy policy_;
+    mutable std::mutex mutex_; std::condition_variable not_empty_, not_full_;
+    std::deque<T> values_; bool closed_{false}; std::size_t evicted_{0}, discarded_{0}, peak_{0};
+};
 }  // namespace lesson21

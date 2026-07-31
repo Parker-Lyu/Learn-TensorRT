@@ -20,6 +20,14 @@ int main() {
         CHECK(dispatch.results().size() == 2);
         CHECK(dispatch.results()[0].stream_id == 8 && dispatch.results()[0].frame_id == 200);
         CHECK(dispatch.results()[1].stream_id == 7 && dispatch.results()[1].frame_id == 100);
+        lesson21::BoundedQueue<int> queue(2, lesson21::OverloadPolicy::DropOldest);
+        CHECK(queue.push(1)); CHECK(queue.push(2)); CHECK(queue.push(3));
+        CHECK(queue.evicted() == 1 && queue.peak() == 2);
+        CHECK(queue.pop().value() == 2); queue.close(false); CHECK(queue.pop().value() == 3);
+        CHECK(!queue.pop().has_value() && !queue.push(4));
+        lesson21::BoundedQueue<int> aborted(2, lesson21::OverloadPolicy::Block);
+        aborted.push(1); aborted.push(2); aborted.close(true);
+        CHECK(aborted.discarded() == 2 && !aborted.pop().has_value());
         lesson21::Accounting ok{10, 9, 1, 2, 7, 7, 0, 0};
         ok.validate_terminal(true);
         bool rejected = false;
