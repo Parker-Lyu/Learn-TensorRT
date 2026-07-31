@@ -74,7 +74,10 @@ void FrameScheduler::capture(std::size_t stream) {
             if (image.empty()) throw std::runtime_error("source returned an empty frame");
             ScheduledFrame item{image, {stream, frame_id++, 0, Clock::now(), {}}};
             ++captured_;
-            if (!queues_[stream]->push(std::move(item))) break;
+            if (!queues_[stream]->push(std::move(item))) {
+                ++rejected_on_close_;
+                break;
+            }
             if (interval_.count() != 0) std::this_thread::sleep_for(interval_);
         }
     } catch (...) {
@@ -143,7 +146,7 @@ std::size_t FrameScheduler::evicted() const {
 }
 
 std::size_t FrameScheduler::discarded() const {
-    std::size_t result = 0;
+    std::size_t result = rejected_on_close_;
     for (const auto& queue : queues_) result += queue->discarded();
     return result;
 }

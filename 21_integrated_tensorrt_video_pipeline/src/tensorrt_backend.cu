@@ -199,6 +199,15 @@ struct TensorRtBackend::Impl {
         const std::size_t source_bytes = source_stride * images.size();
         const std::size_t letterbox_bytes =
             static_cast<std::size_t>(input_size.area()) * 3 * images.size();
+        const bool growth_required = slot.input_capacity < input_bytes ||
+            slot.output_capacity < output_bytes || slot.source_capacity < source_bytes ||
+            slot.letterbox_capacity < letterbox_bytes ||
+            slot.pinned_source_capacity < source_bytes ||
+            slot.pinned_output_capacity < output_bytes;
+        if (!growth_required) {
+            slot.capacity_growth_ms = 0.0;
+            return;
+        }
         replace_device_buffer(slot.input, slot.input_capacity, input_bytes);
         replace_device_buffer(slot.output, slot.output_capacity, output_bytes);
         replace_device_buffer(slot.device_source, slot.source_capacity, source_bytes);

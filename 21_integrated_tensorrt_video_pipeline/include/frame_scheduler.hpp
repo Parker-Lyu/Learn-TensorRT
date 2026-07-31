@@ -41,6 +41,7 @@ public:
     std::size_t captured() const noexcept { return captured_; }
     std::size_t evicted() const;
     std::size_t discarded() const;
+    std::size_t rejected_on_close() const noexcept { return rejected_on_close_; }
     std::size_t queue_peak() const;
     std::size_t queue_depth() const;
     bool done() const;
@@ -55,6 +56,7 @@ private:
     std::atomic<std::size_t> captured_{0};
     std::atomic<std::size_t> finished_{0};
     std::atomic<std::size_t> stale_{0};
+    std::atomic<std::size_t> rejected_on_close_{0};
     std::atomic<bool> stopping_{false};
     std::size_t cursor_{0};
     SchedulingPolicy scheduling_;

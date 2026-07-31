@@ -40,6 +40,7 @@ void PipelineMetrics::record_batch(const GpuBatchResult& result, double queue_wa
 void PipelineMetrics::write(const std::filesystem::path& path, const PipelineConfig& config,
                             const RuntimeIdentity& identity, std::uint64_t captured,
                             std::uint64_t evicted, std::uint64_t aborted,
+                            std::uint64_t rejected_on_admission,
                             std::size_t queue_peak, double elapsed_seconds) const {
     std::ofstream output(path);
     if (!output) throw std::runtime_error("cannot write metrics: " + path.string());
@@ -64,7 +65,8 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
            << "\"host\":\"std::chrono::steady_clock\","
            << "\"gpu\":\"CUDA events on each slot stream\"},"
            << "\"captured\":" << captured
-           << ",\"admitted\":" << (captured - evicted)
+           << ",\"admitted\":" << (captured - rejected_on_admission)
+           << ",\"rejected_on_admission\":" << rejected_on_admission
            << ",\"submitted\":" << submitted_
            << ",\"completed\":" << completed_
            << ",\"processed\":" << completed_

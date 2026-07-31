@@ -143,7 +143,7 @@ int run_integrated_pipeline(const PipelineConfig& config) {
     const std::uint64_t aborted = scheduler.discarded();
     metrics.write(config.output_directory / "metrics.json", config, identity,
                   scheduler.captured(), scheduler.evicted(), aborted,
-                  scheduler.queue_peak(), elapsed);
+                  scheduler.rejected_on_close(), scheduler.queue_peak(), elapsed);
     const bool accounting_ok = scheduler.captured() ==
         metrics.completed() + scheduler.evicted() + aborted;
     std::cout << "backend=tensorrt captured=" << scheduler.captured()

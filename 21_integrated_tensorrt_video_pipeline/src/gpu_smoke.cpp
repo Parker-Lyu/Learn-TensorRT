@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
         if (argc > 4) {
             const std::size_t second = backend.reserve();
             backend.submit(second, images, metadata(1, batch, image));
+            std::cout << "submitted_before_collection=2\n";
             print(backend.collect(second));
         }
         print(backend.collect(first));

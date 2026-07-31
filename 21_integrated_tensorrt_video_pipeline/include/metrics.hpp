@@ -30,7 +30,8 @@ public:
                       const std::vector<double>& frame_latencies_ms);
     void write(const std::filesystem::path& path, const PipelineConfig& config,
                const RuntimeIdentity& identity, std::uint64_t captured,
-               std::uint64_t evicted, std::uint64_t aborted, std::size_t queue_peak,
+               std::uint64_t evicted, std::uint64_t aborted,
+               std::uint64_t rejected_on_admission, std::size_t queue_peak,
                double elapsed_seconds) const;
 
     std::uint64_t submitted() const noexcept { return submitted_; }

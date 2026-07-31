@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -47,9 +48,12 @@ def passing_evidence():
                     "enqueue", "postprocess", "abort_pending")},
         "restarts": {"requested": 100, "failures": 0},
         "long_lived_soak": {"returncode": 0, "single_process": True,
-                            "actual_seconds": 1800.0, "failures": 0},
-        "memory_trend": {name: {"sample_count": 10, "growth_percent": 1.0,
-                                "threshold_percent": 5.0} for name in ("host", "device")},
+                            "actual_seconds": 1800.0, "failures": 0,
+                            "formal_requested": True},
+        "memory_trend": {"formal_requested": True, **{
+            name: {"sample_count": 10, "growth_percent": 1.0,
+                   "threshold_percent": 5.0, "available": True}
+            for name in ("host", "device")}},
         "sanitizers": {name: {"returncode": 0, "tool_started": True} for name in
                        ("compute_memcheck_lesson21", "lesson21_cpu_tsan")},
     }
@@ -62,6 +66,32 @@ class PipelineReportTests(unittest.TestCase):
             "p50_ms=1 p90_ms=2 p99_ms=3")
         self.assertEqual(parsed["processed"], 7)
 
+    def test_read_metrics_and_merge_snapshots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "metrics.json").write_text('{"completed": 2}', encoding="utf-8")
+            self.assertEqual(COLLECT.read_metrics(root)["completed"], 2)
+        samples = [{"elapsed_seconds": 1.1, "rss_mib": 10.0}]
+        COLLECT.merge_pipeline_snapshots(
+            samples, [{"elapsed_seconds": 1.0, "queue_depth": 2, "completed": 4}])
+        self.assertEqual(samples[0]["queue_depth"], 2)
+
+    def test_memory_window_trend_excludes_warmup(self):
+        samples = [
+            {"elapsed_seconds": 0, "rss_mib": 10.0},
+            {"elapsed_seconds": 10, "rss_mib": 100.0},
+            {"elapsed_seconds": 20, "rss_mib": 101.0},
+            {"elapsed_seconds": 30, "rss_mib": 102.0},
+        ]
+        trend = COLLECT.window_trend(samples, "rss_mib", 10, 10, 5.0)
+        self.assertTrue(trend["available"])
+        self.assertLessEqual(trend["growth_percent"], 5.0)
+
+    def test_missing_process_memory_is_unavailable(self):
+        samples = [{"elapsed_seconds": 10, "device_memory_mib": None}]
+        trend = COLLECT.window_trend(samples, "device_memory_mib", 0, 10, 5.0)
+        self.assertFalse(trend["available"])
+
     def test_complete_fixture_passes(self):
         gates = REPORT.evaluate(passing_evidence())
         self.assertEqual(REPORT.overall_status(gates), REPORT.PASS)
@@ -71,6 +101,7 @@ class PipelineReportTests(unittest.TestCase):
         gates = REPORT.evaluate({})
         self.assertEqual(REPORT.overall_status(gates), REPORT.INCOMPLETE)
         self.assertTrue(all(gate["status"] == REPORT.INCOMPLETE for gate in gates.values()))
+        self.assertIn("Checkpoint status: **INCOMPLETE**", REPORT.render({}))
 
     def test_malformed_fixture_is_incomplete_without_exception(self):
         evidence = passing_evidence()
@@ -86,11 +117,23 @@ class PipelineReportTests(unittest.TestCase):
         self.assertEqual(gates["soak_30_minutes"]["status"], REPORT.FAIL)
         self.assertEqual(REPORT.overall_status(gates), REPORT.FAIL)
 
-    def test_short_soak_fails_when_it_was_executed(self):
+    def test_short_restart_and_unavailable_tools_are_incomplete(self):
+        evidence = passing_evidence()
+        evidence["restarts"]["requested"] = 3
+        evidence["sanitizers"]["lesson21_cpu_tsan"]["tool_started"] = False
+        evidence["memory_trend"]["device"]["available"] = False
+        evidence["memory_trend"]["host"]["available"] = True
+        gates = REPORT.evaluate(evidence)
+        self.assertEqual(gates["restart_100"]["status"], REPORT.INCOMPLETE)
+        self.assertEqual(gates["lesson21_cpu_tsan"]["status"], REPORT.INCOMPLETE)
+        self.assertEqual(gates["device_memory_trend"]["status"], REPORT.INCOMPLETE)
+
+    def test_short_smoke_is_incomplete_when_formal_soak_was_not_requested(self):
         evidence = passing_evidence()
         evidence["long_lived_soak"]["actual_seconds"] = 60.0
+        evidence["long_lived_soak"]["formal_requested"] = False
         gates = REPORT.evaluate(evidence)
-        self.assertEqual(gates["soak_30_minutes"]["status"], REPORT.FAIL)
+        self.assertEqual(gates["soak_30_minutes"]["status"], REPORT.INCOMPLETE)
 
 
 if __name__ == "__main__":

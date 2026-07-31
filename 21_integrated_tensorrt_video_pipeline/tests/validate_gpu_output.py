@@ -10,6 +10,11 @@ assert len({(r["stream_id"],r["frame_id"]) for r in records})==8
 assert metrics["captured"]==metrics["processed"]==8
 assert metrics["slots"]==2 and metrics["batches"]==2
 assert metrics["preprocess_ms"]>0 and metrics["inference_ms"]>0
+assert metrics["host_staging_ms"]>0 and metrics["h2d_ms"]>0 and metrics["d2h_ms"]>0
+assert metrics["clock_domains"]["host"]=="std::chrono::steady_clock"
+assert "CUDA events" in metrics["clock_domains"]["gpu"]
+assert all(sample["h2d_ms"]>0 and sample["tensorrt_ms"]>0 and sample["d2h_ms"]>0
+           for sample in metrics["batch_samples"])
 
 assert metrics["batch_distribution"]=={"4":2}
 assert metrics["per_stream_processed"]=={"0":4,"1":4}

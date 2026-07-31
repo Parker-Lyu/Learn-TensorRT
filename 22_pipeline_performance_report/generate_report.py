@@ -135,32 +135,54 @@ def evaluate(evidence: dict[str, Any]) -> dict[str, dict[str, str]]:
                     for name in required_faults), faults)
 
     restarts = evidence.get("restarts")
-    gates["restart_100"] = available(
-        "at least 100 Lesson 21 processes must finish without failure",
-        lambda: int(restarts["requested"]) >= 100 and int(restarts["failures"]) == 0,
-        restarts)
+    if restarts is None:
+        gates["restart_100"] = Gate(INCOMPLETE, "restart evidence is missing")
+    else:
+        try:
+            requested_restarts = int(restarts["requested"])
+        except (KeyError, TypeError, ValueError):
+            gates["restart_100"] = Gate(INCOMPLETE, "restart evidence is malformed")
+        else:
+            gates["restart_100"] = (Gate(
+                INCOMPLETE, "fewer than 100 restart cycles were requested")
+                if requested_restarts < 100 else checked(
+                    "at least 100 Lesson 21 processes must finish without failure",
+                    lambda: int(restarts["failures"]) == 0))
 
     soak = evidence.get("long_lived_soak")
-    gates["soak_30_minutes"] = available(
-        "one Lesson 21 process must run for at least 30 minutes without failure",
-        lambda: bool(soak["single_process"]) and float(soak["actual_seconds"]) >= 1800.0 and
-        int(soak["failures"]) == 0 and run_passed(soak), soak)
+    if soak is None or not nested(soak, "formal_requested", default=False):
+        gates["soak_30_minutes"] = Gate(
+            INCOMPLETE, "a formal 30-minute single-process soak was not requested")
+    else:
+        gates["soak_30_minutes"] = available(
+            "one Lesson 21 process must run for at least 30 minutes without failure",
+            lambda: bool(soak["single_process"]) and float(soak["actual_seconds"]) >= 1800.0 and
+            int(soak["failures"]) == 0 and run_passed(soak), soak)
 
     memory = evidence.get("memory_trend")
     for name in ("host", "device"):
         item = nested(memory, name)
-        gates[f"{name}_memory_trend"] = available(
-            f"{name} memory post-warmup window growth must remain within threshold",
-            lambda item=item: int(item["sample_count"]) >= 2 and
-            float(item["growth_percent"]) <= float(item["threshold_percent"]), item)
+        if memory is None or not nested(memory, "formal_requested", default=False):
+            gates[f"{name}_memory_trend"] = Gate(
+                INCOMPLETE, "formal long-lived memory sampling was not requested")
+        elif item is None or not nested(item, "available", default=False):
+            gates[f"{name}_memory_trend"] = Gate(
+                INCOMPLETE, f"process-specific {name} memory samples are unavailable")
+        else:
+            gates[f"{name}_memory_trend"] = checked(
+                f"{name} memory post-warmup window growth must remain within threshold",
+                lambda item=item: int(item["sample_count"]) >= 2 and
+                float(item["growth_percent"]) <= float(item["threshold_percent"]))
 
     sanitizers = evidence.get("sanitizers")
     for gate_name, evidence_name in (("lesson21_compute_memcheck", "compute_memcheck_lesson21"),
                                      ("lesson21_cpu_tsan", "lesson21_cpu_tsan")):
         item = nested(sanitizers, evidence_name)
-        gates[gate_name] = available(
-            f"{evidence_name} must start and exit successfully",
-            lambda item=item: bool(item["tool_started"]) and run_passed(item), item)
+        if item is None or not nested(item, "tool_started", default=False):
+            gates[gate_name] = Gate(INCOMPLETE, f"{evidence_name} was not successfully started")
+        else:
+            gates[gate_name] = checked(
+                f"{evidence_name} must exit successfully", lambda item=item: run_passed(item))
 
     return {name: gate.as_dict() for name, gate in gates.items()}
 
@@ -174,6 +196,59 @@ def overall_status(gates: dict[str, dict[str, str]]) -> str:
     return PASS
 
 
+def display(value: Any, digits: int = 3) -> str:
+    if value is None:
+        return "missing"
+    if isinstance(value, float):
+        return f"{value:.{digits}f}"
+    return str(value)
+
+
+def metric_rows(evidence: dict[str, Any]) -> tuple[str, str, str, str]:
+    batch_rows = []
+    batches = nested(evidence, "load_matrix", "batches", default={})
+    if isinstance(batches, dict):
+        for size in ("1", "2", "4"):
+            metrics = nested(batches, size, "metrics", default={})
+            batch_rows.append(
+                f"| {size} | {display(nested(metrics, 'completed'))} | "
+                f"{display(nested(metrics, 'fps'))} | {display(nested(metrics, 'p50_ms'))} | "
+                f"{display(nested(metrics, 'p90_ms'))} | {display(nested(metrics, 'p99_ms'))} | "
+                f"{display(nested(metrics, 'queue_peak'))} |")
+
+    policy_rows = []
+    policies = evidence.get("policies", {})
+    if isinstance(policies, dict):
+        for name in ("block", "drop_oldest", "latest_first"):
+            metrics = nested(policies, name, "metrics", default={})
+            policy_rows.append(
+                f"| {name.replace('_', '-')} | {display(nested(metrics, 'captured'))} | "
+                f"{display(nested(metrics, 'completed'))} | {display(nested(metrics, 'evicted'))} | "
+                f"{display(nested(metrics, 'aborted'))} | {display(nested(metrics, 'queue_peak'))} | "
+                f"{display(nested(metrics, 'fps'))} | {display(nested(metrics, 'p99_ms'))} |")
+
+    stream_rows = []
+    streams = nested(evidence, "multi_stream", "metrics", "streams", default=[])
+    if isinstance(streams, list):
+        for stream in streams:
+            stream_rows.append(
+                f"| {display(nested(stream, 'stream_id'))} | {display(nested(stream, 'completed'))} | "
+                f"{display(nested(stream, 'fps'))} | {display(nested(stream, 'p50_ms'))} | "
+                f"{display(nested(stream, 'p90_ms'))} | {display(nested(stream, 'p99_ms'))} |")
+
+    fault_rows = []
+    faults = evidence.get("faults", {})
+    if isinstance(faults, dict):
+        for name, item in sorted(faults.items()):
+            fault_rows.append(
+                f"| {name.replace('_', ' ')} | {display(nested(item, 'returncode'))} | "
+                f"{display(nested(item, 'cleanup_complete'))} | {display(nested(item, 'timed_out'))} |")
+    return ("\n".join(batch_rows) or "| no evidence | | | | | | |",
+            "\n".join(policy_rows) or "| no evidence | | | | | | | |",
+            "\n".join(stream_rows) or "| no evidence | | | | | |",
+            "\n".join(fault_rows) or "| no evidence | | | |")
+
+
 def render(evidence: dict[str, Any]) -> str:
     gates = evaluate(evidence)
     overall = overall_status(gates)
@@ -181,6 +256,11 @@ def render(evidence: dict[str, Any]) -> str:
         f"| {name.replace('_', ' ')} | {gate['status']} | {gate['reason']} |"
         for name, gate in gates.items())
     platform = evidence.get("platform") if isinstance(evidence.get("platform"), dict) else {}
+    batch_rows, policy_rows, stream_rows, fault_rows = metric_rows(evidence)
+    host_memory = nested(evidence, "memory_trend", "host", default={})
+    device_memory = nested(evidence, "memory_trend", "device", default={})
+    compute = nested(evidence, "sanitizers", "compute_memcheck_lesson21", default={})
+    tsan = nested(evidence, "sanitizers", "lesson21_cpu_tsan", default={})
     return f"""# 22 - Pipeline Performance and Reliability Report
 
 Generated from saved measurements. Checkpoint status: **{overall}**.
@@ -195,6 +275,77 @@ Generated from saved measurements. Checkpoint status: **{overall}**.
 
 Performance values are valid only for the recorded environment. A missing tool, duration, field, or
 hardware result is `INCOMPLETE`; it is never silently treated as a pass.
+
+## Real Integrated Load Matrix
+
+All primary rows below come from the Lesson 21 TensorRT executable, not simulated worker delays.
+Latency is capture-to-result and uses the host monotonic clock.
+
+| Batch | Completed | FPS | P50 ms | P90 ms | P99 ms | Queue peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{batch_rows}
+
+## Real Multi-Stream Result
+
+Primary producer: `{nested(evidence, 'multi_stream', 'producer', default='missing')}`.
+
+| Stream | Completed | FPS | P50 ms | P90 ms | P99 ms |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+{stream_rows}
+
+## Overload and Freshness Policies
+
+| Policy | Captured | Completed | Evicted | Aborted | Queue peak | FPS | P99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{policy_rows}
+
+`block` preserves accepted work at the cost of producer backpressure. `drop-oldest` bounds stale
+work by making eviction explicit. `latest-first` additionally discards superseded queued frames;
+its freshness gain must be interpreted together with the evicted count and tail latency.
+
+## Reference Checks
+
+- Batch versus single-image return code / within tolerance:
+  `{nested(evidence, 'reference_checks', 'batch_vs_single', 'returncode', default='missing')}` /
+  `{nested(evidence, 'reference_checks', 'batch_vs_single', 'within_tolerance', default='missing')}`
+- CPU versus CUDA preprocessing return code / within tolerance:
+  `{nested(evidence, 'reference_checks', 'cpu_vs_cuda_preprocess', 'returncode', default='missing')}` /
+  `{nested(evidence, 'reference_checks', 'cpu_vs_cuda_preprocess', 'within_tolerance', default='missing')}`
+
+## Reliability and Memory
+
+- Restart requested / failures: `{nested(evidence, 'restarts', 'requested', default='missing')}` /
+  `{nested(evidence, 'restarts', 'failures', default='missing')}`
+- Long-lived single process / actual seconds / failures:
+  `{nested(evidence, 'long_lived_soak', 'single_process', default='missing')}` /
+  `{display(nested(evidence, 'long_lived_soak', 'actual_seconds'))}` /
+  `{nested(evidence, 'long_lived_soak', 'failures', default='missing')}`
+- Host memory samples / growth / threshold percent:
+  `{nested(host_memory, 'sample_count', default='missing')}` /
+  `{display(nested(host_memory, 'growth_percent'))}` /
+  `{display(nested(host_memory, 'threshold_percent'))}`
+- Device memory samples / growth / threshold percent:
+  `{nested(device_memory, 'sample_count', default='missing')}` /
+  `{display(nested(device_memory, 'growth_percent'))}` /
+  `{display(nested(device_memory, 'threshold_percent'))}`
+
+Memory samples are process-specific. When Docker and NVIDIA tools expose different PID namespaces,
+the collector accepts only one newly appearing GPU process and never sums unrelated compute apps.
+
+## Integrated Fault Matrix
+
+| Fault | Return code | Cleanup complete | Timed out |
+| --- | ---: | --- | --- |
+{fault_rows}
+
+## Sanitizers
+
+- Lesson 21 compute-sanitizer started / return code:
+  `{nested(compute, 'tool_started', default='missing')}` /
+  `{nested(compute, 'returncode', default='missing')}`
+- Lesson 21 CPU TSAN started / return code:
+  `{nested(tsan, 'tool_started', default='missing')}` /
+  `{nested(tsan, 'returncode', default='missing')}`
 
 ## Acceptance Gates
 
