@@ -109,3 +109,15 @@ LESSON21_FAIL_POSTPROCESS_BATCH=0 ./21_integrated_tensorrt_video_pipeline/build/
 
 Both return nonzero. Capture queues close and join through their owner, while the TensorRT backend
 synchronizes submitted slot streams before destroying CUDA or TensorRT resources.
+
+The optional arguments after `OUTPUT` are overload policy (`block` or `drop-oldest`), per-source
+queue capacity, and synthetic capture interval in milliseconds. A controlled overload run is:
+
+```bash
+./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg \
+  100 1 1 21_integrated_tensorrt_video_pipeline/output/overload drop-oldest 1 0
+```
+
+Its terminal invariant is `captured == processed + dropped`, and queue peak must not exceed the
+configured capacity.
