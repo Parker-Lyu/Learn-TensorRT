@@ -28,8 +28,8 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 | CUDA or NPP preprocessing optimization | Covered as advanced path | `20_cuda_preprocess_npp` |
 | Single-stream video pipeline | Integrated TensorRT implementation covered | `16_cpp_producer_consumer`, `18_async_video_pipeline`, `21_integrated_tensorrt_video_pipeline` |
 | Multi-stream video pipeline | Integrated dynamic-batch TensorRT implementation covered | `17_dynamic_batching`, `19_multistream_video_pipeline`, `21_integrated_tensorrt_video_pipeline` |
-| Pipeline latency, overload, and stability evidence | Partially covered; formal soak and sanitizer gates incomplete | `22_pipeline_performance_report` |
-| Failure injection, sanitizer checks, and soak testing | Partially covered; see the incomplete 22 report gates | `08_tensorrt_raii_resource`, `16_cpp_producer_consumer`, `18_async_video_pipeline`, `19_multistream_video_pipeline`, `22_pipeline_performance_report` |
+| Pipeline latency, overload, and stability evidence | Covered; formal gate status is regenerated for each environment | `22_pipeline_performance_report` |
+| Failure injection, sanitizer checks, and soak testing | Covered; see the environment-specific lesson 22 report gates | `08_tensorrt_raii_resource`, `16_cpp_producer_consumer`, `18_async_video_pipeline`, `19_multistream_video_pipeline`, `22_pipeline_performance_report` |
 | Triton model serving, dynamic batching, and metrics | Implementation scaffold; runtime comparison report pending | `24_triton_inference_server` |
 | DeepStream and GStreamer | Implementation scaffold; two-stream runtime acceptance pending | `27_deepstream_gstreamer_multistream` |
 | Jetson Orin/Xavier, cross compilation, and DLA | Target-native scaffold; cross-compilation path and target acceptance pending | `28_jetson_orin_xavier_dla_deployment`, `27_deepstream_gstreamer_multistream` |

@@ -66,7 +66,7 @@ from the job descriptions you are targeting instead of completing every elective
 | Optimization | `13_nsight_performance_diagnosis`, `14_yolov8_int8_quantization_engineering` | Profiled FP32/FP16/INT8 performance, explicit Q/DQ quantization, and deployment evidence |
 | Checkpoint 2 | `15_precision_performance_report` | Application-ready precision and performance report |
 | Pipeline | `16_cpp_producer_consumer` through `21_integrated_tensorrt_video_pipeline` | Bounded asynchronous/multi-stream orchestration integrated with CUDA/NPP preprocessing and real TensorRT execution |
-| Checkpoint 3 | `22_pipeline_performance_report` | Load, latency, throughput, and stability report; formal acceptance is currently incomplete |
+| Checkpoint 3 | `22_pipeline_performance_report` | Reproducible load, latency, throughput, sanitizer, restart, and 30-minute soak report; status is generated per environment |
 
 
 ### Elective Tracks
