@@ -20,12 +20,15 @@ do not reuse an undocumented local engine. `assets/img.jpeg` is the default cont
 ## Design
 
 The shared engine outlives every slot. Each slot exclusively owns its context, stream, lifecycle
-completion event, timing events, and buffers. The submitter performs `Free -> Reserved -> Submitted`;
+completion event, timing events, reusable device intermediates, and pinned host staging. The tested
+slot owner also controls the real backend: the submitter performs `Free -> Reserved -> Submitted`;
 the collector performs `Submitted -> Completing -> Free`. Completion order never defines identity.
 Normal EOS drains. Abort rejects new work, discards unsubmitted work, and quiesces submitted CUDA
 work before resource destruction; already submitted CUDA work is not described as cancellable.
 
-Counters distinguish captured, admitted, admission rejection, queue eviction, submission,
+Image, image-sequence, synthetic, and video-file sources implement one incremental read interface.
+Video decode therefore occurs inside the capture worker and decoded frames are bounded by the
+per-source queues; a whole video is never preloaded. Counters distinguish captured, admitted, queue eviction, submission,
 completion, in-flight failure, and abort discard. CUDA events measure GPU stages; the monotonic host
 clock measures queueing and capture-to-dispatch latency.
 
@@ -55,6 +58,9 @@ Real integrated run with NPP letterbox, two TensorRT contexts/streams, dynamic b
 ```
 
 The positional arguments after the image are frame count, maximum batch size, and in-flight slot count.
+Additional positional arguments select output directory, overload policy, queue capacity, capture
+interval, and scheduling policy. Run `synthetic` for a generated 640x480 source, or use
+`sequence:path1|path2` for a repeatable image sequence.
 
 
 ## Outputs
@@ -118,9 +124,33 @@ A final optional scheduler argument selects `round-robin` (default) or `latest-f
 discards stale queued frames explicitly and includes them in `dropped`; it never hides freshness
 losses from the terminal accounting invariant.
 
-Image paths and video-file paths use the same CLI. Video files are decoded by OpenCV into a
-repeatable per-stream sequence before capture workers begin, so the measured GPU region excludes
-file decode while capture timestamps still cover queue-to-result latency.
+Image paths and video-file paths use the same CLI. `VideoCapture::read()` runs incrementally in the
+capture worker. The frame timestamp is assigned after a successful decode; capture-to-result
+latency therefore starts at admission to the bounded pipeline, while video decode cost remains a
+separate capture-side cost rather than being mislabelled as GPU work.
+
+Lesson 22 can keep one Lesson 21 process alive instead of repeatedly launching short processes:
+
+```bash
+./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
+  17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg \
+  16 4 2 21_integrated_tensorrt_video_pipeline/output/soak \
+  block 4 0 round-robin --duration-seconds 1800 --repeat-source \
+  --metrics-interval-seconds 5
+```
+
+The duration stops new capture, discards and accounts for queued work, and quiesces submitted work.
+Lesson 22 samples the process RSS and process-specific device memory while this command remains alive.
+
+For CPU ThreadSanitizer checks, build separately from CUDA/TensorRT:
+
+```bash
+cmake -S 21_integrated_tensorrt_video_pipeline \
+      -B 21_integrated_tensorrt_video_pipeline/build-tsan \
+      -DLESSON21_ENABLE_CUDA=OFF -DLESSON21_ENABLE_TSAN=ON
+cmake --build 21_integrated_tensorrt_video_pipeline/build-tsan --parallel
+ctest --test-dir 21_integrated_tensorrt_video_pipeline/build-tsan --output-on-failure
+```
 
 ## Checkpoints
 

@@ -56,12 +56,14 @@ class SlotPool {
 public:
     explicit SlotPool(std::size_t slot_count);
     std::size_t reserve();
+    std::optional<std::size_t> try_reserve();
     void mark_submitted(std::size_t slot, BatchMetadata batch);
     BatchMetadata begin_collection(std::size_t slot);
     void release(std::size_t slot);
     void fail(std::size_t slot);
     SlotState state(std::size_t slot) const;
     std::size_t size() const noexcept;
+    std::size_t available() const;
 private:
     struct Slot { SlotState state{SlotState::Free}; std::optional<BatchMetadata> batch; };
     void require(std::size_t slot, SlotState expected) const;
@@ -123,6 +125,7 @@ public:
         not_empty_.notify_all(); not_full_.notify_all();
     }
     bool empty() const { std::lock_guard<std::mutex> l(mutex_); return values_.empty(); }
+    std::size_t size() const { std::lock_guard<std::mutex> l(mutex_); return values_.size(); }
     std::size_t evicted() const { std::lock_guard<std::mutex> l(mutex_); return evicted_; }
     std::size_t discarded() const { std::lock_guard<std::mutex> l(mutex_); return discarded_; }
     std::size_t peak() const { std::lock_guard<std::mutex> l(mutex_); return peak_; }

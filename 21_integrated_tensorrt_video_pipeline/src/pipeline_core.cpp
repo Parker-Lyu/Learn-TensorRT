@@ -35,6 +35,16 @@ std::size_t SlotPool::reserve() {
     return static_cast<std::size_t>(std::distance(slots_.begin(), it));
 }
 
+std::optional<std::size_t> SlotPool::try_reserve() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto it = std::find_if(slots_.begin(), slots_.end(), [](const Slot& slot) {
+        return slot.state == SlotState::Free;
+    });
+    if (it == slots_.end()) return std::nullopt;
+    it->state = SlotState::Reserved;
+    return static_cast<std::size_t>(std::distance(slots_.begin(), it));
+}
+
 void SlotPool::require(std::size_t slot, SlotState expected) const {
     if (slot >= slots_.size()) throw std::out_of_range("slot index is out of range");
     if (slots_[slot].state != expected) throw std::logic_error("invalid slot state transition");
@@ -78,6 +88,13 @@ SlotState SlotPool::state(std::size_t slot) const {
     return slots_[slot].state;
 }
 std::size_t SlotPool::size() const noexcept { return slots_.size(); }
+
+std::size_t SlotPool::available() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return static_cast<std::size_t>(std::count_if(
+        slots_.begin(), slots_.end(),
+        [](const Slot& slot) { return slot.state == SlotState::Free; }));
+}
 
 void IdentityDispatcher::dispatch(const BatchMetadata& batch) {
     for (std::size_t index = 0; index < batch.frames.size(); ++index) {
