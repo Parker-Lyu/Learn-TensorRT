@@ -111,11 +111,15 @@ def main() -> int:
     if args.soak_minutes <= 0 or args.restart_cycles < 100:
         parser.error("soak-minutes must be positive and restart-cycles must be >=100")
 
-    integrated_exe = str(ROOT / "21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline")
-    if not Path(integrated_exe).is_file():
-        raise FileNotFoundError(f"build the integrated lesson first: {integrated_exe}")
-    integrated = run([integrated_exe, str(ROOT / "21_integrated_tensorrt_video_pipeline/output/report_smoke.jsonl")])
-    require_success(integrated, "integrated TensorRT pipeline smoke")
+    integrated_exe = str(ROOT / "21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu")
+    engine = ROOT / "17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine"
+    image = ROOT / "assets/img.jpeg"
+    integrated_output = ROOT / "21_integrated_tensorrt_video_pipeline/output/report_run"
+    if not Path(integrated_exe).is_file() or not engine.is_file():
+        raise FileNotFoundError("build lesson 21 and reproduce the lesson 17 dynamic engine first")
+    integrated = monitored_run([integrated_exe, str(engine), str(image), "64", "4", "2", str(integrated_output)])
+    require_success(integrated, "integrated TensorRT pipeline")
+    integrated["metrics"] = json.loads((integrated_output / "metrics.json").read_text())
     single_exe = str(ROOT / "18_async_video_pipeline/build/async_video_pipeline")
     multi_exe = str(ROOT / "19_multistream_video_pipeline/build/multistream_video_pipeline")
     cuda_exe = str(ROOT / "20_cuda_preprocess_npp/build/cuda_preprocess_npp")
@@ -137,8 +141,7 @@ def main() -> int:
     restart_started = time.monotonic()
     restart_failures = 0
     for _ in range(args.restart_cycles):
-        result = run([single_exe, "--synthetic-frames", "8", "--queue-capacity", "2",
-                      "--max-batch", "2", "--inference-ms", "0"], timeout=10)
+        result = run([integrated_exe, str(engine), str(image), "8", "2", "2", str(integrated_output / "restart")], timeout=30)
         restart_failures += int(result["returncode"] != 0)
     restarts = {"requested": args.restart_cycles, "failures": restart_failures,
                 "elapsed_seconds": time.monotonic() - restart_started}
@@ -146,15 +149,15 @@ def main() -> int:
     soak_deadline = time.monotonic() + args.soak_minutes * 60.0
     soak_cycles = soak_failures = 0
     while time.monotonic() < soak_deadline:
-        result = run([single_exe, "--synthetic-frames", "1000", "--queue-capacity", "4",
-                      "--max-batch", "4", "--inference-ms", "2"])
+        result = run([integrated_exe, str(engine), str(image), "128", "4", "2", str(integrated_output / "soak")])
         soak_cycles += 1
         soak_failures += int(result["returncode"] != 0)
     soak = {"requested_minutes": args.soak_minutes, "cycles": soak_cycles,
             "failures": soak_failures}
 
     faults = {
-        "invalid_input": run([single_exe, "--input", "/definitely/missing/video.mp4"]),
+        "invalid_input": run([integrated_exe, str(engine), "/definitely/missing/image.jpg"]),
+        "invalid_engine": run([integrated_exe, "/definitely/missing.engine", str(image)]),
         "capture_failure": run([single_exe, "--synthetic-frames", "20", "--fail-capture-at", "3"]),
         "worker_failure": run([single_exe, "--synthetic-frames", "20", "--fail-worker-at", "3"]),
         "multistream_inference_failure": run([multi_exe, "--fail-inference-batch", "1"]),

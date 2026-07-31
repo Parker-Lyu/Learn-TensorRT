@@ -16,7 +16,7 @@ def load_json(path: Path) -> dict:
 
 
 def evaluate(evidence: dict) -> dict:
-    single = evidence["single_stream"]["metrics"]
+    single = evidence.get("integrated_pipeline", evidence["single_stream"])["metrics"]
     multi = evidence["multi_stream"]["metrics"]
     return {
         "bounded_single": single["queue_peak"] <= 4,
@@ -33,9 +33,9 @@ def evaluate(evidence: dict) -> dict:
 def render(evidence: dict, cuda_rows: list[dict]) -> str:
     gates = evaluate(evidence)
     overall = "PASS" if all(gates.values()) else "INCOMPLETE"
-    single = evidence["single_stream"]["metrics"]
+    single = evidence.get("integrated_pipeline", evidence["single_stream"])["metrics"]
     multi = evidence["multi_stream"]["metrics"]
-    memory = evidence["single_stream"]
+    memory = evidence.get("integrated_pipeline", evidence["single_stream"])
     gate_rows = "\n".join(
         f"| {name.replace('_', ' ')} | {'PASS' if passed else 'NOT COMPLETE'} |"
         for name, passed in gates.items())
@@ -70,8 +70,8 @@ Performance values are valid only for this recorded software and hardware enviro
 ## Architecture
 
 ```text
-single stream:
-capture -> bounded latest-frame queue -> timeout batcher -> two async slots -> latency metrics
+integrated TensorRT run:
+repeatable sources -> dynamic batches -> bounded slot pool -> NPP -> enqueueV3 -> YOLO/NMS
 
 multi stream:
 capture 0 -> queue 0 --+
@@ -79,11 +79,11 @@ capture 1 -> queue 1 --+-> fair scheduler -> partial batch -> async worker -> ID
 capture N -> queue N --+
 ```
 
-Queues drop the oldest frame under sustained overload to preserve freshness. Normal EOS drains;
+The integrated run measures real NPP and TensorRT work. Lessons 18 and 19 provide supporting bounded-queue and fairness evidence. Normal EOS drains;
 cancellation and worker failure discard queued work. Round-robin is the measured fairness policy;
 latest-first remains available when freshness matters more than equal service.
 
-## Single-Stream Load
+## Integrated TensorRT Load
 
 | Captured | Processed | Dropped | Queue peak | FPS | P50 ms | P90 ms | P99 ms |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
