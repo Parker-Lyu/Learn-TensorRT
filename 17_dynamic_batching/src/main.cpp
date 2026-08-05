@@ -24,7 +24,7 @@ struct Options {
 Options parse_args(int argc, char** argv) {
     const auto executable = std::filesystem::absolute(argv[0]).parent_path();
     const auto root = (executable / ".." / "..").lexically_normal();
-    Options options{root / "06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine",
+    Options options{root / "17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine",
                     executable / ".." / "outputs/batch_benchmark.csv"};
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];

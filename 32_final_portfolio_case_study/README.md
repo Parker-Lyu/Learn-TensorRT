@@ -24,12 +24,11 @@ Run these commands from the repository root **inside the pinned `learn-tensorrt:
 development environment**. The existing development container is sufficient; this lesson does not
 require rebuilding that image.
 
-First create the strongly typed static engine used by the lesson 11 C++ runner:
+First create the static FP16 engine used by the lesson 11 C++ runner:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py
-./17_dynamic_batching/setup_autocast_deps.sh
 ./32_final_portfolio_case_study/build_delivery_engine.sh
 ```
 
@@ -44,7 +43,6 @@ For the real C ABI inference check, also build the dynamic engine expected by le
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/validate_onnx_runtime.py
-./17_dynamic_batching/setup_autocast_deps.sh
 ./17_dynamic_batching/build_dynamic_engine.sh
 ```
 
@@ -66,7 +64,8 @@ with a CPU-only claim.
 The optional image uses `nvcr.io/nvidia/pytorch:25.11-py3` as the reproducible TensorRT 10.14/CUDA
 13.0 builder and `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` as the CUDA runtime base. It copies
 only the lesson 11 executable, TensorRT 10 runtime library, OpenCV runtime packages, the generated
-strongly typed mixed-precision engine, and `assets/img.jpeg` into the final stage.
+FP16 engine, and `assets/img.jpeg` into the final stage. The delivery helper builds directly from
+the lesson 05 static ONNX model with `trtexec --fp16`; no ModelOpt AutoCast step is required.
 
 After the static engine exists, build and record image/platform identity:
 

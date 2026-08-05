@@ -7,37 +7,21 @@ sample offsets, output offsets, and the latency/throughput trade-off explicit.
 
 ## Prerequisites
 
-Complete the lesson 05 dynamic export and validation first. The validation tensor is generated from
-the shared default image, `assets/img.jpeg`:
+Complete the lesson 05 dynamic export and validation first. This establishes that the ONNX model is
+correct before TensorRT builds an engine from it:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
-TensorRT 10.14 strongly typed networks express reduced precision in the model rather than through a
-builder precision flag. Install the lesson-local ONNX dependencies, run NVIDIA ModelOpt AutoCast,
-and build the engine:
-
-```bash
-./17_dynamic_batching/setup_autocast_deps.sh
-./17_dynamic_batching/build_dynamic_engine.sh
-```
-
-AutoCast preserves FP32 input/output tensors, converts the suitable backbone nodes to FP16, and
-keeps the YOLO detection head in FP32. The exclusion keeps dynamic shape calculations and final box
-decoding in their declared types. `trtexec --stronglyTyped` then builds the explicit mixed-precision
-graph without weakly typed precision selection.
-
-The profile is `min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. The script reuses lesson
-06's timing cache and uses builder optimization level 0 so the classroom build remains reasonably
-short; benchmark higher optimization levels before choosing production settings. Engines, the
-AutoCast ONNX graph, calibration input, and timing cache are generated environment-specific
-artifacts and remain ignored.
+The engine-build script consumes only
+`05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`; the validation command is a correctness gate rather
+than an input-generation step for this lesson.
 
 ## Deliverables
 
-- Dynamic-profile engine-build and input-preparation tools
+- Dynamic-profile engine-build tooling and reusable batched-input layout helpers
 - Reusable dynamic batch runner and CLI
 - Batch-layout tests and saved batch benchmark evidence
 
@@ -52,14 +36,38 @@ Therefore throughput can improve while per-frame latency becomes worse.
 
 ## Build
 
-Configure and build from the repository root inside the pinned development container:
+Build this lesson's engine directly from the lesson 05 dynamic ONNX model:
+
+```bash
+./17_dynamic_batching/build_dynamic_engine.sh
+```
+
+The script uses `trtexec --fp16`, which permits TensorRT to select FP16 tactics where supported; it
+does not rewrite the ONNX graph or make the network strongly typed. Its optimization profile is
+`min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. It reuses lesson 06's timing cache and
+uses builder optimization level 0 so the classroom build remains reasonably short. Benchmark
+higher optimization levels before choosing production settings.
+
+The optional positional arguments select a different dynamic ONNX input and engine output:
+
+```bash
+./17_dynamic_batching/build_dynamic_engine.sh \
+  path/to/model.onnx \
+  path/to/model.engine
+```
+
+The model must still expose an input named `images` that supports the profile declared in the
+script.
+
+Configure and build the C++ runner from the repository root inside the pinned development
+container:
 
 ```bash
 cmake -S 17_dynamic_batching -B 17_dynamic_batching/build
 cmake --build 17_dynamic_batching/build --parallel
 ```
 
-The generated build directory is ignored.
+The generated engine, timing cache, and build directory are ignored.
 
 ## Run
 
@@ -72,10 +80,13 @@ Use the pinned TensorRT development container:
   --iterations 50
 ```
 
+The explicit `--engine` argument above matches the program's default engine path and may be omitted.
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
-allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It also writes
-`outputs/batch_benchmark_environment.json` with the GPU, compute capability, TensorRT version, and
-CUDA runtime/driver versions so measurements remain attached to their execution platform.
+allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It uses
+deterministic synthetic NCHW tensors to isolate batching and buffer-layout behavior; it is not an
+accuracy-validation run. The program also writes `outputs/batch_benchmark_environment.json` with
+the GPU, compute capability, TensorRT version, and CUDA runtime/driver versions so measurements
+remain attached to their execution platform.
 
 ### Experiments
 
@@ -86,8 +97,12 @@ CUDA runtime/driver versions so measurements remain attached to their execution 
 
 ## Outputs
 
-- The dynamic engine, AutoCast ONNX model, and prepared input are environment-specific files under ignored `outputs/`.
-- `outputs/batch_benchmark.csv` and `outputs/batch_benchmark_environment.json` record matched benchmark evidence.
+- Committed deliverables include the engine-build script, C++ runner and layout helpers, tests, and
+  this README.
+- The TensorRT engine is an environment-specific generated artifact under ignored `outputs/`.
+- Lesson 06's reused timing cache is generated under its ignored `outputs/` directory.
+- `outputs/batch_benchmark.csv` and `outputs/batch_benchmark_environment.json` are ignored local
+  benchmark evidence; they exist only after a successful run on the target GPU.
 
 ## Tests
 
@@ -96,6 +111,10 @@ Run the configured CTest suite:
 ```bash
 ctest --test-dir 17_dynamic_batching/build --output-on-failure
 ```
+
+The focused test covers CPU-only shape validation and batch-offset calculations. CMake configure
+still requires the pinned container's CUDA and TensorRT development files because the same build
+also defines the TensorRT runner; running the test itself does not require a GPU.
 
 ## Checkpoints
 
