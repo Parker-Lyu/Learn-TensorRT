@@ -5,6 +5,31 @@ language for inference and systems lessons, while Python and shell scripts suppo
 validation, profiling, and report generation. It should teach good engineering habits from the
 beginning, not quick demo shortcuts.
 
+## Required Development Container
+
+- Use the persistent `learn-tensorrt` container for all project code execution unless a lesson or
+  the user explicitly requires a different environment. This includes dependency commands,
+  configuration, compilation, tests, Python and shell scripts, inference, profiling, and report
+  generation; do not run these commands directly on the host by default.
+- The container uses the `learn-tensorrt:25.11` image built from `docker/Dockerfile.dev`, with
+  `nvcr.io/nvidia/pytorch:25.11-py3` as its pinned upstream image. The repository is bind-mounted at
+  `/workspace/Learn-TensorRT`.
+- Before running project code, start the existing container if necessary and execute the command in
+  its repository directory, for example:
+
+  ```bash
+  docker start learn-tensorrt >/dev/null
+  docker exec learn-tensorrt bash -lc \
+    'cd /workspace/Learn-TensorRT && <command>'
+  ```
+
+- Run only host and container-management work on the host, such as `git`, file editing, Docker image
+  and container management, driver checks, and NVIDIA Container Toolkit checks. A documented
+  host-native lesson or an explicit user request is an exception.
+- Reuse the persistent container instead of creating an ad hoc container. Follow
+  `00_environment_check/agent_env_setup.md` when the image or container must be built, recreated, or
+  repaired.
+
 ## Course Baseline
 
 - Use `nvcr.io/nvidia/pytorch:25.11-py3` as the single upstream development image.
@@ -143,8 +168,6 @@ beginning, not quick demo shortcuts.
 
 ## Container And Delivery Style
 
-- Use the development environment derived from `nvcr.io/nvidia/pytorch:25.11-py3` as the default
-  build and test environment.
 - Do not install CUDA, TensorRT, or OpenCV directly on the host unless the user explicitly asks for a
   host-native experiment.
 - A repository development Dockerfile may add course dependencies such as OpenCV, ONNX Runtime, and
@@ -172,7 +195,8 @@ Before finishing code changes, whenever practical:
 
 - Build the touched lesson.
 - Run the lesson executable or a focused smoke test.
-- Run GPU-, CUDA-, and TensorRT-dependent checks inside the pinned development container.
+- Run verification in the persistent development container, including GPU-, CUDA-, and
+  TensorRT-dependent checks.
 - If the required container, GPU, model, or dependency is unavailable, run the strongest available
   static or CPU-only checks and state the exact limitation.
 - Never claim that an executable, test, or benchmark passed unless it was actually run.
