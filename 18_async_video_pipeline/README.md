@@ -62,9 +62,16 @@ The default synthetic source makes the artifact runnable without a camera. Use a
 ```
 
 Important controls are `--queue-capacity`, `--max-batch`, `--batch-timeout-ms`, and
-`--inference-ms`. The last option is a deterministic stand-in for TensorRT compute so concurrency,
-shutdown, overload, and metrics remain CPU-testable. Replace that task with lesson 17's dynamic
-runner without changing capture or queue ownership.
+`--inference-ms`. The last option adds a fixed artificial delay to the CPU-only mock backend; it is
+not TensorRT inference time or GPU-performance evidence. The mock backend keeps queueing, overload,
+shutdown, failure propagation, and metrics testable without a GPU.
+
+A later integration can replace the mock backend with lesson 17's `DynamicBatchRunner` while
+retaining capture-thread and frame-queue ownership. That integration is not a direct function
+substitution: it must convert `cv::Mat` frames into the runner's batched NCHW input, validate the
+batch size against the engine optimization profile, and handle the TensorRT output. Each concurrent
+inference slot also needs its own TensorRT execution context, CUDA stream, and associated buffers;
+do not call one lesson 17 runner concurrently from both slots.
 
 ### Failure Experiments
 
