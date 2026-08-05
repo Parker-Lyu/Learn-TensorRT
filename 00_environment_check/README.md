@@ -72,7 +72,8 @@ The base development environment is ready when the script ends with:
 ```
 
 The script checks the GPU, CUDA 13.0, TensorRT 10.14, CMake, the C++ compiler, OpenCV, PyTorch,
-ModelOpt, Ultralytics, ONNX, ONNX Runtime, and the ONNX simplification tools used by the course.
+ModelOpt and its ONNX AutoCast dependencies, Ultralytics, ONNX, ONNX Runtime, and the ONNX
+simplification tools used by the course.
 
 ## Outputs
 

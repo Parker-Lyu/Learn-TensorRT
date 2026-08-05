@@ -5,8 +5,12 @@ ARG USERNAME=developer
 ARG USER_UID=1000
 ARG USER_GID=1000
 ARG ULTRALYTICS_VERSION=8.3.225
-ARG ONNX_VERSION=1.21.0
-ARG ONNXRUNTIME_VERSION=1.23.2
+ARG MODELOPT_VERSION=0.37.0
+ARG ONNX_VERSION=1.19.1
+ARG ONNXRUNTIME_VERSION=1.22.0
+ARG ONNX_GRAPH_SURGEON_VERSION=0.6.1
+ARG ONNX_CONVERTER_COMMON_VERSION=1.16.0
+ARG CUPY_CUDA13_VERSION=14.1.1
 
 # Keep CUDA, TensorRT, PyTorch, and ModelOpt from the NVIDIA image.  This layer
 # adds only the host-side C++ tools and OpenCV development package used by the
@@ -25,18 +29,24 @@ RUN apt-get update \
         vim \
     && rm -rf /var/lib/apt/lists/*
 
-# Pin the course-level export and CPU validation dependencies.  pip must not
-# replace the NVIDIA-provided PyTorch build; the assertion makes that contract
-# fail visibly during the image build if dependency resolution ever changes.
+# Pin the course-level export, ModelOpt ONNX, and validation dependencies. ModelOpt 0.37's
+# published ONNX extra selects cupy-cuda12x, but the course baseline is CUDA 13. Install the
+# equivalent dependency set explicitly with cupy-cuda13x instead of mixing CUDA major versions.
+# pip must not replace the NVIDIA-provided PyTorch build; the assertion makes that contract fail
+# visibly during the image build if dependency resolution ever changes.
 ARG OPENCV_PYTHON_VERSION=4.12.0.88
 ARG CUDA_PYTHON_VERSION=13.0.3
 RUN python3 -m pip install --no-cache-dir \
+        "nvidia-modelopt==${MODELOPT_VERSION}" \
         "ultralytics==${ULTRALYTICS_VERSION}" \
         "onnx==${ONNX_VERSION}" \
         "onnxruntime==${ONNXRUNTIME_VERSION}" \
+        "onnx-graphsurgeon==${ONNX_GRAPH_SURGEON_VERSION}" \
+        "onnxconverter-common==${ONNX_CONVERTER_COMMON_VERSION}" \
+        "cupy-cuda13x==${CUPY_CUDA13_VERSION}" \
         "opencv-python==${OPENCV_PYTHON_VERSION}" \
         "cuda-python==${CUDA_PYTHON_VERSION}" \
-    && python3 -c 'import torch; assert ".nv25.11" in torch.__version__, torch.__version__'
+    && python3 -c 'import importlib.metadata; import modelopt.onnx.autocast; import onnx; import onnx_graphsurgeon; import onnxruntime; import torch; assert ".nv25.11" in torch.__version__, torch.__version__; assert importlib.metadata.version("nvidia-modelopt") == "0.37.0"; assert onnx.__version__ == "1.19.1", onnx.__version__; assert onnxruntime.__version__ == "1.22.0", onnxruntime.__version__; assert "CPUExecutionProvider" in onnxruntime.get_available_providers()'
 
 ARG ONNXSLIM_VERSION=0.1.94
 ARG ONNXSIM_VERSION=0.6.5

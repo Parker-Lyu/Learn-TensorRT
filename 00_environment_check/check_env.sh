@@ -80,12 +80,16 @@ section "Python"
 run_check "python3 --version" python3 --version
 run_check "Required Python package imports" python3 - <<'PY'
 import importlib
+import importlib.metadata
 
 required = [
     "torch",
+    "cupy",
     "modelopt",
+    "modelopt.onnx.autocast",
     "ultralytics",
     "onnx",
+    "onnx_graphsurgeon",
     "onnxruntime",
     "onnxslim",
     "onnxsim",
@@ -107,6 +111,25 @@ if failures:
 import torch
 if ".nv25.11" not in torch.__version__:
     raise SystemExit(f"expected NVIDIA PyTorch 25.11 build, found {torch.__version__}")
+
+expected = {
+    "nvidia-modelopt": "0.37.0",
+    "onnx": "1.19.1",
+    "onnxruntime": "1.22.0",
+    "onnx-graphsurgeon": "0.6.1",
+    "cupy-cuda13x": "14.1.1",
+}
+for distribution, expected_version in expected.items():
+    actual = importlib.metadata.version(distribution)
+    print(f"{distribution}: {actual}")
+    if actual != expected_version:
+        raise SystemExit(f"expected {distribution} {expected_version}, found {actual}")
+
+import onnxruntime
+providers = onnxruntime.get_available_providers()
+print("onnxruntime providers:", providers)
+if "CPUExecutionProvider" not in providers:
+    raise SystemExit("ONNX Runtime CPUExecutionProvider is required for reproducible validation")
 PY
 
 run_optional "Optional Python package availability" python3 - <<'PY'

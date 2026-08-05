@@ -154,7 +154,10 @@ docker build \
 ```
 
 The UID/GID arguments prevent root-owned files in the bind mount. The Dockerfile pins the required
-Ultralytics, ONNX, ONNX Runtime, `onnxslim`, and `onnxsim` versions.
+Ultralytics, ModelOpt ONNX, ONNX, ONNX Runtime, `onnx-graphsurgeon`, CUDA 13 CuPy,
+`onnxslim`, and `onnxsim` versions. ModelOpt 0.37's published ONNX extra requests a CUDA 12 CuPy
+distribution, so the Dockerfile installs the equivalent dependency set explicitly with
+`cupy-cuda13x`; do not replace it with `cupy-cuda12x` in this CUDA 13 course image.
 
 ## Create The Persistent Container
 
@@ -210,6 +213,16 @@ Preserve complete failure output. Do not work around failures by arbitrarily upg
   undefined-symbol errors during `import torch`.
 - CUDA 13 changed the `cudaMemPrefetchAsync` API. Lesson 04 contains the CUDA 13 compatibility code;
   do not downgrade CUDA to make old call signatures compile.
+- ModelOpt 0.37 AutoCast requires its ONNX optional dependencies and is aligned here with ONNX
+  1.19.1 and ONNX Runtime 1.22.0. The course uses the CPU ONNX Runtime distribution because lesson
+  05 and ModelOpt AutoCast use the CPU provider for reproducible validation; installing only the
+  GPU distribution makes Ultralytics treat its `onnxruntime` export dependency as missing.
+  Installing GraphSurgeon alone beside ONNX 1.21 is not a valid repair; rebuild the pinned image
+  instead.
+- The upstream image's `nvidia-resiliency-ext` metadata requires the deprecated `pynvml`
+  distribution even though the image already supplies the maintained `nvidia-ml-py` bindings.
+  Consequently `pip check` reports that one metadata warning. Do not install `pynvml` merely to
+  silence it: doing so makes current PyTorch emit a deprecation warning on every import.
 - `nvidia-smi` reports the maximum CUDA version supported by the driver. It may be newer than the
   container's CUDA 13.0 `nvcc`; this is expected.
 
