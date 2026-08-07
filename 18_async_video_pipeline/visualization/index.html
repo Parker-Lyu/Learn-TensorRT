@@ -16,6 +16,7 @@
 
     <section class="controls" aria-label="动画控制">
       <div class="mode-buttons" role="group" aria-label="选择流水线模式">
+        <button data-mode="none">无双缓冲、无多 Stream</button>
         <button data-mode="cpu">只有 CPU 双缓冲</button>
         <button data-mode="gpu">只有多 CUDA Stream</button>
         <button data-mode="both" class="active">组合（生产环境）</button>

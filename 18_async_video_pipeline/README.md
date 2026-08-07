@@ -104,10 +104,11 @@ also verify bounded overload accounting and explicit stop without deadlock.
 ### Open the overlap animation
 
 Open `18_async_video_pipeline/visualization/index.html` directly in a modern browser (no server or
-extra dependency is required). Choose **只有 CPU 双缓冲**, **只有多 CUDA Stream**, or **组合（生产环境）**,
-then press **播放**. Bright blocks mark the work currently executing; the message below the lanes
-describes what is parallel at that instant. Click a block for its exact conceptual time interval.
-The durations are an explanatory model, not a benchmark or a claim about a particular GPU.
+extra dependency is required). Start with **无双缓冲、无多 Stream** to see the fully serial baseline,
+then compare **只有 CPU 双缓冲**, **只有多 CUDA Stream**, and **组合（生产环境）**. Press **播放**;
+bright blocks mark the work currently executing, and the message below the lanes describes what is
+parallel at that instant. Click a block for its exact conceptual time interval. The durations are an
+explanatory model, not a benchmark or a claim about a particular GPU.
 
 ## Outputs
 
