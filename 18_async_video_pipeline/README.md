@@ -110,6 +110,22 @@ bright blocks mark the work currently executing, and the message below the lanes
 parallel at that instant. Click a block for its exact conceptual time interval. The durations are an
 explanatory model, not a benchmark or a claim about a particular GPU.
 
+## Visual walkthrough
+
+The lesson includes an interactive browser animation that turns the overlap model into a timeline.
+The snapshot below shows the combined **CPU double buffering + 2 CUDA streams** view: slot A/B
+prepare different frames while Stream 0 and Stream 1 perform H2D, TensorRT compute, and D2H.
+The separate postprocessing lane and the optional resource-lifecycle detail view make ownership
+boundaries explicit.
+
+![Interactive overlap timeline](visualization/overlap_timeline.png)
+
+Open `visualization/index.html` in a modern browser to explore the animation yourself. It starts in
+English; use the **中文** button in the upper-right corner to switch to Simplified Chinese. Press
+**Play**, change speed, switch between the three modes, and expand **Resource lifecycle** in the
+combined mode to see when host input, device/context, and output resources become reusable. The
+illustration is a conceptual teaching model, not a benchmark result for a specific GPU.
+
 ## Outputs
 
 - The executable reports FPS, P50/P90/P99 capture-to-result latency, queue peak, processed frames, and dropped frames.
