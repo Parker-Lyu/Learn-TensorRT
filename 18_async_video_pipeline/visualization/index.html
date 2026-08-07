@@ -1,46 +1,47 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>异步视频流水线：双缓冲 × CUDA Stream</title>
+  <title>Async video pipeline: double buffering × CUDA streams</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="page">
     <header>
       <p class="eyebrow">Lesson 18 · Async video pipeline</p>
-      <h1>CPU 双缓冲与 TensorRT 多 CUDA Stream</h1>
-      <p class="lede">拖动时间线观察：CPU 在准备下一帧的同时，GPU 正在搬运或计算上一帧。两层重叠互补，而不是同一件事。</p>
+      <h1 data-i18n="title">CPU double buffering and TensorRT CUDA streams</h1>
+      <p class="lede" data-i18n="lede">Move through the timeline: the CPU prepares the next frame while the GPU transfers or computes the previous one. These are complementary layers of overlap.</p>
     </header>
 
-    <section class="controls" aria-label="动画控制">
+    <section class="controls" aria-label="Animation controls">
       <div class="mode-buttons" role="group" aria-label="选择流水线模式">
-        <button data-mode="none">无双缓冲、无多 Stream</button>
-        <button data-mode="cpu">只有 CPU 双缓冲</button>
-        <button data-mode="both" class="active">CPU双缓冲+2个 CUDA stream</button>
+        <button data-mode="none" data-i18n="modeNone">No double buffer, no multiple streams</button>
+        <button data-mode="cpu" data-i18n="modeCpu">CPU double buffering only</button>
+        <button data-mode="both" class="active" data-i18n="modeBoth">CPU double buffering + 2 CUDA streams</button>
       </div>
       <div class="transport">
-        <button id="play" class="primary">▶ 播放</button>
-        <button id="reset">↺ 重置</button>
-        <button id="detailToggle" class="detail-toggle" aria-pressed="false">▸ 资源生命周期</button>
-        <label>速度 <input id="speed" type="range" min="0.5" max="2" value="1" step="0.5" /><output id="speedValue">1×</output></label>
+        <button id="play" class="primary">▶ Play</button>
+        <button id="reset">↺ Reset</button>
+        <button id="languageToggle" class="language-toggle" aria-label="Switch to Simplified Chinese">中文</button>
+        <button id="detailToggle" class="detail-toggle" aria-pressed="false">▸ Resource lifecycle</button>
+        <label><span data-i18n="speed">Speed</span> <input id="speed" type="range" min="0.5" max="2" value="1" step="0.5" /><output id="speedValue">1×</output></label>
       </div>
     </section>
 
-    <section class="stage" aria-label="流水线时间线">
-      <div class="stage-head"><span>时间</span><span id="clock">0.0 s</span></div>
+    <section class="stage" aria-label="Pipeline timeline">
+      <div class="stage-head"><span data-i18n="time">Time</span><span id="clock">0.0 s</span></div>
       <div class="lanes" id="lanes"></div>
-      <div class="legend"><span><i class="swatch prep"></i>CPU 预处理</span><span><i class="swatch h2d"></i>H2D 传输</span><span><i class="swatch compute"></i>TensorRT 计算</span><span><i class="swatch result"></i>D2H</span><span><i class="swatch post"></i>CPU 后处理</span></div>
-      <p class="event" id="event" aria-live="polite">当前尚未开始：CPU 正在等待第一帧。</p>
+      <div class="legend"><span><i class="swatch prep"></i><span data-i18n="prep">CPU preprocessing</span></span><span><i class="swatch h2d"></i>H2D</span><span><i class="swatch compute"></i><span data-i18n="compute">TensorRT compute</span></span><span><i class="swatch result"></i>D2H</span><span><i class="swatch post"></i><span data-i18n="post">CPU postprocessing</span></span></div>
+      <p class="event" id="event" aria-live="polite">Not started: CPU is waiting for the first frame.</p>
     </section>
 
     <section class="insight-grid">
-      <article><h2>CPU 双缓冲解决什么？</h2><p>两个独立 slot 让 <b>CPU 线程</b>交替写入 buffer A/B：GPU 使用 A 时，CPU 可准备 B。它隐藏的是主机端准备时间。</p></article>
-      <article><h2>多 CUDA Stream 解决什么？</h2><p>每个 slot 有自己的 stream 和 execution context。借助 pinned memory 与异步 API，<b>H2D 拷贝</b>可以和另一 stream 的 Tensor Core 计算并行。</p></article>
-      <article class="combined"><h2>组合时的所有权边界</h2><p>CPU 写完 slot → 事件通知 H2D；H2D 完成 → 推理读取；计算完成 → slot 归还 CPU。没有独立 buffer、context、stream 就不能安全并发。</p></article>
+      <article><h2 data-i18n="card1h">What does CPU double buffering solve?</h2><p data-i18n="card1p">Two independent slots let the <b>CPU thread</b> alternate between buffers A and B: while the GPU uses A, the CPU prepares B. This hides host-side preparation time.</p></article>
+      <article><h2 data-i18n="card2h">What do multiple CUDA streams solve?</h2><p data-i18n="card2p">Each slot has its own stream and execution context. With pinned memory and asynchronous APIs, <b>H2D copies</b> can overlap Tensor Core computation in another stream.</p></article>
+      <article class="combined"><h2 data-i18n="card3h">Ownership boundaries when combined</h2><p data-i18n="card3p">CPU finishes a slot → an event releases H2D; H2D completes → inference reads; compute completes → the slot returns to CPU. Independent buffers, contexts, and streams are required for safe concurrency.</p></article>
     </section>
-    <p class="hint">提示：点击任意时间线上的帧，查看它经历的阶段。动画是概念模型，不代表特定 GPU 的实际时长。</p>
+    <p class="hint" data-i18n="hint">Tip: click any timeline block to inspect its stage. This is a conceptual model, not a benchmark for a specific GPU.</p>
   </main>
   <script src="app.js"></script>
 </body>
