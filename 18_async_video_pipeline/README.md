@@ -35,6 +35,22 @@ nvidia-smi dmon -s u -d 1 -o DT > outputs/gpu_utilization.log
 Do not label the simulated worker's CPU timing as GPU utilization. GPU utilization must come from
 the real backend run and the monitoring capture above.
 
+## Two Complementary Forms of Overlap
+
+This lesson's CPU-side double buffering and TensorRT's CUDA stream concurrency address different
+parts of the pipeline, and are commonly combined in production:
+
+- **CPU thread double buffering (business/framework layer)** overlaps CPU preparation—reading or
+  decoding frames, resizing, and assembling batches—with GPU inference.
+- **Multiple TensorRT CUDA streams (hardware/driver layer)** overlaps host-to-device (H2D) copies
+  with the GPU's Tensor Core matrix computation, when the hardware, memory, and workload permit
+  concurrent execution.
+
+The two techniques are complementary rather than interchangeable: the first keeps the host busy
+preparing the next work item, while the second pipelines transfers and computation on the device.
+Using both requires independent per-in-flight-slot resources (for example, buffers, execution
+contexts, and CUDA streams) and explicit synchronization at ownership boundaries.
+
 ## Build
 
 Configure and build from the repository root inside the pinned development container:
