@@ -105,15 +105,10 @@ also verify bounded overload accounting and explicit stop without deadlock.
 
 Open `18_async_video_pipeline/visualization/index.html` directly in a modern browser (no server or
 extra dependency is required). Start with **无双缓冲、无多 Stream** to see the fully serial baseline,
-then compare **只有 CPU 双缓冲**, **只有多 CUDA Stream**, and **组合（生产环境）**. Press **播放**;
+then compare **只有 CPU 双缓冲** and **组合（生产环境）**. Press **播放**;
 bright blocks mark the work currently executing, and the message below the lanes describes what is
 parallel at that instant. Click a block for its exact conceptual time interval. The durations are an
 explanatory model, not a benchmark or a claim about a particular GPU.
-
-> **模型边界：**“只有多 CUDA Stream”这一页固定 CPU 为连续的串行生产者，以便单独观察
-> GPU 侧的 H2D/计算重叠。真实实现若只有一个可复用的 host buffer，CPU 必须等待该 buffer
-> 的 H2D 使用结束，准备块之间会出现空隙；而为每个 stream 配置独立 buffer/context/stream
-> slot，本身就已经引入了某种缓冲。因此不要把该页理解为严格的“单 buffer + 多 stream”安全实现。
 
 ## Outputs
 
