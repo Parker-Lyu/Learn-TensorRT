@@ -31,7 +31,7 @@
     <section class="stage" aria-label="流水线时间线">
       <div class="stage-head"><span>时间</span><span id="clock">0.0 s</span></div>
       <div class="lanes" id="lanes"></div>
-      <div class="legend"><span><i class="swatch prep"></i>CPU 准备/解码</span><span><i class="swatch h2d"></i>H2D 传输</span><span><i class="swatch compute"></i>TensorRT 计算</span><span><i class="swatch result"></i>结果/D2H</span></div>
+      <div class="legend"><span><i class="swatch prep"></i>CPU 预处理</span><span><i class="swatch h2d"></i>H2D 传输</span><span><i class="swatch compute"></i>TensorRT 计算</span><span><i class="swatch result"></i>D2H</span><span><i class="swatch post"></i>CPU 后处理</span></div>
       <p class="event" id="event" aria-live="polite">当前尚未开始：CPU 正在等待第一帧。</p>
     </section>
 
