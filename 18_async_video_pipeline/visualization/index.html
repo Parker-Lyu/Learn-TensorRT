@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>异步视频流水线：双缓冲 × CUDA Stream</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Lesson 18 · Async video pipeline</p>
+      <h1>CPU 双缓冲与 TensorRT 多 CUDA Stream</h1>
+      <p class="lede">拖动时间线观察：CPU 在准备下一帧的同时，GPU 正在搬运或计算上一帧。两层重叠互补，而不是同一件事。</p>
+    </header>
+
+    <section class="controls" aria-label="动画控制">
+      <div class="mode-buttons" role="group" aria-label="选择流水线模式">
+        <button data-mode="cpu">只有 CPU 双缓冲</button>
+        <button data-mode="gpu">只有多 CUDA Stream</button>
+        <button data-mode="both" class="active">组合（生产环境）</button>
+      </div>
+      <div class="transport">
+        <button id="play" class="primary">▶ 播放</button>
+        <button id="reset">↺ 重置</button>
+        <label>速度 <input id="speed" type="range" min="0.5" max="2" value="1" step="0.5" /><output id="speedValue">1×</output></label>
+      </div>
+    </section>
+
+    <section class="stage" aria-label="流水线时间线">
+      <div class="stage-head"><span>时间</span><span id="clock">0.0 s</span></div>
+      <div class="lanes" id="lanes"></div>
+      <div class="legend"><span><i class="swatch prep"></i>CPU 准备/解码</span><span><i class="swatch h2d"></i>H2D 传输</span><span><i class="swatch compute"></i>TensorRT 计算</span><span><i class="swatch result"></i>结果/D2H</span></div>
+      <p class="event" id="event" aria-live="polite">当前尚未开始：CPU 正在等待第一帧。</p>
+    </section>
+
+    <section class="insight-grid">
+      <article><h2>CPU 双缓冲解决什么？</h2><p>两个独立 slot 让 <b>CPU 线程</b>交替写入 buffer A/B：GPU 使用 A 时，CPU 可准备 B。它隐藏的是主机端准备时间。</p></article>
+      <article><h2>多 CUDA Stream 解决什么？</h2><p>每个 slot 有自己的 stream 和 execution context。借助 pinned memory 与异步 API，<b>H2D 拷贝</b>可以和另一 stream 的 Tensor Core 计算并行。</p></article>
+      <article class="combined"><h2>组合时的所有权边界</h2><p>CPU 写完 slot → 事件通知 H2D；H2D 完成 → 推理读取；计算完成 → slot 归还 CPU。没有独立 buffer、context、stream 就不能安全并发。</p></article>
+    </section>
+    <p class="hint">提示：点击任意时间线上的帧，查看它经历的阶段。动画是概念模型，不代表特定 GPU 的实际时长。</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
