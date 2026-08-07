@@ -7,7 +7,7 @@ OUTPUT_DIR="${SCRIPT_DIR}/outputs"
 DEVELOPMENT_IMAGE=${DEVELOPMENT_IMAGE:-learn-tensorrt:25.11}
 RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE:-nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04}
 RUNTIME_IMAGE=${RUNTIME_IMAGE:-learn-tensorrt-runtime:10.14}
-ENGINE="${SCRIPT_DIR}/outputs/yolov8n_static_fp16.engine"
+ENGINE="${SCRIPT_DIR}/outputs/yolov8n_static_fp16_strong.engine"
 
 command -v docker >/dev/null || { echo "Docker is required" >&2; exit 2; }
 if [[ ! -f "${ENGINE}" ]]; then

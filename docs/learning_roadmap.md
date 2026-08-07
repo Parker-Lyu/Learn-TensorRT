@@ -354,7 +354,10 @@ Purpose:
 
 Learning outcomes:
 
-- Build strict FP32, FP16, static-shape, and dynamic-shape TensorRT engines with `trtexec`.
+- Build strict FP32, legacy weakly typed FP16, and modern strongly typed FP16 static/dynamic
+  engines with `trtexec`, understanding why `--fp16` is retained only for compatibility.
+- Generate explicit mixed-precision FP16 ONNX graphs with ModelOpt AutoCast and pass a reproducible
+  ONNX Runtime raw-output conversion gate before TensorRT consumes them.
 - Interpret latency, throughput, memory, layer-profile, timing-cache, and environment evidence.
 - Explain why serialized engines and timing caches belong to a recorded compatibility context.
 

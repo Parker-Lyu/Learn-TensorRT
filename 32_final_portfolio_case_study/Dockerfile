@@ -16,7 +16,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 COPY --from=builder /tmp/build/yolov8_trt_cpp /app/yolov8_trt_cpp
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libnvinfer.so.10.14.1 /usr/lib/x86_64-linux-gnu/
-COPY 32_final_portfolio_case_study/outputs/yolov8n_static_fp16.engine /app/model.engine
+COPY 32_final_portfolio_case_study/outputs/yolov8n_static_fp16_strong.engine /app/model.engine
 COPY assets/img.jpeg /app/input.jpeg
 RUN ln -s libnvinfer.so.10.14.1 /usr/lib/x86_64-linux-gnu/libnvinfer.so.10 && \
     ldconfig && \

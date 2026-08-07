@@ -29,6 +29,7 @@ First create the static FP16 engine used by the lesson 11 C++ runner:
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
 ./32_final_portfolio_case_study/build_delivery_engine.sh
 ```
 
@@ -65,7 +66,9 @@ The optional image uses `nvcr.io/nvidia/pytorch:25.11-py3` as the reproducible T
 13.0 builder and `nvcr.io/nvidia/cuda:13.0.0-base-ubuntu24.04` as the CUDA runtime base. It copies
 only the lesson 11 executable, TensorRT 10 runtime library, OpenCV runtime packages, the generated
 FP16 engine, and `assets/img.jpeg` into the final stage. The delivery helper builds directly from
-the lesson 05 static ONNX model with `trtexec --fp16`; no ModelOpt AutoCast step is required.
+the validated lesson 06 static AutoCast ONNX model with `trtexec --stronglyTyped`. Generate that
+model in lesson 06 before rebuilding the delivery engine; the deprecated weakly typed `--fp16`
+route remains available there for compatibility testing.
 
 After the static engine exists, build and record image/platform identity:
 

@@ -107,3 +107,17 @@ test established feasibility, not a committed accuracy result.
 - The detection-head exclusion is model-graph-specific and must fail visibly if future export node
   names no longer match the expected `/model.22/` prefix.
 - Serialized engines and benchmark numbers remain environment-specific and must not be committed.
+
+## Implementation Status (2026-08-07)
+
+The approved design is now implemented. The development image has the globally pinned ModelOpt ONNX
+stack; lesson 06 generates and validates static/dynamic AutoCast graphs using semantic YOLO output
+tolerances (5% relative/absolute for pixel-scale box coordinates and 1%/0.02 for scores). Lesson 06
+build planning emits both deprecated weakly typed and recommended strongly typed commands. Lesson 17
+and the lesson 32 delivery helper consume the validated graphs with `--stronglyTyped`.
+
+Verified in the persistent container: lesson 05 export/runtime validation, static and dynamic lesson
+06 conversion, strongly typed static and dynamic TensorRT builds, lesson 17 dynamic-profile engine
+build (TensorRT reported `PASSED`), Python tests, shell syntax, and `git diff --check`. Full-duration
+benchmark matrices and lesson 17 C++ runtime batch measurements remain environment-specific and were
+not rerun in this change.

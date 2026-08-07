@@ -7,16 +7,16 @@ sample offsets, output offsets, and the latency/throughput trade-off explicit.
 
 ## Prerequisites
 
-Complete the lesson 05 dynamic export and validation first. This establishes that the ONNX model is
-correct before TensorRT builds an engine from it:
+Complete the lesson 05 dynamic export and validation, then lesson 06 FP16 ONNX preparation:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/validate_onnx_runtime.py
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models dynamic
 ```
 
 The engine-build script consumes only
-`05_torch_to_onnx/outputs/yolov8n_dynamic.onnx`; the validation command is a correctness gate rather
+`06_trtexec_engine/outputs/yolov8n_dynamic_autocast_fp16.onnx`; lesson 06's validation command is a correctness gate rather
 than an input-generation step for this lesson.
 
 ## Deliverables
@@ -36,13 +36,14 @@ Therefore throughput can improve while per-frame latency becomes worse.
 
 ## Build
 
-Build this lesson's engine directly from the lesson 05 dynamic ONNX model:
+Build this lesson's engine from the validated lesson 06 dynamic AutoCast ONNX model:
 
 ```bash
 ./17_dynamic_batching/build_dynamic_engine.sh
 ```
 
-The script uses `trtexec --fp16`, which permits TensorRT to select FP16 tactics where supported; it
+The script uses `trtexec --stronglyTyped` with the explicit ModelOpt AutoCast graph. The deprecated
+weakly typed `--fp16` route is intentionally taught in lesson 06, but is not used here; it
 does not rewrite the ONNX graph or make the network strongly typed. Its optimization profile is
 `min=1x3x640x640`, `opt=2x3x640x640`, and `max=4x3x640x640`. It reuses lesson 06's timing cache and
 uses builder optimization level 0 so the classroom build remains reasonably short. Benchmark

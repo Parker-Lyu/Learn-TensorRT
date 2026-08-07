@@ -1,339 +1,85 @@
 #!/usr/bin/env python3
-"""Build TensorRT engines with trtexec and keep reproducible benchmark artifacts."""
-
+"""Build reproducible TensorRT engines for the legacy and modern FP16 routes."""
 from __future__ import annotations
-
-import argparse
-import json
-import os
-import platform
-import shutil
-import subprocess
-import sys
+import argparse, json, os, platform, shutil, subprocess, sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_STATIC_ONNX = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n.onnx"
-DEFAULT_DYNAMIC_ONNX = REPO_ROOT / "05_torch_to_onnx" / "outputs" / "yolov8n_dynamic.onnx"
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "06_trtexec_engine" / "outputs"
-
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "06_trtexec_engine" / "outputs"
+FP32 = ROOT / "05_torch_to_onnx/outputs/yolov8n.onnx"
+DYN = ROOT / "05_torch_to_onnx/outputs/yolov8n_dynamic.onnx"
+AUTO = OUT / "yolov8n_static_autocast_fp16.onnx"
+DYNAUTO = OUT / "yolov8n_dynamic_autocast_fp16.onnx"
 
 @dataclass(frozen=True)
 class EngineBuild:
-    name: str
-    onnx_path: Path
-    engine_path: Path
-    log_path: Path
-    times_path: Path
-    layer_info_path: Path
-    profile_path: Path
-    fp16: bool
-    dynamic: bool
-    shapes: str | None = None
-    min_shapes: str | None = None
-    opt_shapes: str | None = None
-    max_shapes: str | None = None
+    name: str; onnx_path: Path; engine_path: Path; log_path: Path; times_path: Path
+    layer_info_path: Path; profile_path: Path; precision: str; typing_mode: str
+    deprecated: bool; validation_report: Path | None; dynamic: bool
+    shapes: str | None = None; min_shapes: str | None = None; opt_shapes: str | None = None; max_shapes: str | None = None
 
+def parse_args():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--onnx",type=Path,default=FP32); p.add_argument("--dynamic-onnx",type=Path,default=DYN)
+    p.add_argument("--static-autocast-onnx",type=Path,default=AUTO); p.add_argument("--dynamic-autocast-onnx",type=Path,default=DYNAUTO)
+    p.add_argument("--output-dir",type=Path,default=OUT); p.add_argument("--input-name",default="images")
+    p.add_argument("--workspace-mib",type=int,default=2048); p.add_argument("--warmup-ms",type=int,default=500)
+    p.add_argument("--duration-sec",type=int,default=5); p.add_argument("--avg-runs",type=int,default=10)
+    p.add_argument("--skip-dynamic",action="store_true"); p.add_argument("--skip-strongly-typed",action="store_true")
+    p.add_argument("--builds",nargs="+",choices=("static_fp32","static_fp16_legacy","dynamic_fp16_legacy","static_fp16_strong","dynamic_fp16_strong"))
+    p.add_argument("--dynamic-min",default="1x3x320x320"); p.add_argument("--dynamic-opt",default="1x3x640x640"); p.add_argument("--dynamic-max",default="4x3x640x640")
+    p.add_argument("--dry-run",action="store_true"); return p.parse_args()
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Build FP32/FP16 TensorRT engines from lesson 05 ONNX artifacts."
-    )
-    parser.add_argument("--onnx", type=Path, default=DEFAULT_STATIC_ONNX, help="Static ONNX path.")
-    parser.add_argument(
-        "--dynamic-onnx",
-        type=Path,
-        default=DEFAULT_DYNAMIC_ONNX,
-        help="Dynamic ONNX path. If missing, dynamic profile build is skipped.",
-    )
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Artifact directory.")
-    parser.add_argument("--input-name", default="images", help="Model input tensor name.")
-    parser.add_argument("--workspace-mib", type=int, default=2048, help="TensorRT workspace pool in MiB.")
-    parser.add_argument("--warmup-ms", type=int, default=500, help="trtexec warmup time in milliseconds.")
-    parser.add_argument("--duration-sec", type=int, default=5, help="trtexec benchmark duration in seconds.")
-    parser.add_argument("--avg-runs", type=int, default=10, help="Iterations averaged per timing sample.")
-    parser.add_argument(
-        "--skip-dynamic",
-        action="store_true",
-        help="Build only static FP32 and FP16 engines even if the dynamic ONNX exists.",
-    )
-    parser.add_argument(
-        "--builds",
-        nargs="+",
-        choices=("static_fp32", "static_fp16", "dynamic_fp16"),
-        help="Optional subset of builds to run. Defaults to all available builds.",
-    )
-    parser.add_argument(
-        "--dynamic-min",
-        default="1x3x320x320",
-        help="Dynamic profile minimum shape without input name.",
-    )
-    parser.add_argument(
-        "--dynamic-opt",
-        default="1x3x640x640",
-        help="Dynamic profile optimum shape without input name.",
-    )
-    parser.add_argument(
-        "--dynamic-max",
-        default="4x3x640x640",
-        help="Dynamic profile maximum shape without input name.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print planned trtexec commands without running them.",
-    )
-    return parser.parse_args()
+def shape_spec(name, shape): return shape if ":" in shape else f"{name}:{shape}"
+def validate(a):
+    if a.workspace_mib<=0 or a.duration_sec<=0 or a.avg_runs<=0 or a.warmup_ms<0: raise ValueError("invalid build settings")
+    if not a.onnx.exists(): raise FileNotFoundError(f"Static ONNX not found: {a.onnx}; run lesson 05 first")
+    if shutil.which("trtexec") is None: raise FileNotFoundError("trtexec was not found in PATH")
 
+def planned(a):
+    o=a.output_dir.resolve(); s=a.onnx.resolve(); d=a.dynamic_onnx.resolve()
+    def make(name,path,dynamic,mode,deprecated=False,report=None):
+        stem=f"yolov8n_{name}"; return EngineBuild(name,path.resolve(),o/f"{stem}.engine",o/f"{stem}.log",o/f"{stem}_times.json",o/f"{stem}_layers.json",o/f"{stem}_profile.json","fp32" if mode=="none" else "fp16",mode,deprecated,report,dynamic,
+            shape_spec(a.input_name,a.dynamic_opt) if dynamic else None,shape_spec(a.input_name,a.dynamic_min) if dynamic else None,shape_spec(a.input_name,a.dynamic_opt) if dynamic else None,shape_spec(a.input_name,a.dynamic_max) if dynamic else None)
+    b=[make("static_fp32",s,False,"none"),make("static_fp16_legacy",s,False,"weakly_typed",True)]
+    if not a.skip_dynamic and d.exists(): b.append(make("dynamic_fp16_legacy",d,True,"weakly_typed",True))
+    if not a.skip_strongly_typed:
+        if not a.static_autocast_onnx.exists(): raise FileNotFoundError(f"{a.static_autocast_onnx} not found; run prepare_fp16_onnx.py first")
+        b.append(make("static_fp16_strong",a.static_autocast_onnx,False,"strongly_typed",False,o/"static_fp16_onnx_validation.json"))
+        if not a.skip_dynamic and a.dynamic_autocast_onnx.exists(): b.append(make("dynamic_fp16_strong",a.dynamic_autocast_onnx,True,"strongly_typed",False,o/"dynamic_fp16_onnx_validation.json"))
+    if a.builds:
+        names=set(a.builds); missing=names-{x.name for x in b}
+        if missing: raise FileNotFoundError("Requested builds unavailable: "+", ".join(sorted(missing)))
+        b=[x for x in b if x.name in names]
+    return b
 
-def validate_args(args: argparse.Namespace) -> None:
-    if args.workspace_mib <= 0:
-        raise ValueError("--workspace-mib must be positive")
-    if args.warmup_ms < 0:
-        raise ValueError("--warmup-ms cannot be negative")
-    if args.duration_sec <= 0:
-        raise ValueError("--duration-sec must be positive")
-    if args.avg_runs <= 0:
-        raise ValueError("--avg-runs must be positive")
-    if not args.input_name:
-        raise ValueError("--input-name cannot be empty")
-    if not args.onnx.exists():
-        raise FileNotFoundError(
-            f"Static ONNX not found: {args.onnx}\n"
-            "Run lesson 05 first: python3 05_torch_to_onnx/export_yolov8_onnx.py"
-        )
-    if shutil.which("trtexec") is None:
-        raise FileNotFoundError("trtexec was not found in PATH. Complete lesson 00 inside the TensorRT container.")
+def command(build,a):
+    c=["trtexec",f"--onnx={build.onnx_path}",f"--saveEngine={build.engine_path}",f"--memPoolSize=workspace:{a.workspace_mib}",f"--timingCacheFile={a.output_dir.resolve()/'trtexec_timing.cache'}","--profilingVerbosity=detailed","--dumpLayerInfo","--dumpProfile","--separateProfileRun",f"--exportTimes={build.times_path}",f"--exportLayerInfo={build.layer_info_path}",f"--exportProfile={build.profile_path}",f"--warmUp={a.warmup_ms}",f"--duration={a.duration_sec}",f"--avgRuns={a.avg_runs}","--percentile=50,90,95,99"]
+    c.append("--noTF32" if build.typing_mode=="none" else "--fp16" if build.typing_mode=="weakly_typed" else "--stronglyTyped")
+    if build.dynamic: c += [f"--minShapes={build.min_shapes}",f"--optShapes={build.opt_shapes}",f"--maxShapes={build.max_shapes}",f"--shapes={build.shapes}"]
+    return c
 
+def run(build,a):
+    c=command(build,a); print(f"\n== {build.name} ==\n{' '.join(c)}")
+    if a.dry_run:return
+    build.log_path.parent.mkdir(parents=True,exist_ok=True)
+    with build.log_path.open("w") as log:
+        r=subprocess.run(c,stdout=log,stderr=subprocess.STDOUT,check=False)
+    if r.returncode or not build.engine_path.exists(): raise RuntimeError(f"{build.name} failed; see {build.log_path}")
 
-def shape_spec(input_name: str, shape: str) -> str:
-    if ":" in shape:
-        return shape
-    return f"{input_name}:{shape}"
-
-
-def planned_builds(args: argparse.Namespace) -> list[EngineBuild]:
-    output_dir = args.output_dir.resolve()
-    static_onnx = args.onnx.resolve()
-    dynamic_onnx = args.dynamic_onnx.resolve()
-
-    builds = [
-        EngineBuild(
-            name="static_fp32",
-            onnx_path=static_onnx,
-            engine_path=output_dir / "yolov8n_static_fp32.engine",
-            log_path=output_dir / "yolov8n_static_fp32.log",
-            times_path=output_dir / "yolov8n_static_fp32_times.json",
-            layer_info_path=output_dir / "yolov8n_static_fp32_layers.json",
-            profile_path=output_dir / "yolov8n_static_fp32_profile.json",
-            fp16=False,
-            dynamic=False,
-        ),
-        EngineBuild(
-            name="static_fp16",
-            onnx_path=static_onnx,
-            engine_path=output_dir / "yolov8n_static_fp16.engine",
-            log_path=output_dir / "yolov8n_static_fp16.log",
-            times_path=output_dir / "yolov8n_static_fp16_times.json",
-            layer_info_path=output_dir / "yolov8n_static_fp16_layers.json",
-            profile_path=output_dir / "yolov8n_static_fp16_profile.json",
-            fp16=True,
-            dynamic=False,
-        ),
-    ]
-
-    if not args.skip_dynamic and dynamic_onnx.exists():
-        builds.append(
-            EngineBuild(
-                name="dynamic_fp16",
-                onnx_path=dynamic_onnx,
-                engine_path=output_dir / "yolov8n_dynamic_fp16.engine",
-                log_path=output_dir / "yolov8n_dynamic_fp16.log",
-                times_path=output_dir / "yolov8n_dynamic_fp16_times.json",
-                layer_info_path=output_dir / "yolov8n_dynamic_fp16_layers.json",
-                profile_path=output_dir / "yolov8n_dynamic_fp16_profile.json",
-                fp16=True,
-                dynamic=True,
-                shapes=shape_spec(args.input_name, args.dynamic_opt),
-                min_shapes=shape_spec(args.input_name, args.dynamic_min),
-                opt_shapes=shape_spec(args.input_name, args.dynamic_opt),
-                max_shapes=shape_spec(args.input_name, args.dynamic_max),
-            )
-        )
-
-    if args.builds:
-        requested = set(args.builds)
-        available = {build.name for build in builds}
-        missing = sorted(requested - available)
-        if missing:
-            raise FileNotFoundError(
-                "Requested build(s) are not available: "
-                + ", ".join(missing)
-                + ". Check whether the dynamic ONNX exists or remove --skip-dynamic."
-            )
-        builds = [build for build in builds if build.name in requested]
-
-    return builds
-
-
-def trtexec_command(build: EngineBuild, args: argparse.Namespace) -> list[str]:
-    command = [
-        "trtexec",
-        f"--onnx={build.onnx_path}",
-        f"--saveEngine={build.engine_path}",
-        f"--memPoolSize=workspace:{args.workspace_mib}",
-        f"--timingCacheFile={args.output_dir.resolve() / 'trtexec_timing.cache'}",
-        "--profilingVerbosity=detailed",
-        "--dumpLayerInfo",
-        "--dumpProfile",
-        "--separateProfileRun",
-        f"--exportTimes={build.times_path}",
-        f"--exportLayerInfo={build.layer_info_path}",
-        f"--exportProfile={build.profile_path}",
-        f"--warmUp={args.warmup_ms}",
-        f"--duration={args.duration_sec}",
-        f"--avgRuns={args.avg_runs}",
-        "--percentile=50,90,95,99",
-    ]
-
-    if build.fp16:
-        command.append("--fp16")
-    else:
-        # TensorRT enables TF32 by default. Disable it for the course's strict FP32 reference.
-        command.append("--noTF32")
-    if build.dynamic:
-        command.extend(
-            [
-                f"--minShapes={build.min_shapes}",
-                f"--optShapes={build.opt_shapes}",
-                f"--maxShapes={build.max_shapes}",
-                f"--shapes={build.shapes}",
-            ]
-        )
-
-    return command
-
-
-def run_build(build: EngineBuild, args: argparse.Namespace) -> None:
-    command = trtexec_command(build, args)
-    print(f"\n== {build.name} ==")
-    print(" ".join(command))
-
-    if args.dry_run:
-        return
-
-    build.log_path.parent.mkdir(parents=True, exist_ok=True)
-    with build.log_path.open("w", encoding="utf-8") as log_file:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        assert process.stdout is not None
-        for line in process.stdout:
-            log_file.write(line)
-            log_file.flush()
-        return_code = process.wait()
-
-    if return_code != 0:
-        raise RuntimeError(f"{build.name} failed with exit code {return_code}. See {build.log_path}")
-    if not build.engine_path.exists():
-        raise RuntimeError(f"{build.name} finished but did not create {build.engine_path}")
-
-    print(f"engine: {build.engine_path}")
-    print(f"log: {build.log_path}")
-
-
-def command_output(command: list[str]) -> str:
-    completed = subprocess.run(
-        command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False
-    )
-    return completed.stdout.strip()
-
-
-def runtime_environment() -> dict[str, str]:
+def env():
     import tensorrt as trt
-
-    return {
-        "course_image": "nvcr.io/nvidia/pytorch:25.11-py3",
-        "nvidia_container_release": os.environ.get("NVIDIA_PYTORCH_VERSION", "unknown"),
-        "nvidia_build_id": os.environ.get("NVIDIA_BUILD_ID", "unknown"),
-        "python": platform.python_version(),
-        "tensorrt": trt.__version__,
-        "cuda_toolkit": os.environ.get("CUDA_VERSION", command_output(["nvcc", "--version"])),
-        "gpu_and_driver": command_output(
-            [
-                "nvidia-smi",
-                "--query-gpu=name,driver_version,compute_cap",
-                "--format=csv,noheader",
-            ]
-        ),
-    }
-
-
-def write_manifest(builds: list[EngineBuild], args: argparse.Namespace) -> None:
-    manifest = {
-        "runtime_environment": runtime_environment(),
-        "static_onnx": str(args.onnx.resolve()),
-        "dynamic_onnx": str(args.dynamic_onnx.resolve()),
-        "workspace_mib": args.workspace_mib,
-        "warmup_ms": args.warmup_ms,
-        "duration_sec": args.duration_sec,
-        "avg_runs": args.avg_runs,
-        "builds": [
-            {
-                "name": build.name,
-                "onnx": str(build.onnx_path),
-                "engine": str(build.engine_path),
-                "log": str(build.log_path),
-                "times": str(build.times_path),
-                "layers": str(build.layer_info_path),
-                "profile": str(build.profile_path),
-                "fp16": build.fp16,
-                "dynamic": build.dynamic,
-                "shapes": build.shapes,
-                "min_shapes": build.min_shapes,
-                "opt_shapes": build.opt_shapes,
-                "max_shapes": build.max_shapes,
-            }
-            for build in builds
-        ],
-    }
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "build_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-
-def main() -> int:
-    args = parse_args()
-    args.onnx = args.onnx.resolve()
-    args.dynamic_onnx = args.dynamic_onnx.resolve()
-    args.output_dir = args.output_dir.resolve()
-
+    def out(c): return subprocess.run(c,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,check=False).stdout.strip()
+    return {"python":platform.python_version(),"tensorrt":trt.__version__,"cuda_toolkit":os.environ.get("CUDA_VERSION",out(["nvcc","--version"])),"gpu_and_driver":out(["nvidia-smi","--query-gpu=name,driver_version,compute_cap","--format=csv,noheader"])}
+def manifest(bs,a):
+    a.output_dir.mkdir(parents=True,exist_ok=True); (a.output_dir/"build_manifest.json").write_text(json.dumps({"runtime_environment":env(),"builds":[{**{k:getattr(b,k) for k in ("name","precision","typing_mode","deprecated","dynamic")},"onnx":str(b.onnx_path),"engine":str(b.engine_path),"validation_report":str(b.validation_report) if b.validation_report else None} for b in bs]},indent=2)+"\n")
+def main():
+    a=parse_args(); a.output_dir=a.output_dir.resolve()
     try:
-        validate_args(args)
-        builds = planned_builds(args)
-        if not args.skip_dynamic and not args.dynamic_onnx.exists():
-            print(
-                f"Dynamic ONNX not found, skipping dynamic profile build: {args.dynamic_onnx}\n"
-                "Create it with: python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic"
-            )
-
-        args.output_dir.mkdir(parents=True, exist_ok=True)
-        for build in builds:
-            run_build(build, args)
-        write_manifest(builds, args)
-
-        if not args.dry_run:
-            print(f"\nmanifest: {args.output_dir / 'build_manifest.json'}")
-            print("Next: python3 06_trtexec_engine/summarize_results.py")
+        validate(a); bs=planned(a)
+        for b in bs: run(b,a)
+        if not a.dry_run: manifest(bs,a); print(f"manifest: {a.output_dir/'build_manifest.json'}")
         return 0
-    except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    except Exception as e: print(f"error: {e}",file=sys.stderr); return 1
+if __name__=="__main__": raise SystemExit(main())
