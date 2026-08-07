@@ -9,6 +9,7 @@
 <body>
   <main class="page">
     <header>
+      <button id="languageToggle" class="language-toggle" aria-label="Switch to Simplified Chinese">中文</button>
       <p class="eyebrow">Lesson 18 · Async video pipeline</p>
       <h1 data-i18n="title">CPU double buffering and TensorRT CUDA streams</h1>
       <p class="lede" data-i18n="lede">Move through the timeline: the CPU prepares the next frame while the GPU transfers or computes the previous one. These are complementary layers of overlap.</p>
@@ -23,7 +24,6 @@
       <div class="transport">
         <button id="play" class="primary">▶ Play</button>
         <button id="reset">↺ Reset</button>
-        <button id="languageToggle" class="language-toggle" aria-label="Switch to Simplified Chinese">中文</button>
         <button id="detailToggle" class="detail-toggle" aria-pressed="false">▸ Resource lifecycle</button>
         <label><span data-i18n="speed">Speed</span> <input id="speed" type="range" min="0.5" max="2" value="1" step="0.5" /><output id="speedValue">1×</output></label>
       </div>

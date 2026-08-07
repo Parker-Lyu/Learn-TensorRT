@@ -21,3 +21,6 @@ button:hover,button.active { background:#31507f; border-color:#6eb9e8; } button.
 @media (max-width:760px){ .detail-heading { margin-left:120px; } }
 
 [data-language="zh"] .playhead::before { content:'当前时刻'; }
+
+.page > header { position:relative; padding-right:130px; } .language-toggle { position:absolute; top:0; right:0; min-width:82px; padding:11px 16px; font-size:15px; background:#0e7490; border:1px solid #67e8f9; box-shadow:0 0 18px #22d3ee66; } .language-toggle:hover { background:#155e75; transform:translateY(-1px); }
+@media (max-width:760px){ .page > header { padding-right:95px; } .language-toggle { min-width:70px; padding:9px 11px; } }
