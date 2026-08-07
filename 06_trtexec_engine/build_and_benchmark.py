@@ -38,21 +38,55 @@ def validate(a):
     if shutil.which("trtexec") is None: raise FileNotFoundError("trtexec was not found in PATH")
 
 def planned(a):
-    o=a.output_dir.resolve(); s=a.onnx.resolve(); d=a.dynamic_onnx.resolve()
-    def make(name,path,dynamic,mode,deprecated=False,report=None):
-        stem=f"yolov8n_{name}"; return EngineBuild(name,path.resolve(),o/f"{stem}.engine",o/f"{stem}.log",o/f"{stem}_times.json",o/f"{stem}_layers.json",o/f"{stem}_profile.json","fp32" if mode=="none" else "fp16",mode,deprecated,report,dynamic,
-            shape_spec(a.input_name,a.dynamic_opt) if dynamic else None,shape_spec(a.input_name,a.dynamic_min) if dynamic else None,shape_spec(a.input_name,a.dynamic_opt) if dynamic else None,shape_spec(a.input_name,a.dynamic_max) if dynamic else None)
-    b=[make("static_fp32",s,False,"none"),make("static_fp16_legacy",s,False,"weakly_typed",True)]
-    if not a.skip_dynamic and d.exists(): b.append(make("dynamic_fp16_legacy",d,True,"weakly_typed",True))
+    output_dir = a.output_dir.resolve()
+    static_onnx = a.onnx.resolve()
+    dynamic_onnx = a.dynamic_onnx.resolve()
+    requested = set(a.builds or ())
+
+    def wants(name):
+        return not requested or name in requested
+
+    def make(name, path, dynamic, mode, deprecated=False, report=None):
+        stem = f"yolov8n_{name}"
+        return EngineBuild(
+            name, path.resolve(), output_dir / f"{stem}.engine", output_dir / f"{stem}.log",
+            output_dir / f"{stem}_times.json", output_dir / f"{stem}_layers.json",
+            output_dir / f"{stem}_profile.json", "fp32" if mode == "none" else "fp16", mode,
+            deprecated, report, dynamic,
+            shape_spec(a.input_name, a.dynamic_opt) if dynamic else None,
+            shape_spec(a.input_name, a.dynamic_min) if dynamic else None,
+            shape_spec(a.input_name, a.dynamic_opt) if dynamic else None,
+            shape_spec(a.input_name, a.dynamic_max) if dynamic else None,
+        )
+
+    builds = []
+    if wants("static_fp32"):
+        builds.append(make("static_fp32", static_onnx, False, "none"))
+    if wants("static_fp16_legacy"):
+        builds.append(make("static_fp16_legacy", static_onnx, False, "weakly_typed", True))
+
+    dynamic_legacy_requested = wants("dynamic_fp16_legacy") and not a.skip_dynamic
+    if dynamic_legacy_requested:
+        if not dynamic_onnx.is_file():
+            raise FileNotFoundError(f"Dynamic ONNX not found: {dynamic_onnx}; run lesson 05 dynamic export first")
+        builds.append(make("dynamic_fp16_legacy", dynamic_onnx, True, "weakly_typed", True))
+
     if not a.skip_strongly_typed:
-        if not a.static_autocast_onnx.exists(): raise FileNotFoundError(f"{a.static_autocast_onnx} not found; run prepare_fp16_onnx.py first")
-        b.append(make("static_fp16_strong",a.static_autocast_onnx,False,"strongly_typed",False,o/"static_fp16_onnx_validation.json"))
-        if not a.skip_dynamic and a.dynamic_autocast_onnx.exists(): b.append(make("dynamic_fp16_strong",a.dynamic_autocast_onnx,True,"strongly_typed",False,o/"dynamic_fp16_onnx_validation.json"))
-    if a.builds:
-        names=set(a.builds); missing=names-{x.name for x in b}
-        if missing: raise FileNotFoundError("Requested builds unavailable: "+", ".join(sorted(missing)))
-        b=[x for x in b if x.name in names]
-    return b
+        if wants("static_fp16_strong"):
+            if not a.static_autocast_onnx.is_file():
+                raise FileNotFoundError(f"{a.static_autocast_onnx} not found; run prepare_fp16_onnx.py first")
+            builds.append(make("static_fp16_strong", a.static_autocast_onnx, False, "strongly_typed", False, output_dir / "static_fp16_onnx_validation.json"))
+        if wants("dynamic_fp16_strong") and not a.skip_dynamic:
+            if not a.dynamic_autocast_onnx.is_file():
+                raise FileNotFoundError(f"{a.dynamic_autocast_onnx} not found; run prepare_fp16_onnx.py --models dynamic first")
+            builds.append(make("dynamic_fp16_strong", a.dynamic_autocast_onnx, True, "strongly_typed", False, output_dir / "dynamic_fp16_onnx_validation.json"))
+
+    if requested:
+        available = {build.name for build in builds}
+        missing = requested - available
+        if missing:
+            raise ValueError("Requested builds are disabled or unavailable: " + ", ".join(sorted(missing)))
+    return builds
 
 def command(build,a):
     c=["trtexec",f"--onnx={build.onnx_path}",f"--saveEngine={build.engine_path}",f"--memPoolSize=workspace:{a.workspace_mib}",f"--timingCacheFile={a.output_dir.resolve()/'trtexec_timing.cache'}","--profilingVerbosity=detailed","--dumpLayerInfo","--dumpProfile","--separateProfileRun",f"--exportTimes={build.times_path}",f"--exportLayerInfo={build.layer_info_path}",f"--exportProfile={build.profile_path}",f"--warmUp={a.warmup_ms}",f"--duration={a.duration_sec}",f"--avgRuns={a.avg_runs}","--percentile=50,90,95,99"]
@@ -71,9 +105,14 @@ def run(build,a):
 def env():
     import tensorrt as trt
     def out(c): return subprocess.run(c,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,check=False).stdout.strip()
-    return {"python":platform.python_version(),"tensorrt":trt.__version__,"cuda_toolkit":os.environ.get("CUDA_VERSION",out(["nvcc","--version"])),"gpu_and_driver":out(["nvidia-smi","--query-gpu=name,driver_version,compute_cap","--format=csv,noheader"])}
+    return {"course_image":os.environ.get("NVIDIA_PYTORCH_VERSION","unknown"),"nvidia_container_release":os.environ.get("NVIDIA_PYTORCH_VERSION","unknown"),"nvidia_build_id":os.environ.get("NVIDIA_BUILD_ID","unknown"),"python":platform.python_version(),"tensorrt":trt.__version__,"cuda_toolkit":os.environ.get("CUDA_VERSION",out(["nvcc","--version"])),"gpu_and_driver":out(["nvidia-smi","--query-gpu=name,driver_version,compute_cap","--format=csv,noheader"])}
 def manifest(bs,a):
-    a.output_dir.mkdir(parents=True,exist_ok=True); (a.output_dir/"build_manifest.json").write_text(json.dumps({"runtime_environment":env(),"builds":[{**{k:getattr(b,k) for k in ("name","precision","typing_mode","deprecated","dynamic")},"onnx":str(b.onnx_path),"engine":str(b.engine_path),"validation_report":str(b.validation_report) if b.validation_report else None} for b in bs]},indent=2)+"\n")
+    a.output_dir.mkdir(parents=True,exist_ok=True)
+    builds=[]
+    for b in bs:
+        builds.append({"name":b.name,"precision":b.precision,"typing_mode":b.typing_mode,"deprecated":b.deprecated,"dynamic":b.dynamic,"fp16":b.precision=="fp16","onnx":str(b.onnx_path),"engine":str(b.engine_path),"log":str(b.log_path),"times":str(b.times_path),"layers":str(b.layer_info_path),"profile":str(b.profile_path),"validation_report":str(b.validation_report) if b.validation_report else None})
+    payload={"runtime_environment":env(),"static_onnx":str(a.onnx.resolve()),"dynamic_onnx":str(a.dynamic_onnx.resolve()),"workspace_mib":a.workspace_mib,"warmup_ms":a.warmup_ms,"duration_sec":a.duration_sec,"avg_runs":a.avg_runs,"builds":builds}
+    (a.output_dir/"build_manifest.json").write_text(json.dumps(payload,indent=2)+"\n",encoding="utf-8")
 def main():
     a=parse_args(); a.output_dir=a.output_dir.resolve()
     try:

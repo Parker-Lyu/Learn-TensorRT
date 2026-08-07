@@ -121,7 +121,7 @@ def build_report(manifest: dict[str, Any]) -> str:
 
     for build in manifest["builds"]:
         metrics = extract_metrics(Path(build["log"]))
-        precision = "FP16" if build["fp16"] else "FP32"
+        precision = "FP16" if build.get("fp16", build.get("precision") == "fp16") else "FP32"
         lines.append(
             "| {name} | {precision} | {dynamic} | {size} | {throughput} | {latency} | {gpu} | {h2d} | {d2h} | {status} |".format(
                 name=build["name"],

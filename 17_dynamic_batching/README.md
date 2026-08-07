@@ -17,7 +17,8 @@ python3 06_trtexec_engine/prepare_fp16_onnx.py --models dynamic
 
 The engine-build script consumes only
 `06_trtexec_engine/outputs/yolov8n_dynamic_autocast_fp16.onnx`; lesson 06's validation command is a correctness gate rather
-than an input-generation step for this lesson.
+than an input-generation step for this lesson. Before building, the script checks that the lesson 06
+validation report passed and that its recorded SHA256 matches the ONNX file.
 
 ## Deliverables
 
@@ -58,7 +59,8 @@ The optional positional arguments select a different dynamic ONNX input and engi
 ```
 
 The model must still expose an input named `images` that supports the profile declared in the
-script.
+script. When overriding the ONNX path, also set `VALIDATION_REPORT` to its matching successful
+lesson 06-format validation report.
 
 Configure and build the C++ runner from the repository root inside the pinned development
 container:

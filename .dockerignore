@@ -24,4 +24,4 @@ assets/*
 # Lesson 32 packages this generated engine intentionally into the delivery image.
 !32_final_portfolio_case_study/outputs/
 32_final_portfolio_case_study/outputs/*
-!32_final_portfolio_case_study/outputs/yolov8n_static_autocast_fp16.engine
+!32_final_portfolio_case_study/outputs/yolov8n_static_fp16_strong.engine

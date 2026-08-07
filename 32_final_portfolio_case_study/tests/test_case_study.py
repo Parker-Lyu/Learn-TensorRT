@@ -28,6 +28,8 @@ class CaseStudyTests(unittest.TestCase):
         self.assertIn("libnvinfer.so.10", text)
         self.assertIn("assets/img.jpeg", text)
         self.assertIn("yolov8n_static_fp16_strong.engine", text)
+        dockerignore = (ROOT / ".dockerignore").read_text()
+        self.assertIn("!32_final_portfolio_case_study/outputs/yolov8n_static_fp16_strong.engine", dockerignore)
 
     def test_local_matrix_has_explicit_build_script(self):
         script = ROOT / "32_final_portfolio_case_study/build_local_checks.sh"

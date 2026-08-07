@@ -68,7 +68,8 @@ only the lesson 11 executable, TensorRT 10 runtime library, OpenCV runtime packa
 FP16 engine, and `assets/img.jpeg` into the final stage. The delivery helper builds directly from
 the validated lesson 06 static AutoCast ONNX model with `trtexec --stronglyTyped`. Generate that
 model in lesson 06 before rebuilding the delivery engine; the deprecated weakly typed `--fp16`
-route remains available there for compatibility testing.
+route remains available there for compatibility testing. The helper rejects an ONNX file unless
+the matching lesson 06 validation report passed and its SHA256 matches the model.
 
 After the static engine exists, build and record image/platform identity:
 
