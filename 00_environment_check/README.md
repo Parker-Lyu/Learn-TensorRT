@@ -75,6 +75,12 @@ The script checks the GPU, CUDA 13.0, TensorRT 10.14, CMake, the C++ compiler, O
 ModelOpt and its ONNX AutoCast dependencies, Ultralytics, ONNX, ONNX Runtime, and the ONNX
 simplification tools used by the course.
 
+ONNX Runtime is intentionally the CPU `onnxruntime==1.22.0` distribution in the baseline image.
+It is used for deterministic ONNX and ModelOpt AutoCast numerical validation, while TensorRT is the
+GPU deployment runtime taught by the course. ModelOpt 0.37's Linux extra requests
+`onnxruntime-gpu`, but that optional CUDA Execution Provider workflow is outside the baseline and
+must be validated separately rather than mixed into this environment.
+
 ## Outputs
 
 - The main output is the environment-check log written to standard output.

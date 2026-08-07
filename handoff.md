@@ -14,17 +14,22 @@ Lesson 05 remains the canonical PyTorch-to-FP32-ONNX export and validation bound
 consumes lesson 06's validated dynamic AutoCast ONNX graph and focuses on its own batch profile,
 runtime shapes, buffer offsets, and throughput/latency trade-off.
 
-## Environment Findings
+## Initial Environment Findings (Before The Curated Stack)
 
-The pinned upstream image supplies `nvidia-modelopt==0.37.0`, but the current derived image does not
-provide a working ONNX extra:
+The following findings describe the starting image state that motivated the curated stack now
+recorded in the implementation status below. The pinned upstream image supplies
+`nvidia-modelopt==0.37.0`, but did not provide a working ModelOpt ONNX environment as shipped:
 
 - `onnx-graphsurgeon` is absent.
 - Installing GraphSurgeon alone against the current `onnx==1.21.0` fails because that combination
   expects an ONNX helper removed from 1.21.
 - ModelOpt 0.37 declares `onnx~=1.19.0` and selects `onnxruntime-gpu~=1.22.0` on Linux for its ONNX
-  extra. The course installs the CPU `onnxruntime==1.22.0` distribution instead: AutoCast uses the
-  CPU provider, and Ultralytics otherwise treats its `onnxruntime` export dependency as missing.
+  extra. The course intentionally installs the CPU `onnxruntime==1.22.0` distribution instead.
+  Lesson 05 and ModelOpt AutoCast use the CPU provider as a reproducible ONNX numerical-validation
+  reference; TensorRT remains the course's GPU deployment runtime. `onnxruntime-gpu` is not an
+  invalid package, but it is an optional alternative for a separate ONNX Runtime CUDA-EP workflow,
+  not a prerequisite for the TensorRT lessons. Keeping the CPU distribution also satisfies tools
+  that check Ultralytics' export dependency by the distribution name `onnxruntime`.
 - ModelOpt's published extra selects `cupy-cuda12x`, while this course targets CUDA 13.0. The image
   must install the equivalent curated dependency set with `cupy-cuda13x`, rather than silently add
   a CUDA 12 CuPy wheel.

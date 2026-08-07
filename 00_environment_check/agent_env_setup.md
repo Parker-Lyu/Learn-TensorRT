@@ -214,9 +214,13 @@ Preserve complete failure output. Do not work around failures by arbitrarily upg
 - CUDA 13 changed the `cudaMemPrefetchAsync` API. Lesson 04 contains the CUDA 13 compatibility code;
   do not downgrade CUDA to make old call signatures compile.
 - ModelOpt 0.37 AutoCast requires its ONNX optional dependencies and is aligned here with ONNX
-  1.19.1 and ONNX Runtime 1.22.0. The course uses the CPU ONNX Runtime distribution because lesson
-  05 and ModelOpt AutoCast use the CPU provider for reproducible validation; installing only the
-  GPU distribution makes Ultralytics treat its `onnxruntime` export dependency as missing.
+  1.19.1 and ONNX Runtime 1.22.0. ModelOpt's Linux `onnx` extra names `onnxruntime-gpu`, but the
+  course intentionally installs the CPU `onnxruntime` distribution. Lesson 05 and AutoCast use
+  the CPU provider for reproducible ONNX validation; TensorRT is the GPU deployment runtime. This
+  is a course architecture decision, not a claim that the GPU distribution is unusable. An
+  ONNX Runtime CUDA-EP experiment must use a separately validated dependency profile, and must not
+  replace the course baseline or install both distributions together. Keeping the CPU distribution
+  also satisfies tools that check Ultralytics' export dependency by distribution name.
   Installing GraphSurgeon alone beside ONNX 1.21 is not a valid repair; rebuild the pinned image
   instead.
 - The upstream image's `nvidia-resiliency-ext` metadata requires the deprecated `pynvml`
