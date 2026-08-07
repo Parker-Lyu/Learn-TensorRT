@@ -4,7 +4,7 @@ const playBtn = document.querySelector('#play');
 const speedEl = document.querySelector('#speed');
 const speedValue = document.querySelector('#speedValue');
 const eventEl = document.querySelector('#event');
-const modes = { none: '无双缓冲、无多 Stream', cpu: '只有 CPU 双缓冲', both: '组合（生产环境）' };
+const modes = { none: '无双缓冲、无多 Stream', cpu: '只有 CPU 双缓冲', both: 'CPU双缓冲+2个 CUDA stream' };
 let mode = 'both', time = 0, playing = false, last = performance.now(), selected = null;
 const total = 10;
 const base = {
