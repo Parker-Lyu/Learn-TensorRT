@@ -168,8 +168,8 @@ round-robin scheduling protects fairness, while dynamic batching trades queue de
 - C++ preprocessing, postprocessing, TensorRT runner, and visualization libraries in lesson 11.
 - Generic bounded queues and lifecycle tests in lessons 16–19.
 - CUDA/NPP preprocessing with pageable, pinned, and mapped-memory evidence in lesson 20.
-- Stable C ABI plus Python ctypes wrapper in lesson 28.
-- Focused algorithm and RAII tests in lesson 30.
+- Stable C ABI plus Python ctypes wrapper in lesson 29.
+- Focused algorithm and RAII tests in lesson 31.
 
 ## Test Evidence
 

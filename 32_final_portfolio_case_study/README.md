@@ -4,12 +4,12 @@
 
 This lesson assembles the validated YOLOv8n deployment into a reproducible portfolio report and an
 optional multi-stage delivery image. It consumes generated evidence from lessons 05, 12, 15,
-21, 17, and 28; it never treats an absent engine or failed GPU check as a successful deployment.
+21, 17, and 29; it never treats an absent engine or failed GPU check as a successful deployment.
 
 ## Prerequisites
 
 - Complete the checkpoint reports and only the elective evidence that will be presented.
-- Build the required lesson 11, 17, and 28 artifacts in the pinned development environment.
+- Build the required lesson 11, 17, and 29 artifacts in the pinned development environment.
 
 ## Deliverables
 
@@ -39,7 +39,8 @@ Build the local checkpoint matrix (generated `build/` directories are ignored):
 ./32_final_portfolio_case_study/build_local_checks.sh
 ```
 
-For the real C ABI inference check, also build the dynamic engine expected by lesson 28:
+For the real C ABI inference check in Lesson 29, also build the dynamic engine expected by that
+lesson:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic

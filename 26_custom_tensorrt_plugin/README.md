@@ -8,7 +8,9 @@ deserialization, engine build, and C++ runtime validation.
 
 ## Prerequisites
 
-- Complete lesson 24 and use the pinned TensorRT/CUDA development container.
+- Complete lesson 25 (recommended) and use the pinned TensorRT/CUDA development container. Lesson
+  25 explains the escalation from graph surgery to a custom plugin; this lesson implements the
+  runnable plugin path.
 - An accessible NVIDIA GPU and `trtexec` are required.
 
 ## Deliverables
