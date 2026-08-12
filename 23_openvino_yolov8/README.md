@@ -11,7 +11,8 @@ directory. The course pins `openvino==2025.4.1`; do not replace it with an unrec
 ## Prerequisites
 
 - Generate lesson 05's static ONNX model.
-- Generate the lesson 06 TensorRT comparison evidence if a GPU-versus-CPU report is required.
+- Complete lesson 14's canonical performance collection and lesson 15's evidence validation if a
+  GPU-versus-CPU report is required.
 
 ## Deliverables
 
@@ -63,9 +64,11 @@ rm -rf 23_openvino_yolov8/.deps 23_openvino_yolov8/outputs
 
 ## Run
 
-Complete the lesson 05 export and validation first. The comparison step also requires the generated
-`15_precision_performance_report/outputs/performance.json` from checkpoint 15; run that
-checkpoint's documented collection command on the same platform before comparing results.
+Complete the lesson 05 export and validation first. The comparison step also requires lesson 14's
+generated canonical TensorRT evidence at
+`14_yolov8_int8_quantization_engineering/outputs/tensorrt10/performance/performance.json`. Follow
+lesson 14's reproduction procedure, then run lesson 15's report generator to validate the linked
+performance, quality, engine, dataset, and runtime identities before comparing results.
 
 ```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
@@ -78,8 +81,9 @@ PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
 logical CPU count, and OpenVINO device name, and reports P50/P90/P99,
 compiles a `LATENCY` model for synchronous requests, compiles a separate `THROUGHPUT` model for
 `AsyncInferQueue`, and checks raw output against lesson 05's ONNX Runtime reference.
-`generate_comparison.py` reads the machine-readable TensorRT evidence from checkpoint 15 instead
-of copying numbers by hand.
+`generate_comparison.py` reads the canonical machine-readable TensorRT evidence consumed and
+validated by checkpoint 15 instead of copying numbers by hand. FP32 and FP16 measurements are
+required. INT8 appears only when it passed lesson 14's quality gate and was benchmarked.
 
 OpenVINO's `benchmark_app` is installed with the package and provides a runtime-owned reference:
 

@@ -60,7 +60,7 @@ def main() -> int:
     core = ov.Core()
     model = core.read_model(args.onnx)
     if len(model.inputs) != 1 or len(model.outputs) != 1:
-        raise RuntimeError("lesson 22 expects one input and one output")
+        raise RuntimeError("lesson 23 expects one input and one output")
     model_input = model.input(0)
     if list(model_input.shape) != list(input_tensor.shape):
         raise ValueError(f"input shape mismatch: model={model_input.shape}, data={input_tensor.shape}")
