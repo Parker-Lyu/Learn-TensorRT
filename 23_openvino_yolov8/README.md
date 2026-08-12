@@ -77,10 +77,12 @@ PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
   python3 23_openvino_yolov8/generate_comparison.py
 ```
 
-`run_openvino.py` performs ten warmups and at least 100 measured requests, records the CPU model,
-logical CPU count, and OpenVINO device name, and reports P50/P90/P99,
+`run_openvino.py` performs ten warmups per compiled mode and at least 100 measured requests, records
+the CPU model, logical CPU count, and OpenVINO device name, and reports P50/P90/P99,
 compiles a `LATENCY` model for synchronous requests, compiles a separate `THROUGHPUT` model for
 `AsyncInferQueue`, and checks raw output against lesson 05's ONNX Runtime reference.
+The async request pool defaults to OpenVINO's model- and device-specific optimal size. Override it
+with `--async-jobs N` only for a documented experiment; `--async-jobs 0` selects automatic sizing.
 `generate_comparison.py` reads the canonical machine-readable TensorRT evidence consumed and
 validated by checkpoint 15 instead of copying numbers by hand. FP32 and FP16 measurements are
 required. INT8 appears only when it passed lesson 14's quality gate and was benchmarked.
@@ -99,8 +101,9 @@ PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
 ### Interpretation
 
 - Synchronous latency describes one request at a time.
-- Async throughput describes a saturated CPU and includes queueing behavior; it is not directly
-  interchangeable with single-request latency.
+- Async response latency measures submission through callback completion and includes request-pool
+  backpressure. Async inference latency comes from OpenVINO's `InferRequest.latency` and excludes
+  waiting for an available request. Neither is directly interchangeable with sync latency.
 - TensorRT GPU and OpenVINO CPU use different hardware, so compare deployment constraints as well
   as milliseconds.
 - OpenVINO is relevant for Intel servers, CPU-only edge systems, mixed CPU/GPU capacity planning,

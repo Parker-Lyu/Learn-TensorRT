@@ -23,17 +23,23 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[max(0, math.ceil(len(ordered) * fraction) - 1)]
 
 
+def latency_summary(latencies: list[float]) -> dict:
+    if not latencies:
+        raise ValueError("latencies must not be empty")
+    return {
+        "mean": statistics.fmean(latencies),
+        "p50": percentile(latencies, 0.50),
+        "p90": percentile(latencies, 0.90),
+        "p99": percentile(latencies, 0.99),
+    }
+
+
 def summary(latencies: list[float], elapsed_seconds: float) -> dict:
-    if not latencies or elapsed_seconds <= 0:
-        raise ValueError("latencies and elapsed time must be positive")
+    if elapsed_seconds <= 0:
+        raise ValueError("elapsed time must be positive")
     return {
         "requests": len(latencies),
-        "latency_ms": {
-            "mean": statistics.fmean(latencies),
-            "p50": percentile(latencies, 0.50),
-            "p90": percentile(latencies, 0.90),
-            "p99": percentile(latencies, 0.99),
-        },
+        "latency_ms": latency_summary(latencies),
         "throughput_requests_per_second": len(latencies) / elapsed_seconds,
     }
 
@@ -48,12 +54,15 @@ def main() -> int:
                         default=ROOT / "05_torch_to_onnx/outputs/onnxruntime_raw_output.npy")
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iterations", type=int, default=100)
-    parser.add_argument("--async-jobs", type=int, default=4)
+    parser.add_argument(
+        "--async-jobs", type=int, default=0,
+        help="async request pool size; 0 lets OpenVINO select the optimal number",
+    )
     parser.add_argument("--output", type=Path,
                         default=ROOT / "23_openvino_yolov8/outputs/openvino_benchmark.json")
     args = parser.parse_args()
-    if args.warmup < 0 or args.iterations < 100 or args.async_jobs <= 0:
-        parser.error("warmup must be non-negative, iterations >=100, and async-jobs positive")
+    if args.warmup < 0 or args.iterations < 100 or args.async_jobs < 0:
+        parser.error("warmup and async-jobs must be non-negative, and iterations must be >=100")
 
     input_tensor = np.load(args.input_npy).astype(np.float32, copy=False)
     reference = np.load(args.reference_npy).astype(np.float32, copy=False)
@@ -79,13 +88,19 @@ def main() -> int:
     sync_elapsed = time.perf_counter() - sync_started
     assert output is not None
 
-    async_latencies: list[float] = []
+    async_response_latencies: list[float] = []
+    async_inference_latencies: list[float] = []
     async_checksums: list[float] = []
     throughput_compiled = core.compile_model(model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"})
     queue = ov.AsyncInferQueue(throughput_compiled, args.async_jobs)
+    for _ in range(args.warmup):
+        queue.start_async({0: input_tensor})
+    queue.wait_all()
 
     def complete(infer_request, userdata):
-        async_latencies.append((time.perf_counter() - userdata) * 1000.0)
+        # Response time includes backpressure while start_async waits for an idle request.
+        async_response_latencies.append((time.perf_counter() - userdata) * 1000.0)
+        async_inference_latencies.append(float(infer_request.latency))
         async_checksums.append(float(np.asarray(infer_request.get_output_tensor().data).sum()))
 
     queue.set_callback(complete)
@@ -96,6 +111,9 @@ def main() -> int:
     async_elapsed = time.perf_counter() - async_started
 
     error = np.abs(np.asarray(output, dtype=np.float32) - reference)
+    optimal_async_requests = int(
+        throughput_compiled.get_property("OPTIMAL_NUMBER_OF_INFER_REQUESTS")
+    )
     cpu_model = "unknown"
     cpuinfo = Path("/proc/cpuinfo")
     if cpuinfo.is_file():
@@ -105,6 +123,7 @@ def main() -> int:
                 break
 
     evidence = {
+        "schema_version": 2,
         "model": str(args.onnx.relative_to(ROOT)),
         "input": str(args.input_npy.relative_to(ROOT)),
         "device": "CPU",
@@ -126,8 +145,16 @@ def main() -> int:
             },
         },
         "sync": summary(sync_latencies, sync_elapsed),
-        "async": {**summary(async_latencies, async_elapsed), "jobs": args.async_jobs,
-                  "last_checksum": async_checksums[-1]},
+        "async": {
+            "requests": len(async_response_latencies),
+            "response_latency_ms": latency_summary(async_response_latencies),
+            "inference_latency_ms": latency_summary(async_inference_latencies),
+            "throughput_requests_per_second": len(async_response_latencies) / async_elapsed,
+            "jobs_requested": args.async_jobs,
+            "jobs_actual": len(queue),
+            "optimal_number_of_infer_requests": optimal_async_requests,
+            "last_checksum": async_checksums[-1],
+        },
         "alignment_vs_onnxruntime": {
             "max_abs": float(error.max()), "mean_abs": float(error.mean()),
             "p99_abs": float(np.percentile(error, 99)),
