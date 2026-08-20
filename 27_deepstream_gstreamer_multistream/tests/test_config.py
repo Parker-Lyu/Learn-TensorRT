@@ -39,6 +39,17 @@ class DeepStreamConfigTests(unittest.TestCase):
             self.assertIn("batch-size=4", config)
             self.assertIn("config-file=../config/config_infer_primary_yolov8_b4.txt", config)
 
+    def test_generator_can_enable_osd_and_file_sink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = [Path(directory) / f"source-{index}.mp4" for index in range(2)]
+            for source in sources:
+                source.write_bytes(b"fixture")
+            output = Path(directory) / "annotated.mp4"
+            config = GENERATE.render(sources, render_output=output)
+            self.assertIn("enable=1", config)
+            self.assertIn("type=3", config)
+            self.assertIn(f"output-file={output}", config)
+
 
 if __name__ == "__main__":
     unittest.main()
