@@ -169,6 +169,7 @@ docker rm -f learn-tensorrt 2>/dev/null || true
 docker run -dit \
   --name learn-tensorrt \
   --gpus all \
+  --network host \
   --ipc=host \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
@@ -176,6 +177,18 @@ docker run -dit \
   --workdir /workspace/Learn-TensorRT \
   learn-tensorrt:25.11
 ```
+
+`--network host` gives the container the host's network namespace. Lesson 24 runs the Triton
+server with `--network host` on the host's ports, so the client inside the development container
+can reach it at `localhost:8000` only when both share one network namespace. The trade-offs:
+
+- Host networking disables port isolation; `-p` publish flags do not apply, and any port a course
+  process binds is a host port. Avoid running two services on the same port.
+- `--network host` works on Linux Docker hosts. On Docker Desktop for macOS or Windows it has
+  limited, version-dependent support; this course targets a native Linux host.
+- Existing containers keep their original network mode. Recreate the container as shown above to
+  apply the change; the bind-mounted repository is not affected, but state stored only in the
+  container's writable layer is lost.
 
 Start or enter it with:
 
