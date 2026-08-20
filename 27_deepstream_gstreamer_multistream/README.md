@@ -77,7 +77,28 @@ are visible inside the container.
 The generated `nvstreammux` batch equals the source count. The committed primary-inference config
 uses a batch-2 engine, FP16, aspect-ratio preservation, class-aware NMS, and the custom
 `NvDsInferParseYoloV8` function. For more than two streams, rebuild the engine/config batch sizes to
-match the mux.
+match the mux, using the batch-4 configuration below for the included engine's maximum profile.
+
+### Optional four-stream experiment
+
+The engine built by this lesson has a dynamic batch profile up to four images. To exercise four
+concurrent sources with matching `nvstreammux` and `nvinfer` batch sizes, run:
+
+```bash
+python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_office.mp4 \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_cam5.mp4 \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_cam6.mp4 \
+  --inference-config ../config/config_infer_primary_yolov8_b4.txt
+
+cd 27_deepstream_gstreamer_multistream/outputs
+deepstream-app -c deepstream_app_config.txt
+```
+
+This is an optional batch-4 experiment, not an additional acceptance requirement. The current
+engine profile supports at most four inputs; larger source counts require rebuilding the engine and
+creating a matching inference configuration.
 
 ## Outputs
 

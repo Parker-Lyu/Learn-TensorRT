@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 
-def render(sources: list[Path]) -> str:
+def render(sources: list[Path], inference_config: str = "../config/config_infer_primary_yolov8.txt") -> str:
     if len(sources) < 2:
         raise ValueError("at least two video sources are required")
     sections = []
@@ -39,7 +39,7 @@ enable-padding=1
 
 [primary-gie]
 enable=1
-config-file=../config/config_infer_primary_yolov8.txt
+config-file={inference_config}
 
 [osd]
 enable=0
@@ -50,17 +50,19 @@ type=1
 sync=0
 qos=0
 
-""".format(count=count) + "\n".join(sections)
+""".format(count=count, inference_config=inference_config) + "\n".join(sections)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", action="append", type=Path, required=True)
+    parser.add_argument("--inference-config", default="../config/config_infer_primary_yolov8.txt",
+                        help="path to the nvinfer config, relative to the generated app config")
     parser.add_argument("--output", type=Path,
                         default=ROOT / "outputs/deepstream_app_config.txt")
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(render(args.source), encoding="utf-8")
+    args.output.write_text(render(args.source, args.inference_config), encoding="utf-8")
     print(f"wrote {args.output}")
     return 0
 

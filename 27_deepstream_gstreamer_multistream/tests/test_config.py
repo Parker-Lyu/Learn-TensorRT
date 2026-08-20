@@ -22,11 +22,22 @@ class DeepStreamConfigTests(unittest.TestCase):
     def test_inference_config(self):
         result = VALIDATE.validate_infer(ROOT / "config/config_infer_primary_yolov8.txt")
         self.assertEqual(result["batch_size"], 2)
+        result = VALIDATE.validate_infer(ROOT / "config/config_infer_primary_yolov8_b4.txt")
+        self.assertEqual(result["batch_size"], 4)
 
     def test_generator_requires_two_sources(self):
         with tempfile.NamedTemporaryFile() as source:
             with self.assertRaisesRegex(ValueError, "two"):
                 GENERATE.render([Path(source.name)])
+
+    def test_generator_selects_batch_four_inference_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = [Path(directory) / f"source-{index}.mp4" for index in range(4)]
+            for source in sources:
+                source.write_bytes(b"fixture")
+            config = GENERATE.render(sources, "../config/config_infer_primary_yolov8_b4.txt")
+            self.assertIn("batch-size=4", config)
+            self.assertIn("config-file=../config/config_infer_primary_yolov8_b4.txt", config)
 
 
 if __name__ == "__main__":
