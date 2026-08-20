@@ -9,7 +9,8 @@ headless sink keeps throughput measurements independent of display rendering.
 ## Prerequisites
 
 - Use a compatible NVIDIA GPU host and the documented DeepStream 8.0 development container.
-- Provide at least two real video sources for runtime acceptance.
+- The documented DeepStream container includes the two sample videos used by the commands below;
+  no additional video download is required.
 
 ## Deliverables
 
@@ -61,12 +62,17 @@ script, for example `CUDA_HOME=/usr/local/cuda ./27_deepstream_gstreamer_multist
 
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
-  --source /data/camera-a.mp4 \
-  --source /data/camera-b.mp4
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_office.mp4
 
 cd 27_deepstream_gstreamer_multistream/outputs
 deepstream-app -c deepstream_app_config.txt
 ```
+
+`sample_720p.mp4` and `sample_office.mp4` are real video files shipped in the official DeepStream
+container. The two sources exercise the multi-stream mux and batch-2 inference without requiring a
+camera or external media. To use your own files, replace both `--source` arguments with paths that
+are visible inside the container.
 
 The generated `nvstreammux` batch equals the source count. The committed primary-inference config
 uses a batch-2 engine, FP16, aspect-ratio preservation, class-aware NMS, and the custom
@@ -90,8 +96,8 @@ python3 -m unittest discover -s 27_deepstream_gstreamer_multistream/tests -v
 python3 27_deepstream_gstreamer_multistream/validate_config.py
 ```
 
-Acceptance requires the documented DeepStream container, two real videos, parser compilation,
-successful model loading, and per-stream FPS output. Save the execution platform beside performance
+Acceptance requires the documented DeepStream container, two decodable video sources, parser
+compilation, successful model loading, and per-stream FPS output. Save the execution platform beside performance
 evidence:
 
 ```bash
