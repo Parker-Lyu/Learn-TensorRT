@@ -44,26 +44,26 @@ The mirror variable is optional. Packages are installed under ignored `.deps/`.
 Run every command from the repository root. The inline `#` comments explain what each line does:
 
 ```bash
-# 关闭用户级 site-packages，避免宿主/用户 Python 包污染容器基线环境
+# Disable user-level site-packages so only the container baseline packages are visible.
 export PYTHONNOUSERSITE=1
-# 把本课隔离安装的依赖目录 .deps 加入模块搜索路径，以导入 onnx_graphsurgeon
+# Add the lesson's isolated .deps directory to the import path so onnx_graphsurgeon is importable.
 export PYTHONPATH=25_onnx_graph_surgery_plugin/.deps
 
-# 生成一张包含自定义算子 com.acme::AcmeSwish 的演示 ONNX 模型
+# Generate the demo ONNX model whose graph contains the custom com.acme::AcmeSwish node.
 python3 25_onnx_graph_surgery_plugin/create_demo_model.py
-# 加载该模型并列出其中的自定义域节点，确认不支持算子
+# Load that model and list its custom-domain nodes to confirm the unsupported operator.
 python3 25_onnx_graph_surgery_plugin/diagnose_model.py
 
-# 用 trtexec 尝试从含不支持算子的模型构建强类型引擎（预期失败）
+# Ask trtexec to build a strongly-typed engine from the unsupported model (expected to fail).
 trtexec --stronglyTyped --onnx=25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
 # Expected failure: no importer for com.acme::AcmeSwish.
 
-# 用 ONNX GraphSurgeon 重写图：把 AcmeSwish 替换为标准 Sigmoid + Mul（即 x * sigmoid(x)），并清理、拓扑排序
+# Rewrite the graph: replace AcmeSwish with standard Sigmoid + Mul (x * sigmoid(x)), then clean and topologically sort.
 python3 25_onnx_graph_surgery_plugin/rewrite_with_graphsurgeon.py
-# 用 ONNX Runtime 运行重写后的模型，并与 NumPy 参考结果做数值对比
+# Run the rewritten model in ONNX Runtime and compare its output against a NumPy reference.
 python3 25_onnx_graph_surgery_plugin/validate_rewrite.py
 
-# 从修复后的标准算子图构建强类型 TensorRT 引擎并保存
+# Build a strongly-typed TensorRT engine from the repaired standard-operator graph and save it.
 trtexec \
   --stronglyTyped \
   --onnx=25_onnx_graph_surgery_plugin/outputs/rewritten_swish.onnx \
