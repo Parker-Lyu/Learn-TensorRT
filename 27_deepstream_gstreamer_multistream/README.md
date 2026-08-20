@@ -63,7 +63,7 @@ script, for example `CUDA_HOME=/usr/local/cuda ./27_deepstream_gstreamer_multist
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_office.mp4
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov
 
 cd 27_deepstream_gstreamer_multistream/outputs
 deepstream-app -c deepstream_app_config.txt
@@ -87,9 +87,9 @@ concurrent sources with matching `nvstreammux` and `nvinfer` batch sizes, run:
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_office.mp4 \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_cam5.mp4 \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_cam6.mp4 \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_ride_bike.mov \
+  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_run.mov \
   --inference-config ../config/config_infer_primary_yolov8_b4.txt
 
 cd 27_deepstream_gstreamer_multistream/outputs
