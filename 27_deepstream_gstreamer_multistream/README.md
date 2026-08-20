@@ -60,8 +60,6 @@ script, for example `CUDA_HOME=/usr/local/cuda ./27_deepstream_gstreamer_multist
 
 ## Run
 
-### Detection and throughput (no rendering)
-
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
@@ -71,36 +69,10 @@ cd 27_deepstream_gstreamer_multistream/outputs
 deepstream-app -c deepstream_app_config.txt
 ```
 
-This is the measurement-oriented path. It runs inference and keeps detections in DeepStream
-metadata, but disables OSD and uses a fakesink, so it does not create a displayed or annotated video.
-
-`sample_720p.mp4` and `sample_push.mov` are real video files shipped in the official DeepStream
+`sample_720p.mp4` and `sample_office.mp4` are real video files shipped in the official DeepStream
 container. The two sources exercise the multi-stream mux and batch-2 inference without requiring a
 camera or external media. To use your own files, replace both `--source` arguments with paths that
 are visible inside the container.
-
-### Detection, OSD, and annotated MP4 output
-
-After the detection-only run, generate a second configuration that enables OSD and writes the
-annotated tiled output to a local MP4 file:
-
-```bash
-python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
-  --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov \
-  --render-output 27_deepstream_gstreamer_multistream/outputs/annotated_two_streams.mp4 \
-  --output 27_deepstream_gstreamer_multistream/outputs/deepstream_app_render_config.txt
-
-cd 27_deepstream_gstreamer_multistream/outputs
-deepstream-app -c deepstream_app_render_config.txt
-```
-
-The resulting `outputs/annotated_two_streams.mp4` contains tiled frames with YOLOv8 bounding boxes.
-The file is an ignored runtime artifact; inspect it on the host after the container exits. This
-rendering path uses hardware H.264 encoding and is intended for visual verification, not raw
-inference throughput comparisons. The DeepStream container must have NVIDIA Video Codec access
-(including `/dev/v4l2-nvenc`); without it, detection can still run but MP4 encoding will fail during
-sink initialization.
 
 The generated `nvstreammux` batch equals the source count. The committed primary-inference config
 uses a batch-2 engine, FP16, aspect-ratio preservation, class-aware NMS, and the custom
