@@ -53,6 +53,10 @@ Build the engine and custom parser inside the documented DeepStream container:
 ./27_deepstream_gstreamer_multistream/build_runtime_assets.sh
 ```
 
+The parser build detects the container's CUDA toolkit headers automatically. If the toolkit is
+installed in a non-standard location, set `CUDA_HOME` (or `CUDAToolkit_ROOT`) before running the
+script, for example `CUDA_HOME=/usr/local/cuda ./27_deepstream_gstreamer_multistream/build_runtime_assets.sh`.
+
 ## Run
 
 ```bash
