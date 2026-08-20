@@ -104,8 +104,8 @@ also verify bounded overload accounting and explicit stop without deadlock.
 ### Open the overlap animation
 
 Open `18_async_video_pipeline/visualization/index.html` directly in a modern browser (no server or
-extra dependency is required). Start with **无双缓冲、无多 Stream** to see the fully serial baseline,
-then compare **只有 CPU 双缓冲** and **CPU双缓冲+2个 CUDA stream**. Press **播放**;
+extra dependency is required). Start with **No double buffer, no multiple streams** to see the fully serial baseline,
+then compare **CPU double buffering only** and **CPU double buffering + 2 CUDA streams**. Press **Play**;
 bright blocks mark the work currently executing, and the message below the lanes describes what is
 parallel at that instant. Click a block for its exact conceptual time interval. The durations are an
 explanatory model, not a benchmark or a claim about a particular GPU.
@@ -121,7 +121,7 @@ boundaries explicit.
 ![Interactive overlap timeline](visualization/overlap_timeline.png)
 
 Open `visualization/index.html` in a modern browser to explore the animation yourself. It starts in
-English; use the **中文** button in the upper-right corner to switch to Simplified Chinese. Press
+English; use the **Chinese** button in the upper-right corner to switch to Simplified Chinese. Press
 **Play**, change speed, switch between the three modes, and expand **Resource lifecycle** in the
 combined mode to see when host input, device/context, and output resources become reusable. The
 illustration is a conceptual teaching model, not a benchmark result for a specific GPU.

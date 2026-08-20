@@ -366,152 +366,152 @@ artifact that later C++ lessons will load.
 - Explain why a single-input allclose result is useful for debugging but insufficient for release
   approval.
 
-## Appendix: ONNX → TensorRT 精度对齐与排查笔记
+## Appendix: ONNX → TensorRT Precision Alignment and Troubleshooting Notes
 
-模型从 ONNX 转换为 TensorRT 后，原始输出可能与 ONNX Runtime（ORT）产生数值偏差。
-排查的核心原则是：**固定输入和模型版本，先建立 FP32 基线，再检查 FP16 或 INT8；先定位
-误差从哪里开始，再决定如何修复。**
+After a model is converted from ONNX to TensorRT, its raw outputs may differ numerically from
+ONNX Runtime (ORT). The core debugging principle is: **fix the input and model version, establish an
+FP32 baseline first, then check FP16 or INT8; first locate where the error starts, then decide how
+to fix it.**
 
-这份笔记是故障排查清单，不替代本课生成的单输入报告，也不替代多样本、解码后检测结果和
-数据集级任务指标。单个张量的 `allclose` 结果只能回答“这个样本的原始输出是否在给定容差内”，
-不能单独证明模型精度满足上线要求。
+This note is a troubleshooting checklist. It does not replace this lesson's single-input report, nor
+the multi-sample, decoded-detection, and dataset-level task metrics. A single tensor's `allclose`
+result only answers "is this sample's raw output within the given tolerance"; it cannot, by itself,
+prove that model precision meets release requirements.
 
-### 1. 核心工具
+### 1. Core Tools
 
-| 工具 | 主要用途 | 使用边界 |
+| Tool | Primary use | Limits |
 | --- | --- | --- |
-| **Polygraphy** | 运行 ORT/TRT、保存输入输出、逐张量比较、缩减失败子图和搜索精度约束 | 逐层标记输出可能改变 TensorRT 的融合和内存占用，结果应作为定位线索 |
-| **Netron** | 查看节点、张量名称、属性及图结构 | 只负责可视化，不验证实际运行语义 |
-| **trtexec** | 构建和分析引擎，记录解析日志、层信息、精度、tactic 与性能 | 性能分析不能代替数值验证 |
-| **Polygraphy Surgeon / ONNX GraphSurgeon** | 提取子图、常量折叠和有依据的图修改 | 修改后必须重新运行 ONNX Checker、ORT 基线和 TRT 对比 |
+| **Polygraphy** | Run ORT/TRT, save inputs/outputs, compare tensor by tensor, reduce failing subgraphs, and search precision constraints | Marking per-layer outputs can change TensorRT fusion and memory footprint; treat results as localization clues |
+| **Netron** | Inspect nodes, tensor names, attributes, and graph structure | Visualization only; does not validate actual runtime semantics |
+| **trtexec** | Build and analyze engines, record parse logs, layer info, precision, tactics, and performance | Performance analysis is not a substitute for numerical validation |
+| **Polygraphy Surgeon / ONNX GraphSurgeon** | Extract subgraphs, constant folding, and evidence-based graph edits | After editing, re-run ONNX Checker, the ORT baseline, and the TRT comparison |
 
-### 2. 开始前先固定比较条件
+### 2. Fix the Comparison Conditions First
 
-很多“精度问题”实际上是比较条件不同。至少确认以下项目一致：
+Many "precision problems" are actually differences in comparison conditions. Confirm at least the
+following are consistent:
 
-1. ONNX 模型与 TensorRT 引擎来自同一次导出；序列化引擎不能脱离其构建环境讨论。
-2. 两个后端读取完全相同的预处理后输入张量，而不是分别读取并预处理同一张图片。
-3. 输入名称、形状、数据类型、布局和动态 Shape profile 一致。
-4. 比较的是同一语义阶段的输出，例如都在 decode 和 NMS 之前。
-5. 随机种子、插件版本、TensorRT/CUDA/GPU/驱动以及构建选项已记录。
-6. 同时查看绝对误差、相对误差、误差分位数、`NaN`/`Inf` 和任务级指标；不要只看一个
-   最大相对误差，因为参考值接近零时该指标会被放大。
+1. The ONNX model and the TensorRT engine come from the same export; a serialized engine cannot be
+   discussed apart from its build environment.
+2. Both backends read the exact same preprocessed input tensor, rather than each reading and
+   preprocessing the same image separately.
+3. Input names, shapes, data types, layout, and dynamic shape profiles are consistent.
+4. The comparison uses outputs from the same semantic stage, for example both before decode and NMS.
+5. Random seeds, plugin versions, TensorRT/CUDA/GPU/driver, and build options are recorded.
+6. Inspect absolute error, relative error, error quantiles, `NaN`/`Inf`, and task-level metrics
+   together; do not look only at a single maximum relative error, because that metric is amplified
+   when the reference value is near zero.
 
-推荐时间线：
+Recommended timeline:
 
 ```text
-确认比较条件
-  → 验证 ORT 自身基线
-  → 对齐 ORT 与 TRT FP32
-  → 若 FP32 失败，定位解析、图语义或 tactic 问题
-  → 若 FP32 通过，再测试 FP16 或显式 Q/DQ INT8
-  → 对定位出的局部问题做最小修复
-  → 回归单输入、代表性样本集和任务级指标
+Confirm the comparison conditions
+  → Verify the ORT baseline itself
+  → Align ORT and TRT FP32
+  → If FP32 fails, locate the parsing, graph-semantics, or tactic problem
+  → If FP32 passes, test FP16 or explicit Q/DQ INT8
+  → Apply the smallest fix for the localized problem
+  → Regress single-input, representative-sample-set, and task-level metrics
 ```
 
-### 3. 第一阶段：FP32 基线
+### 3. Stage One: FP32 Baseline
 
-#### 3.1 从本课的受控比较开始
+#### 3.1 Start with this lesson's controlled comparison
 
-先执行本课已有工作流，它会复用课程 05 保存的 `.npy` 输入，并比较 ORT 与课程 06 的
-FP32 引擎：
+First run this lesson's existing workflow, which reuses the `.npy` input saved by lesson 05 and
+compares ORT against lesson 06's FP32 engine:
 
 ```bash
 python3 07_polygraphy_precision_alignment/align_precision.py
 ```
 
-不要为了让结果变成 `PASSED` 而直接放宽容差。先检查报告中的最大、均值和 P99 绝对误差、
-最大误差位置、输出形状及异常值，再根据业务指标制定容差。
+Do not loosen tolerance just to make the result `PASSED`. First inspect the maximum, mean, and P99
+absolute errors, the largest-mismatch position, output shapes, and outliers in the report, then set
+tolerances from the business metrics.
 
-#### 3.2 单独验证 TF32 的影响
+#### 3.2 Verify the impact of TF32 separately
 
-在 Ampere 及更新架构上，TF32 可能使 FP32 网络选择吞吐更高但数值行为不同的实现。
-不过，**本课程固定的 Polygraphy 0.49.26 使用 `--tf32` 显式启用 TF32，并不存在
-`--no-tf32` 参数**。因此，用 Polygraphy 从 ONNX 临时构建基线时先不传 `--tf32`，再单独
-增加该参数做 A/B 对比：
-
-```bash
-# 基线：不显式启用 TF32
-polygraphy run model.onnx --onnxrt --trt \
-  --data-loader-script your_data_loader.py \
-  --rtol 1e-4 --atol 1e-4
-
-# 对照实验：显式启用 TF32
-polygraphy run model.onnx --onnxrt --trt --tf32 \
-  --data-loader-script your_data_loader.py \
-  --rtol 1e-4 --atol 1e-4
-```
-
-不同前端或 TensorRT API 对构建标志的默认处理可能不同，不能把上述命令的默认行为直接推广到
-所有构建方式。应以实际命令、BuilderConfig 和构建日志为准。若只有 TF32 对照失败，说明差异
-与所选数值路径相关，但是否禁用仍应由任务级精度与性能数据决定。
-
-#### 3.3 逐张量寻找最早的明显分歧
-
-确认最终输出确实失败后，可临时将中间张量标记为输出：
+On Ampere and newer architectures, TF32 may cause FP32 networks to pick implementations with higher
+throughput but different numerical behavior. However, **the Polygraphy 0.49.26 pinned by this course
+enables TF32 explicitly with `--tf32`; there is no `--no-tf32` flag**. Therefore, when building a
+temporary baseline from ONNX with Polygraphy, first run without `--tf32`, then add that flag
+separately for an A/B comparison:
 
 ```bash
-polygraphy run model.onnx \
-  --onnxrt --trt \
-  --data-loader-script your_data_loader.py \
-  --onnx-outputs mark all \
-  --trt-outputs mark all \
-  --rtol 1e-3 --atol 1e-3
+# Baseline: do not explicitly enable TF32
+polygraphy run model.onnx --onnxrt --trt   --data-loader-script your_data_loader.py   --rtol 1e-4 --atol 1e-4
+
+# Control: explicitly enable TF32
+polygraphy run model.onnx --onnxrt --trt --tf32   --data-loader-script your_data_loader.py   --rtol 1e-4 --atol 1e-4
 ```
 
-重点观察拓扑路径上最早出现明显误差增长的位置，而不是机械地认定日志中第一个 `FAILED` 的
-节点就是根因。分支图、接近零的参考值、节点排序以及误差累积都可能干扰判断。此外，标记所有
-输出会抑制部分融合并增加显存占用；大型模型应按可疑区域分批标记张量，并用未插桩的完整网络
-复现最终误差。
+Different frontends or TensorRT APIs may handle build flags differently by default, so do not
+generalize the default behavior of the commands above to every build path. Rely on the actual
+commands, BuilderConfig, and build logs. If only the TF32 control fails, the difference is related to
+the chosen numerical path, but whether to disable it should still be decided by task-level accuracy
+and performance data.
 
-#### 3.4 提取最小可复现子图
+#### 3.3 Find the earliest clear divergence tensor by tensor
 
-找到可疑张量后，可提取该区域。Polygraphy 0.49.26 的元数据格式是
-`名称:[形状]:数据类型`：
+After confirming the final output actually fails, temporarily mark intermediate tensors as outputs:
 
 ```bash
-polygraphy surgeon extract model.onnx \
-  --inputs 'suspect_input:[1,64,80,80]:float32' \
-  --outputs 'suspect_output:float32' \
-  --output single_region.onnx
+polygraphy run model.onnx   --onnxrt --trt   --data-loader-script your_data_loader.py   --onnx-outputs mark all   --trt-outputs mark all   --rtol 1e-3 --atol 1e-3
 ```
 
-提取子图并不自动证明某个算子有错。为了复现完整网络中的问题，应尽量保存并使用原网络运行到
-子图边界时的真实输入；随机输入可能覆盖不到相同数值范围。提取后先运行 ONNX Checker 和 ORT，
-再用相同输入比较 TensorRT。
+Focus on the earliest location along the topological path where error growth clearly appears, rather
+than mechanically declaring the first `FAILED` node in the log as the root cause. Branching graphs,
+near-zero reference values, node ordering, and error accumulation can all mislead judgment. In
+addition, marking all outputs suppresses some fusion and increases memory usage; for large models,
+mark tensors in batches around the suspected region and reproduce the final error with the
+un-instrumented full network.
 
-大网络也可以使用实验性的 `debug reduce` 自动缩减失败图：
+#### 3.4 Extract a minimal reproducible subgraph
+
+After finding a suspicious tensor, extract that region. Polygraphy 0.49.26's metadata format is
+`name:[shape]:dtype`:
 
 ```bash
-polygraphy debug reduce model.onnx \
-  --output reduced_failing_model.onnx \
-  --model-input-shapes 'images:[1,3,640,640]' \
-  --check polygraphy run polygraphy_debug.onnx \
-    --onnxrt --trt \
-    --data-loader-script your_data_loader.py \
-    --rtol 1e-3 --atol 1e-3
+polygraphy surgeon extract model.onnx   --inputs 'suspect_input:[1,64,80,80]:float32'   --outputs 'suspect_output:float32'   --output single_region.onnx
 ```
 
-`debug reduce` 根据检查命令的退出状态判断当前子图是好是坏，因此必须先确认检查命令能稳定
-复现目标故障。对于动态 Shape 和 Shape 子图，必要时先固定调试形状；不要把缩减结果误当成
-完整模型的最终修复。
+Extracting a subgraph does not automatically prove a specific operator is wrong. To reproduce the
+problem in the full network, save and reuse the real inputs that the original network produced at the
+subgraph boundary; random inputs may not cover the same numerical range. After extraction, run ONNX
+Checker and ORT first, then compare TensorRT with the same inputs.
 
-### 4. FP32 问题的修复顺序
+For large networks you can also use the experimental `debug reduce` to shrink the failing graph
+automatically:
 
-#### 4.1 优先修复导出源
+```bash
+polygraphy debug reduce model.onnx   --output reduced_failing_model.onnx   --model-input-shapes 'images:[1,3,640,640]'   --check polygraphy run polygraphy_debug.onnx     --onnxrt --trt     --data-loader-script your_data_loader.py     --rtol 1e-3 --atol 1e-3
+```
 
-若 ONNX 图的属性或语义本身不符合预期，优先修改 PyTorch 导出源并重新导出。例如：
+`debug reduce` judges whether the current subgraph is good or bad from the check command's exit
+status, so first confirm the check command can reproduce the target failure reliably. For dynamic
+shapes and shape subgraphs, pin the debug shapes first when necessary; do not mistake the reduced
+result for a final fix of the full model.
 
-- 明确 `Resize`/`interpolate` 的模式和 `align_corners` 等语义；
-- 在算法允许时为归一化或除法使用合理的 `epsilon`；
-- 避免依赖未定义行为、输入相关控制流或导出器无法可靠表达的操作。
+### 4. Fix Order for FP32 Problems
 
-不要为了让 ORT 与 TRT 对齐而随意改动算子属性。修改必须符合原模型语义，并重新验证 PyTorch
-与 ONNX 的输出。
+#### 4.1 Fix the export source first
 
-#### 4.2 无法重导出时再做 ONNX 图手术
+If the ONNX graph's attributes or semantics are already wrong, first fix the PyTorch export source
+and re-export. For example:
 
-下面的示例只演示操作方式；`half_pixel` 是否正确必须由原框架语义决定：
+- Make the `Resize`/`interpolate` mode and semantics such as `align_corners` explicit;
+- Use a reasonable `epsilon` for normalization or division when the algorithm allows;
+- Avoid relying on undefined behavior, input-dependent control flow, or operations the exporter
+  cannot express reliably.
+
+Do not arbitrarily change operator attributes just to make ORT and TRT align. Changes must match the
+original model semantics, and PyTorch and ONNX outputs must be re-validated.
+
+#### 4.2 Do ONNX graph surgery only when re-export is impossible
+
+The example below only demonstrates the mechanics; whether `half_pixel` is correct must be decided by
+the original framework's semantics:
 
 ```python
 import onnx
@@ -528,99 +528,105 @@ onnx.checker.check_model(fixed)
 onnx.save(fixed, "model_fixed.onnx")
 ```
 
-常量折叠可用于简化可静态计算的子图，但不是通用的精度修复方法：
+Constant folding can simplify statically computable subgraphs, but it is not a general precision fix:
 
 ```bash
-polygraphy surgeon sanitize model.onnx \
-  --fold-constants \
-  --output sanitized_model.onnx
+polygraphy surgeon sanitize model.onnx   --fold-constants   --output sanitized_model.onnx
 ```
 
-#### 4.3 最后才考虑插件或 tactic 级诊断
+#### 4.3 Consider plugin or tactic-level diagnosis last
 
-只有在确认 TensorRT 10.14 无法正确表达或实现目标语义，且无法合理重写模型时，才考虑自定义
-插件。TensorRT 10.14 的新插件应优先采用 `IPluginV3` 接口；旧的 `IPluginV2` 系列和已弃用
-插件不应作为新课程代码的默认方案。优先检查 TensorRT 是否已有原生层或受支持的 ONNX 映射。
+Consider a custom plugin only after confirming that TensorRT 10.14 cannot correctly express or
+implement the target semantics and the model cannot be reasonably rewritten. New TensorRT 10.14
+plugins should prefer the `IPluginV3` interface; the old `IPluginV2` family and deprecated plugins
+should not be the default for new course code. First check whether TensorRT already has a native
+layer or a supported ONNX mapping.
 
-若怀疑某个 tactic 或融合路径存在问题，应保存构建日志与可复现模型，并使用 Polygraphy 的
-`debug build`、tactic replay 或精度约束进行受控实验。TensorRT 没有一个适用于所有网络的
-“关闭指定融合”通用开关，也不应在没有证据时随意禁用 tactic source。
+If you suspect a specific tactic or fusion path is at fault, save the build log and a reproducible
+model, and run controlled experiments with Polygraphy's `debug build`, tactic replay, or precision
+constraints. TensorRT has no universal "disable a specific fusion" switch that works for every
+network, and tactic sources should not be disabled arbitrarily without evidence.
 
-### 5. 第二阶段：FP16 与显式 Q/DQ INT8
+### 5. Stage Two: FP16 and Explicit Q/DQ INT8
 
-只有 FP32 基线通过后，才能把新增偏差归因于低精度路径。先分别测试 FP16 和 INT8，不要同时
-改变精度、输入、优化 profile 和模型版本。
+Only after the FP32 baseline passes can you attribute newly introduced drift to the low-precision
+path. Test FP16 and INT8 separately; do not change precision, inputs, optimization profiles, and
+model version all at once.
 
 #### 5.1 FP16
 
-逐层检查误差首次明显放大的区域，同时检查：
+Check, layer by layer, the region where error first grows clearly, and also check:
 
-- 中间张量是否出现 `NaN`、`Inf`、上溢或下溢；
-- 归一化、指数、除法和大范围 reduction 周围的数值范围；
-- 层的计算精度与输出张量类型，二者并不是同一个概念；
-- 放宽容差后，解码结果和任务指标是否仍满足质量门槛。
+- Whether intermediate tensors show `NaN`, `Inf`, overflow, or underflow;
+- Numerical ranges around normalization, exponentials, division, and large reductions;
+- A layer's computation precision versus its output tensor type — these are not the same concept;
+- Whether decoded results and task metrics still meet quality thresholds after loosening tolerance.
 
-Polygraphy 可以实验性地搜索哪些层需要更高精度。该命令需要一个能自动判定好坏的 `--check`
-命令；省略时会进入交互模式：
+Polygraphy can experimentally search for which layers need higher precision. The command needs a
+`--check` command that decides pass/fail automatically; omitting it enters interactive mode:
 
 ```bash
-polygraphy debug precision model.onnx \
-  --fp16 \
-  --mode bisect \
-  --precision float32 \
-  --check your_accuracy_check_command
+polygraphy debug precision model.onnx   --fp16   --mode bisect   --precision float32   --check your_accuracy_check_command
 ```
 
-搜索结果是诊断线索，不是最终设计。对于弱类型网络，可通过层精度约束做验证；对于强类型网络
-或显式量化模型，应在模型类型和量化图允许的边界内调整，不能假定
-`ILayer::setPrecision(kFLOAT)` 对所有 TensorRT 10.14 网络都有效。
+The search result is a diagnostic clue, not a final design. For weakly-typed networks, verify via
+per-layer precision constraints; for strongly-typed networks or explicitly quantized models, adjust
+within the bounds allowed by the model type and the quantization graph, and do not assume
+`ILayer::setPrecision(kFLOAT)` works for every TensorRT 10.14 network.
 
 #### 5.2 INT8
 
-本课程以 ModelOpt 导出的**显式 Q/DQ** 模型为主，完整工程流程在课程 14。TensorRT 10.14 中
-基于 `IInt8Calibrator` 的隐式量化流程已经弃用，因此不应把切换
-`ENTROPY_CALIBRATION_2`/`MINMAX_CALIBRATION` 作为本课程的首选修复方法。
+This course centers on **explicit Q/DQ** models exported with ModelOpt; the complete engineering flow
+is in lesson 14. The `IInt8Calibrator`-based implicit quantization flow is deprecated in TensorRT
+10.14, so switching `ENTROPY_CALIBRATION_2`/`MINMAX_CALIBRATION` should not be the course's
+preferred fix.
 
-显式 Q/DQ INT8 应重点检查：
+For explicit Q/DQ INT8, focus on checking:
 
-1. 代表性校准数据是否复用了部署时完全相同的预处理；
-2. Q/DQ 的 scale、粒度、轴和对称性是否符合目标算子与硬件约束；
-3. 是否存在异常值导致有效量化范围被少数样本占据；
-4. 敏感层是否需要保留为 FP16/FP32，并由 ModelOpt 配置和导出的 Q/DQ 图明确表达；
-5. 多样本张量漂移、解码后检测结果及数据集级指标是否同时通过。
+1. Whether representative calibration data reuses the exact same preprocessing as deployment;
+2. Whether Q/DQ scale, granularity, axes, and symmetry match the target operator and hardware
+   constraints;
+3. Whether outliers make a few samples dominate the effective quantization range;
+4. Whether sensitive layers need to stay FP16/FP32 and are expressed explicitly by the ModelOpt
+   configuration and the exported Q/DQ graph;
+5. Whether multi-sample tensor drift, decoded detection results, and dataset-level metrics all pass
+   at the same time.
 
-不存在对所有模型都正确的“100～500 张校准图片”固定答案。样本数量只是变量之一，分布覆盖、
-类别与场景代表性、预处理一致性和最终任务指标更重要。
+There is no universal "100–500 calibration images" answer that is correct for every model. Sample
+count is only one variable; distribution coverage, class and scene representativeness, preprocessing
+consistency, and final task metrics matter more.
 
-### 6. 常见现象速查
+### 6. Quick Reference for Common Symptoms
 
-| 现象 | 优先检查 | 不应直接下的结论 |
+| Symptom | Check first | Do not conclude prematurely |
 | --- | --- | --- |
-| FP32 最终输出不一致 | 模型/输入版本、Shape、TF32 配置、首个明显漂移张量、解析与 tactic 日志 | “一定是量化问题” |
-| `Resize` 附近漂移 | mode、坐标变换、nearest rounding、opset 和原框架语义 | “统一改成 `half_pixel` 就能修复” |
-| `GridSample` 或边界算子漂移 | padding、坐标归一化、`align_corners`、TensorRT 10.14 实际支持情况 | “必须换第三方插件” |
-| NMS 结果顺序不同 | 阈值附近候选框、相同分数排序、输出集合与任务指标 | “原始浮点网络已失真” |
-| FP16 出现巨大误差 | `NaN`/`Inf`、动态范围、敏感 reduction/norm/exp、层精度 | “所有 Norm/Softmax 都必须回退 FP32” |
-| INT8 深层输出失真 | Q/DQ scale、校准分布、异常值、预处理、敏感层策略 | “只要增加校准图片数量就能解决” |
-| 常量或 Shape 子图异常 | shape inference、动态维度、可折叠子图及解析日志 | “常量折叠一定安全且能修复精度” |
+| FP32 final outputs disagree | Model/input version, shape, TF32 configuration, first clearly drifting tensor, parsing and tactic logs | "It must be a quantization problem" |
+| Drift near `Resize` | Mode, coordinate transform, nearest rounding, opset, and original-framework semantics | "Changing to `half_pixel` uniformly will fix it" |
+| Drift in `GridSample` or boundary operators | Padding, coordinate normalization, `align_corners`, actual TensorRT 10.14 support | "A third-party plugin is required" |
+| NMS result order differs | Near-threshold candidate boxes, equal-score ordering, output set, and task metrics | "The original floating-point network is already distorted" |
+| FP16 shows huge error | `NaN`/`Inf`, dynamic range, sensitive reductions/norm/exp, layer precision | "All Norm/Softmax must fall back to FP32" |
+| INT8 deep-output distortion | Q/DQ scale, calibration distribution, outliers, preprocessing, sensitive-layer strategy | "Adding more calibration images will fix it" |
+| Constant or shape subgraph anomaly | Shape inference, dynamic dimensions, foldable subgraph, and parsing logs | "Constant folding is always safe and fixes precision" |
 
-### 7. 最终决策树
+### 7. Final Decision Tree
 
 ```text
-发现 ORT 与 TRT 输出偏差
- ├─ 比较条件是否完全一致？
- │   ├─ 否：先统一模型、输入、Shape、输出语义和构建配置
- │   └─ 是：运行 FP32 基线
- ├─ FP32 是否通过已定义的数值门槛？
- │   ├─ 否：检查 TF32 配置 → 分批标记中间张量 → 保存边界输入
- │   │      → 提取/缩减可复现子图 → 修复导出语义、解析或已证实的 tactic 问题
- │   └─ 是：分别运行 FP16 或显式 Q/DQ INT8
- ├─ 低精度是否新增不可接受的漂移？
- │   ├─ 是：定位首个明显放大区域 → 检查动态范围/QDQ scale
- │   │      → 对敏感区域采用有依据的混合精度或重新量化
- │   └─ 否：进入多样本验证
- └─ 单输入、代表性样本集、解码结果和任务级指标全部通过后，才形成发布证据
+ORT and TRT outputs diverge
+ ├─ Are the comparison conditions fully consistent?
+ │   ├─ No: unify the model, input, shape, output semantics, and build configuration first
+ │   └─ Yes: run the FP32 baseline
+ ├─ Does FP32 pass the defined numerical threshold?
+ │   ├─ No: check TF32 configuration → mark intermediate tensors in batches → save boundary inputs
+ │   │      → extract/reduce a reproducible subgraph → fix export semantics, parsing, or a proven tactic issue
+ │   └─ Yes: run FP16 or explicit Q/DQ INT8 separately
+ ├─ Does low precision introduce unacceptable new drift?
+ │   ├─ Yes: locate the first clearly amplified region → check dynamic range / QDQ scale
+ │   │      → apply evidence-based mixed precision or re-quantization to the sensitive region
+ │   └─ No: proceed to multi-sample validation
+ └─ Only after single-input, representative-sample-set, decoded results, and task-level metrics all
+     pass do you form release evidence
 ```
 
-每次修复后都应从完整模型重新执行基线，而不是只验证提取出的子图。最终报告应同时保留模型
-标识、环境身份、精度配置、输入来源、容差、数值统计和任务级验证结论。
+After every fix, re-run the baseline from the full model rather than only validating the extracted
+subgraph. The final report should retain the model identity, environment identity, precision
+configuration, input source, tolerances, numerical statistics, and task-level validation conclusions.
