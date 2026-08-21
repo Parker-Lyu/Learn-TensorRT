@@ -79,7 +79,7 @@ prerequisites below; Lesson `31` is ongoing practice and Lesson `32` is the fina
 | --- | --- | --- |
 | Server inference | `24_triton_inference_server`, `29_cpp_shared_library_python_binding` | Both build on Lesson 17; they are independent of each other. |
 | Edge CV | `27_deepstream_gstreamer_multistream`, `28_jetson_orin_xavier_dla_deployment` | Learn 27 before 28 when possible; 28 requires Jetson/DLA hardware for full validation. |
-| Advanced TensorRT | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` | **25 → 26**: graph-surgery escalation precedes the runnable plugin implementation. |
+| Advanced TensorRT | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` | **25 → 26**: repair the same unsupported `com.acme::AcmeSwish` model with GraphSurgeon, then with a TensorRT plugin. |
 | CPU and Intel | `23_openvino_yolov8` | Independent branch; reuse the ONNX and comparison evidence from Lessons 05/15 as documented. |
 | LLM awareness | `30_llm_inference_intro` | Independent branch; no YOLO/TensorRT elective prerequisite. |
 | Ongoing interview practice | `31_cpp_interview_katas` | Practice alongside the related core lessons, not only after Lesson 30. |

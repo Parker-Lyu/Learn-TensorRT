@@ -21,9 +21,9 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 | Explicit-Q/DQ PTQ and INT8 accuracy regression | Covered as core path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
 | Dataset-level detection metrics and regression gates | Covered as core validation path | `14_yolov8_int8_quantization_engineering`, `15_precision_performance_report` |
 | Mixed-precision layer audit and fallback diagnosis | Covered as advanced quantization topic | `14_yolov8_int8_quantization_engineering` |
-| Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` |
+| Unsupported operators, ONNX graph surgery, plugins | Covered as advanced path; the same `AcmeSwish` model is solved by graph surgery and then a plugin | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` |
 | TensorRT custom plugin implementation | Covered as portfolio differentiator | `26_custom_tensorrt_plugin` |
-| TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` |
+| TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `26_custom_tensorrt_plugin` |
 | Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `13_nsight_performance_diagnosis` |
 | CUDA or NPP preprocessing optimization | Covered as advanced path | `20_cuda_preprocess_npp` |
 | Single-stream video pipeline | Integrated TensorRT implementation covered | `16_cpp_producer_consumer`, `18_async_video_pipeline`, `21_integrated_tensorrt_video_pipeline` |

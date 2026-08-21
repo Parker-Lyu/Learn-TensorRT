@@ -1191,9 +1191,9 @@ Purpose:
 
 Learning outcomes:
 
-- Diagnose an unsupported ONNX operator and choose among model rewrite, graph surgery, and a TensorRT plugin.
+- Diagnose an unsupported ONNX operator and explain the choice between graph surgery and a TensorRT plugin.
 - Rewrite and validate a small ONNX graph with ONNX GraphSurgeon.
-- Explain the build-time and runtime responsibilities of TensorRT `IPluginV3` capabilities.
+- Build a TensorRT engine from the rewritten graph and hand the original model to Lesson 26.
 
 Topics:
 
@@ -1202,21 +1202,19 @@ Topics:
 - ONNX GraphSurgeon
 - Constant folding
 - Node replacement and node splitting
-- TensorRT plugin design
-- TensorRT `IPluginV3` capability interfaces and plugin creator responsibilities
-- Plugin serialization, deserialization, and resource ownership
+- The boundary between ONNX graph surgery and TensorRT plugin integration
 
 Deliverables:
 
 - Unsupported-operator demo model and diagnosis tool
 - GraphSurgeon rewrite and numerical-validation scripts
+- TensorRT engine built from the rewritten graph
 - Diagnosis tests and an isolated dependency setup
 
 Acceptance criteria:
 
 - The rewrite tool edits the demo ONNX graph with GraphSurgeon and the validator confirms numerical agreement.
-- The lesson documentation traces plugin registration, build-time shape/type negotiation, runtime
-  `enqueue`, serialization, and engine deserialization.
+- The rewritten graph builds with TensorRT, while the original `unsupported_swish.onnx` is documented as Lesson 26's input.
 
 ### `26_custom_tensorrt_plugin`
 
@@ -1224,7 +1222,7 @@ Acceptance criteria:
 
 Purpose:
 
-- Build one runnable custom TensorRT plugin instead of only describing the plugin strategy.
+- Build a runnable custom TensorRT plugin for the unsupported `com.acme::AcmeSwish` node from Lesson 25.
 - Custom plugin experience is a strong signal for roles that deploy non-standard CV, medical,
   industrial, or research models.
 - A small complete plugin demonstrates C++ ABI awareness, CUDA kernel integration, TensorRT
@@ -1232,7 +1230,8 @@ Purpose:
 
 Learning outcomes:
 
-- Implement, register, build, serialize, deserialize, and execute a TensorRT `IPluginV3` layer.
+- Implement, register, build, serialize, deserialize, and execute a TensorRT `IPluginV3` layer for
+  the original Lesson 25 ONNX graph.
 - Launch a CUDA kernel from plugin `enqueue` while respecting dynamic shape and data-type contracts.
 - Validate plugin output numerically against a reference implementation.
 
@@ -1247,28 +1246,28 @@ Topics:
 - Building a plugin shared library
 - Loading plugins with `trtexec --plugins`
 - Loading plugins from C++ runtime code
-- ONNX GraphSurgeon replacement with a plugin node
-- Polygraphy or ONNX Runtime reference comparison
+- Matching an ONNX custom domain/op type to a plugin creator
+- Full-graph CPU-reference numerical comparison
 
 Deliverables:
 
-- `ScaleShift` TensorRT plugin shared library
-- Plugin ONNX model, engine-build workflow, and C++ validator
-- CPU-reference numerical comparison
+- `AcmeSwish` TensorRT plugin shared library
+- Lesson 25 original ONNX model, engine-build workflow, and C++ validator
+- Full-graph CPU-reference numerical comparison
 
 Design notes:
 
-**Suggested plugin scope:**
+**Plugin scope:**
 
-- Implement a compact operator such as `ScaleShift`, `Clip`, or `CustomNormalize`.
-- Keep the operator simple enough that plugin mechanics, serialization, and validation remain the teaching focus.
+- Implement the compact `AcmeSwish` operator used by Lesson 25.
+- Keep the operator stateless so plugin mechanics, serialization, and validation remain the teaching focus.
 
 Acceptance criteria:
 
 - A plugin shared library builds with CMake.
-- `trtexec` can load the plugin library and build an engine containing the plugin layer.
-- A small C++ or Python runtime example loads the plugin-backed engine and runs inference.
-- The plugin output is numerically checked against a CPU/Python reference.
+- `trtexec` can load the plugin library and build an engine from Lesson 25's original model.
+- A C++ runtime example deserializes the plugin-backed engine and runs the complete graph.
+- The complete graph output is numerically checked against a CPU/Python reference.
 
 ### `27_deepstream_gstreamer_multistream`
 

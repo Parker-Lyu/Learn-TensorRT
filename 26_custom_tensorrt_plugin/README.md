@@ -1,44 +1,55 @@
-# 26 - Custom TensorRT ScaleShift Plugin
+# 26 - Implementing a TensorRT Plugin for an Unsupported ONNX Operator
 
 ## Purpose
 
-This lesson implements `output = input * scale + shift` as a complete custom TensorRT plugin: CUDA
-kernel, creator fields, registration, format negotiation, shape propagation, serialization,
-deserialization, engine build, and C++ runtime validation.
+Lesson 25 repairs `com.acme::AcmeSwish` by editing the ONNX graph. This lesson keeps that custom
+node and implements the alternative TensorRT solution: a CUDA-backed `IPluginV3` that lets
+TensorRT parse, build, serialize, deserialize, and execute the original model.
+
+The plugin implements:
+
+```text
+AcmeSwish(x) = x * sigmoid(x)
+```
+
+The input model is produced by Lesson 25, so both lessons solve the same conversion failure using
+different integration boundaries.
 
 ## Prerequisites
 
-- Complete lesson 25 (recommended) and use the pinned TensorRT/CUDA development container. Lesson
-  25 explains the escalation from graph surgery to a custom plugin; this lesson implements the
-  runnable plugin path.
-- An accessible NVIDIA GPU and `trtexec` are required.
+- Complete Lesson 25, or generate its model with `python3 25_onnx_graph_surgery_plugin/create_demo_model.py`.
+- Use the pinned `learn-tensorrt` development container with TensorRT 10.14 and CUDA 13.
+- An NVIDIA GPU and `/opt/tensorrt/bin/trtexec` are required for engine conversion and runtime validation.
 
 ## Deliverables
 
-- `ScaleShift` TensorRT plugin shared library
-- Plugin ONNX model, engine-build workflow, and C++ validator
-- CPU-reference numerical comparison
+- `AcmeSwish` TensorRT plugin shared library
+- CMake build and `trtexec` conversion workflow for Lesson 25's original ONNX model
+- C++ engine validator that checks the complete `Add -> AcmeSwish -> Mul` graph
+- CUDA memory-checking command
 
-## TensorRT 10.14 API
+## Plugin Contract
 
-The implementation uses `IPluginV3` with separate core, build, and runtime capability interfaces.
-`IPluginCreatorV3One` receives ONNX attributes during the build phase and the serialized field
-collection during engine deserialization. The build uses a strongly typed network.
+The ONNX parser matches the plugin creator using the custom node identity:
 
-## Lifecycle
+```text
+ONNX domain       com.acme
+ONNX op_type      AcmeSwish
+Plugin namespace  com.acme
+Plugin name       AcmeSwish
+Plugin version    1
+Inputs            one FP32 linear tensor
+Outputs           one FP32 tensor with the input shape
+```
 
-- The creator receives ONNX attributes `scale` and `shift` as plugin fields.
-- TensorRT clones the V3 plugin and attaches a runtime capability to each execution context.
-- `supportsFormatCombination` accepts only linear FP32 input/output.
-- `getOutputShapes` preserves the input shape.
-- `enqueue` launches on the TensorRT-provided CUDA stream without synchronizing it.
-- The `scale` and `shift` fields are serialized into the engine; deserialization reconstructs the V3
-  plugin.
-- The plugin library must be loaded before deserializing an engine that contains the plugin.
+The plugin has no attributes. `supportsFormatCombination` accepts only FP32 and linear layout;
+`getOutputShapes` preserves every input dimension; `enqueue` launches the elementwise CUDA kernel
+on TensorRT's stream without synchronizing it. The empty serialization field collection makes the
+stateless plugin reconstructible when the engine is deserialized.
 
 ## Build
 
-Configure and compile the plugin library and validator from the repository root:
+Run from the repository root inside the development container:
 
 ```bash
 cmake -S 26_custom_tensorrt_plugin -B 26_custom_tensorrt_plugin/build \
@@ -48,40 +59,65 @@ cmake --build 26_custom_tensorrt_plugin/build --parallel
 
 ## Run
 
-Create the custom-node ONNX graph, build the engine, and run the validator:
+The wrapper generates Lesson 25's source model, builds the plugin, converts the original graph, and
+validates the serialized engine:
 
 ```bash
-python3 26_custom_tensorrt_plugin/create_plugin_model.py
-/opt/tensorrt/bin/trtexec \
-  --stronglyTyped \
-  --staticPlugins=26_custom_tensorrt_plugin/build/libscale_shift_plugin.so \
-  --onnx=26_custom_tensorrt_plugin/outputs/scale_shift.onnx \
-  --saveEngine=26_custom_tensorrt_plugin/outputs/scale_shift.engine \
-  --skipInference
-./26_custom_tensorrt_plugin/build/validate_plugin \
-  26_custom_tensorrt_plugin/outputs/scale_shift.engine
+./26_custom_tensorrt_plugin/build_and_validate.sh
 ```
 
-The convenience wrapper `26_custom_tensorrt_plugin/build_and_validate.sh` performs the same build
-and run sequence. The validator deserializes the engine in C++ and compares four outputs with the
-CPU formula. Generated engines remain ignored and must be rebuilt for the deployment
-TensorRT/CUDA/GPU environment.
+The equivalent explicit commands are:
 
-Run CUDA memory checking:
+```bash
+python3 25_onnx_graph_surgery_plugin/create_demo_model.py
+/opt/tensorrt/bin/trtexec \
+  --stronglyTyped \
+  --staticPlugins=26_custom_tensorrt_plugin/build/libacme_swish_plugin.so \
+  --onnx=25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx \
+  --saveEngine=26_custom_tensorrt_plugin/outputs/acme_swish.engine \
+  --skipInference
+./26_custom_tensorrt_plugin/build/validate_plugin \
+  26_custom_tensorrt_plugin/outputs/acme_swish.engine
+```
+
+The validator compares the complete graph against:
+
+```text
+(input + 0.25) * sigmoid(input + 0.25) * 1.5
+```
+
+Run CUDA memory checking with:
 
 ```bash
 compute-sanitizer --tool memcheck \
-  ./26_custom_tensorrt_plugin/build/validate_plugin \
-  26_custom_tensorrt_plugin/outputs/scale_shift.engine
+  26_custom_tensorrt_plugin/build/validate_plugin \
+  26_custom_tensorrt_plugin/outputs/acme_swish.engine
 ```
 
 ## Outputs
 
-- The plugin library and validator are ignored build artifacts.
-- The custom-node ONNX model and TensorRT engine are environment-specific files under ignored `outputs/`.
+Committed deliverables are the plugin source, CMake files, validator, wrapper, and documentation.
+Ignored generated artifacts include the plugin library, build directory, and
+`outputs/acme_swish.engine`. The source ONNX model remains under Lesson 25's ignored `outputs/`
+directory and is regenerated from repository code.
+
+## Tests
+
+Build and run the end-to-end smoke test in the pinned container:
+
+```bash
+./26_custom_tensorrt_plugin/build_and_validate.sh
+```
+
+This requires a working NVIDIA driver and GPU. Without GPU access, inspect the source and run
+`git diff --check`; engine conversion and CUDA execution cannot be claimed as verified.
 
 ## Checkpoints
 
-1. Implement, register, build, serialize, deserialize, and execute a TensorRT `IPluginV3` layer.
-2. Launch a CUDA kernel from plugin `enqueue` while respecting dynamic shape and data-type contracts.
-3. Validate plugin output numerically against a reference implementation.
+1. Explain how `com.acme::AcmeSwish` maps to the plugin creator's namespace and name.
+2. Trace the `IPluginV3` core, build, and runtime capability responsibilities.
+3. Explain why the plugin preserves dynamic dimensions but accepts only FP32 linear tensors.
+4. Explain why the TensorRT-provided CUDA stream is used directly in `enqueue`.
+5. Verify that the original Lesson 25 model converts only when the plugin library is loaded.
+6. Compare the graph-surgery path in Lesson 25 with this plugin path in terms of deployment and
+   maintenance trade-offs.

@@ -1,12 +1,25 @@
-# 25 - ONNX Graph Surgery and Plugin Escalation
+# 25 - ONNX Graph Surgery for Unsupported TensorRT Operators
 
 ## Purpose
 
-This lesson demonstrates the escalation order for unsupported operators with a runnable failure:
+This lesson demonstrates how to repair an ONNX model that TensorRT cannot convert because it
+contains a custom operator. The demo model contains `com.acme::AcmeSwish`, whose semantics are
+`x * sigmoid(x)`.
+
+The lesson uses ONNX GraphSurgeon to replace that unsupported node with standard ONNX operators:
+
+```text
+AcmeSwish(x) -> Sigmoid(x) + Mul(x, Sigmoid(x))
+```
+
+The broader escalation order is:
 
 1. Rewrite the source model with equivalent supported operators when you control model code.
 2. Replace or split nodes in ONNX when the exported graph is the integration boundary.
 3. Write a TensorRT plugin only when equivalent supported operators are unavailable or too slow.
+
+This lesson implements the graph-surgery path. Lesson 26 keeps the original custom node and
+implements the TensorRT plugin path for the same model.
 
 ## Prerequisites
 
@@ -17,15 +30,27 @@ This lesson demonstrates the escalation order for unsupported operators with a r
 
 - Unsupported-operator demo model and diagnosis tool
 - GraphSurgeon rewrite and numerical-validation scripts
+- A TensorRT engine built from the rewritten graph
 - Diagnosis tests and an isolated dependency setup
 
-## Plugin Interface Awareness
+The original `outputs/unsupported_swish.onnx` is also the input artifact for Lesson 26.
 
-TensorRT 10.14 uses `IPluginV3` capability interfaces to separate core identity, build-time shape
-and format negotiation, and runtime execution. A creator constructs plugins from fields, and engine
-deserialization must find the registered creator and compatible plugin library. Lesson 26 provides
-the runnable V3 implementation. The repaired standard-operator graph is built as a strongly typed
-network so TensorRT follows the data types declared by ONNX.
+## Relationship to Lesson 26
+
+This lesson intentionally stops at the graph-surgery solution. The custom node contract is:
+
+```text
+domain = com.acme
+op_type = AcmeSwish
+inputs = 1 FP32 tensor
+outputs = 1 tensor with the same shape and type
+```
+
+Because `AcmeSwish` can be expressed with standard ONNX operators, this lesson replaces it with
+`Sigmoid` and `Mul`, then builds the repaired model with TensorRT. Lesson 26 keeps
+`com.acme::AcmeSwish` in the graph and registers a TensorRT `IPluginV3` whose creator matches that
+domain and operator name. The two lessons therefore compare graph surgery with plugin integration
+on the same source model.
 
 ## Setup
 
@@ -70,6 +95,22 @@ trtexec \
   --saveEngine=25_onnx_graph_surgery_plugin/outputs/rewritten_swish.engine
 ```
 
+### Handoff to Lesson 26
+
+Keep `outputs/unsupported_swish.onnx` as the plugin-path input. Do not replace it with
+`rewritten_swish.onnx` when starting Lesson 26:
+
+```text
+unsupported_swish.onnx
+  -> Lesson 25 GraphSurgeon
+  -> rewritten_swish.onnx
+  -> TensorRT engine
+
+unsupported_swish.onnx
+  -> Lesson 26 AcmeSwish TensorRT plugin
+  -> TensorRT engine
+```
+
 The repaired graph implements `swish(x) = x * sigmoid(x)` with two standard ONNX nodes. Cleanup and
 topological sorting remove the disconnected custom node before export.
 
@@ -78,6 +119,8 @@ topological sorting remove the disconnected custom node before export.
 - The unsupported model, rewritten model, validation evidence, and rebuilt engine are generated
   under ignored `outputs/`.
 - The expected parser failure is evidence only when its command and log are retained.
+- `unsupported_swish.onnx` is the handoff input for Lesson 26; this lesson's engine is built from
+  `rewritten_swish.onnx`.
 
 ## Tests
 
@@ -90,6 +133,8 @@ python3 -m unittest discover -s 25_onnx_graph_surgery_plugin/tests -v
 
 ## Checkpoints
 
-1. Diagnose an unsupported ONNX operator and choose among model rewrite, graph surgery, and a TensorRT plugin.
-2. Rewrite and validate a small ONNX graph with ONNX GraphSurgeon.
-3. Explain the build-time and runtime responsibilities of TensorRT `IPluginV3` capabilities.
+1. Identify the domain and operator type of an unsupported ONNX node.
+2. Explain why `com.acme::AcmeSwish` cannot be parsed by TensorRT without additional handling.
+3. Rewrite and validate a small ONNX graph with ONNX GraphSurgeon.
+4. Explain when graph surgery is preferable to a TensorRT plugin.
+5. Identify `unsupported_swish.onnx` as the input artifact for Lesson 26.
