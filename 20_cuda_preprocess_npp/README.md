@@ -63,8 +63,8 @@ Use the pinned TensorRT development container and an NVIDIA GPU:
 The default input is `../assets/img.jpeg`. Results are written to
 `outputs/preprocess_benchmark.csv`. The adjacent `preprocess_benchmark_environment.json` records
 the GPU, compute capability, and CUDA runtime/driver versions for the measured data. CPU
-preprocessing, host staging, H2D,
-NPP+CUDA preprocessing, and D2H are separate columns. The exact-size unit test requires the fused
+preprocessing, host staging, H2D, NPP resize, fused conversion, combined GPU preprocessing, and D2H
+are separate columns. The exact-size unit test requires the fused
 conversion to match within `1e-6`. For resized images, the executable uses mean absolute error
 `<=0.02` and maximum error `<=0.30`, because NPP and OpenCV use different bilinear sampling
 coordinates near some boundaries. Both errors remain in the CSV; do not hide a large local error
@@ -85,8 +85,10 @@ Run CUDA memory checking on the focused smoke test:
 compute-sanitizer --tool memcheck ./20_cuda_preprocess_npp/build/cuda_preprocess_tests
 ```
 
-Then profile the executable with Nsight Systems and verify H2D, NPP resize, the fused kernel, and D2H
-appear on the same stream. Compare the CSV before claiming GPU preprocessing is faster: for one
+Then profile the executable with Nsight Systems and verify the `host_input_staging`, `h2d_submit`,
+`npp_resize_submit`, `bgr_to_rgb_nchw_submit`, and `d2h_submit` NVTX ranges correspond to work on
+the same CUDA stream. NVTX ranges describe host submission; CUDA events provide device duration.
+Compare the CSV before claiming GPU preprocessing is faster: for one
 small image, transfer and launch overhead can outweigh the kernel savings. The most useful path is
 often decode/capture directly into GPU-visible memory (NVDEC, DeepStream NVMM, or a platform camera
 API), avoiding the host round trip rather than merely optimizing it.

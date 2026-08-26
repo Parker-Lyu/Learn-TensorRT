@@ -169,7 +169,7 @@ round-robin scheduling protects fairness, while dynamic batching trades queue de
 - Generic bounded queues and lifecycle tests in lessons 16–19.
 - CUDA/NPP preprocessing with pageable, pinned, and mapped-memory evidence in lesson 20.
 - Stable C ABI plus Python ctypes wrapper in lesson 29.
-- Focused algorithm and RAII tests in lesson 31.
+- Reproducible CUDA kernel variants, correctness gates, and Nsight Compute analysis in lesson 31.
 
 ## Test Evidence
 
@@ -203,8 +203,9 @@ Jetson acceptance remains pending in their required containers or target hardwar
 
 ## Bottleneck and Future Work
 
-Nsight evidence identified CPU preprocessing/postprocessing as the original end-to-end bottleneck.
-CUDA/NPP reduced preprocessing work, but transfer strategy still matters. Next work is to
+Nsight Systems evidence identified CPU preprocessing/postprocessing as the original end-to-end
+bottleneck. Lesson 31 keeps standalone kernel timing separate from Nsight Compute replay and from
+pipeline benefit; CUDA/NPP transfer strategy still matters. Next work is to
 {precision_next}, complete the formal soak/TSAN gates, and validate runtime behavior on
 Triton, DeepStream, and Jetson hardware.
 
@@ -214,8 +215,9 @@ Triton, DeepStream, and Jetson hardware.
   CUDA/NPP preprocessing, dynamic batching, bounded multi-stream scheduling, and fault injection.
 - Implemented a serialized CUDA TensorRT plugin, ONNX graph repair workflow, C ABI shared library,
   Python integration, and reproducible latency/accuracy/report generation.
-- Profiled CPU/GPU bottlenecks and documented honest deployment boundaries for Triton, DeepStream,
-  Jetson DLA, OpenVINO CPU, and local autoregressive LLM inference.
+- Profiled system and CUDA-kernel bottlenecks with Nsight Systems/Compute and documented honest
+  deployment boundaries for Triton, DeepStream, Jetson DLA, OpenVINO CPU, and local autoregressive
+  LLM inference.
 
 ## Five-Minute English Presentation
 

@@ -12,6 +12,8 @@ enum class HostMemoryMode { Pageable, Pinned, Mapped };
 struct PreprocessTiming {
     float host_staging_ms{0.0F};
     float h2d_ms{0.0F};
+    float npp_resize_ms{0.0F};
+    float conversion_ms{0.0F};
     float gpu_preprocess_ms{0.0F};
     float d2h_ms{0.0F};
 };

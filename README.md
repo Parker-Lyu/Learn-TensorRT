@@ -71,9 +71,9 @@ from the job descriptions you are targeting instead of completing every elective
 
 ### Elective Tracks
 
-Lessons `23`–`30` use global, stable identifiers. Their numbers do **not** imply that every
+Lessons `23`–`31` use global, stable identifiers. Their numbers do **not** imply that every
 elective should be completed in numerical order. Follow the track-specific sequence and
-prerequisites below; Lesson `31` is ongoing practice and Lesson `32` is the final synthesis.
+prerequisites below; Lesson `32` is the final synthesis.
 
 | Track | Lessons | Recommended order and prerequisites |
 | --- | --- | --- |
@@ -82,7 +82,7 @@ prerequisites below; Lesson `31` is ongoing practice and Lesson `32` is the fina
 | Advanced TensorRT | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` | **25 → 26**: repair the same unsupported `com.acme::AcmeSwish` model with GraphSurgeon, then with a TensorRT plugin. |
 | CPU and Intel | `23_openvino_yolov8` | Independent branch; reuse the ONNX and comparison evidence from Lessons 05/15 as documented. |
 | LLM awareness | `30_llm_inference_intro` | Independent branch; no YOLO/TensorRT elective prerequisite. |
-| Ongoing interview practice | `31_cpp_interview_katas` | Practice alongside the related core lessons, not only after Lesson 30. |
+| CUDA kernel analysis | `31_nsight_compute_kernel_analysis` | Complete Lessons 13 and 20 first; use Lesson 21 only for matched end-to-end evidence. |
 | Final synthesis | `32_final_portfolio_case_study` | Complete after the core checkpoints and only the elective evidence you plan to present. |
 
 

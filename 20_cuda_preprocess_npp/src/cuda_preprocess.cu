@@ -1,5 +1,7 @@
 #include "preprocess.hpp"
 
+#include "nvtx_range.hpp"
+
 #include <cuda_runtime_api.h>
 #include <nppcore.h>
 #include <nppi_geometry_transforms.h>
@@ -121,42 +123,64 @@ struct GpuPreprocessor::Impl {
             throw std::invalid_argument("GPU input must be continuous CV_8UC3 with configured dimensions");
         GpuPreprocessResult result;
         result.tensor_nchw.resize(output_bytes / sizeof(float));
-        const auto staging_start = std::chrono::steady_clock::now();
         const void* copy_source = image.data;
-        if (mode != HostMemoryMode::Pageable) {
-            std::memcpy(host_input, image.data, source_bytes);
-            copy_source = host_input;
+        const auto staging_start = std::chrono::steady_clock::now();
+        {
+            NvtxRange range("host_input_staging");
+            if (mode != HostMemoryMode::Pageable) {
+                std::memcpy(host_input, image.data, source_bytes);
+                copy_source = host_input;
+            }
         }
         const auto staging_stop = std::chrono::steady_clock::now();
         result.timing.host_staging_ms =
             std::chrono::duration<float, std::milli>(staging_stop - staging_start).count();
 
-        Event h2d_start, h2d_stop, preprocess_start, preprocess_stop, d2h_start, d2h_stop;
+        Event h2d_start, h2d_stop, preprocess_start, preprocess_stop;
+        Event resize_start, resize_stop, conversion_start, conversion_stop;
+        Event d2h_start, d2h_stop;
         check_cuda(cudaEventRecord(h2d_start.get(), stream), "record H2D start");
-        if (mode != HostMemoryMode::Mapped)
-            check_cuda(cudaMemcpyAsync(device_input, copy_source, source_bytes,
-                                       cudaMemcpyHostToDevice, stream), "copy source to device");
+        {
+            NvtxRange range("h2d_submit");
+            if (mode != HostMemoryMode::Mapped)
+                check_cuda(cudaMemcpyAsync(device_input, copy_source, source_bytes,
+                                           cudaMemcpyHostToDevice, stream), "copy source to device");
+        }
         check_cuda(cudaEventRecord(h2d_stop.get(), stream), "record H2D stop");
         check_cuda(cudaEventRecord(preprocess_start.get(), stream), "record preprocess start");
-        check_npp(nppiResize_8u_C3R_Ctx(
-            static_cast<const Npp8u*>(device_input), source.width * 3,
-            {source.width, source.height}, {0, 0, source.width, source.height},
-            static_cast<Npp8u*>(device_resized), target.width * 3,
-            {target.width, target.height}, {0, 0, target.width, target.height},
-            NPPI_INTER_LINEAR, npp_context), "nppiResize_8u_C3R_Ctx");
+        check_cuda(cudaEventRecord(resize_start.get(), stream), "record resize start");
+        {
+            NvtxRange range("npp_resize_submit");
+            check_npp(nppiResize_8u_C3R_Ctx(
+                static_cast<const Npp8u*>(device_input), source.width * 3,
+                {source.width, source.height}, {0, 0, source.width, source.height},
+                static_cast<Npp8u*>(device_resized), target.width * 3,
+                {target.width, target.height}, {0, 0, target.width, target.height},
+                NPPI_INTER_LINEAR, npp_context), "nppiResize_8u_C3R_Ctx");
+        }
+        check_cuda(cudaEventRecord(resize_stop.get(), stream), "record resize stop");
         const dim3 block(16, 16);
         const dim3 grid((target.width + block.x - 1) / block.x,
                         (target.height + block.y - 1) / block.y);
-        bgr_to_rgb_nchw<<<grid, block, 0, stream>>>(
-            static_cast<const unsigned char*>(device_resized), static_cast<float*>(device_output),
-            target.width, target.height, target.width * 3);
-        check_cuda(cudaGetLastError(), "launch bgr_to_rgb_nchw");
+        check_cuda(cudaEventRecord(conversion_start.get(), stream), "record conversion start");
+        {
+            NvtxRange range("bgr_to_rgb_nchw_submit");
+            bgr_to_rgb_nchw<<<grid, block, 0, stream>>>(
+                static_cast<const unsigned char*>(device_resized),
+                static_cast<float*>(device_output), target.width, target.height, target.width * 3);
+            check_cuda(cudaGetLastError(), "launch bgr_to_rgb_nchw");
+        }
+        check_cuda(cudaEventRecord(conversion_stop.get(), stream), "record conversion stop");
         check_cuda(cudaEventRecord(preprocess_stop.get(), stream), "record preprocess stop");
         check_cuda(cudaEventRecord(d2h_start.get(), stream), "record D2H start");
-        if (mode != HostMemoryMode::Mapped) {
-            void* destination = mode == HostMemoryMode::Pinned ? host_output : result.tensor_nchw.data();
-            check_cuda(cudaMemcpyAsync(destination, device_output, output_bytes,
-                                       cudaMemcpyDeviceToHost, stream), "copy output to host");
+        {
+            NvtxRange range("d2h_submit");
+            if (mode != HostMemoryMode::Mapped) {
+                void* destination =
+                    mode == HostMemoryMode::Pinned ? host_output : result.tensor_nchw.data();
+                check_cuda(cudaMemcpyAsync(destination, device_output, output_bytes,
+                                           cudaMemcpyDeviceToHost, stream), "copy output to host");
+            }
         }
         check_cuda(cudaEventRecord(d2h_stop.get(), stream), "record D2H stop");
         check_cuda(cudaEventSynchronize(d2h_stop.get()), "wait for preprocessing");
@@ -165,6 +189,8 @@ struct GpuPreprocessor::Impl {
         else if (mode == HostMemoryMode::Mapped)
             std::memcpy(result.tensor_nchw.data(), host_output, output_bytes);
         result.timing.h2d_ms = elapsed(h2d_start, h2d_stop);
+        result.timing.npp_resize_ms = elapsed(resize_start, resize_stop);
+        result.timing.conversion_ms = elapsed(conversion_start, conversion_stop);
         result.timing.gpu_preprocess_ms = elapsed(preprocess_start, preprocess_stop);
         result.timing.d2h_ms = elapsed(d2h_start, d2h_stop);
         return result;

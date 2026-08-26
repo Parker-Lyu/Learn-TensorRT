@@ -12,7 +12,7 @@ lessons=(
   19_multistream_video_pipeline
   20_cuda_preprocess_npp
   29_cpp_shared_library_python_binding
-  31_cpp_interview_katas
+  31_nsight_compute_kernel_analysis
 )
 
 for lesson in "${lessons[@]}"; do

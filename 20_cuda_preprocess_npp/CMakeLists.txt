@@ -13,7 +13,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 add_library(cuda_preprocess src/preprocess.cpp src/cuda_preprocess.cu)
 target_compile_features(cuda_preprocess PUBLIC cxx_std_17)
 target_include_directories(cuda_preprocess PUBLIC include)
-target_link_libraries(cuda_preprocess PUBLIC opencv_core opencv_imgproc CUDA::cudart CUDA::nppc CUDA::nppig)
+target_link_libraries(cuda_preprocess PUBLIC opencv_core opencv_imgproc CUDA::cudart CUDA::nppc CUDA::nppig CUDA::nvtx3)
 set_target_properties(cuda_preprocess PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON CUDA_EXTENSIONS OFF)
 
 add_executable(cuda_preprocess_npp src/main.cpp)

@@ -178,6 +178,13 @@ docker run -dit \
   learn-tensorrt:25.11
 ```
 
+Keep the default container unprivileged. Lesson 31 is the exception: when the host NVIDIA driver has
+`RmProfilingAdminOnly=1`, recreate the persistent container with `--cap-add SYS_ADMIN` inserted after
+`--gpus all`, run only the profiler process as container root, and restore bind-mounted output
+ownership afterward. Do not change or reload the host driver merely to complete the lesson. Remove
+the capability by recreating the normal container after profiling. A host configured to permit
+non-admin profiling does not need this exception.
+
 `--network host` gives the container the host's network namespace. Lesson 24 runs the Triton
 server with `--network host` on the host's ports, so the client inside the development container
 can reach it at `localhost:8000` only when both share one network namespace. The trade-offs:

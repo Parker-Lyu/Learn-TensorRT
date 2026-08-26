@@ -26,8 +26,8 @@ CHECKS = [
     ("lesson29 ctypes inference",
      [sys.executable, "-m", "unittest", "discover", "-s",
       "29_cpp_shared_library_python_binding/tests", "-v"]),
-    ("lesson31 katas",
-     ["ctest", "--test-dir", "31_cpp_interview_katas/build", "--output-on-failure"]),
+    ("lesson31 Nsight Compute kernel analysis",
+     ["ctest", "--test-dir", "31_nsight_compute_kernel_analysis/build", "--output-on-failure"]),
 ]
 
 

@@ -55,7 +55,8 @@ int main(int argc, char** argv) {
         std::filesystem::create_directories(output_dir);
         std::ofstream csv(output_dir / "preprocess_benchmark.csv");
         if (!csv) throw std::runtime_error("failed to create benchmark CSV");
-        csv << "mode,cpu_ms,host_stage_ms,h2d_ms,gpu_preprocess_ms,d2h_ms,max_abs_error,mean_abs_error\n";
+        csv << "mode,cpu_ms,host_stage_ms,h2d_ms,npp_resize_ms,conversion_ms,"
+               "gpu_preprocess_ms,d2h_ms,max_abs_error,mean_abs_error\n";
 
         int device = 0;
         int runtime_version = 0;
@@ -80,12 +81,14 @@ int main(int argc, char** argv) {
                                 lesson20::HostMemoryMode::Mapped}) {
             lesson20::GpuPreprocessor gpu(image.size(), target, mode);
             (void)gpu.run(image);
-            std::vector<double> stage, h2d, preprocess, d2h;
+            std::vector<double> stage, h2d, resize, conversion, preprocess, d2h;
             lesson20::GpuPreprocessResult result;
             for (int iteration = 0; iteration < iterations; ++iteration) {
                 result = gpu.run(image);
                 stage.push_back(result.timing.host_staging_ms);
                 h2d.push_back(result.timing.h2d_ms);
+                resize.push_back(result.timing.npp_resize_ms);
+                conversion.push_back(result.timing.conversion_ms);
                 preprocess.push_back(result.timing.gpu_preprocess_ms);
                 d2h.push_back(result.timing.d2h_ms);
             }
@@ -98,13 +101,14 @@ int main(int argc, char** argv) {
             const double mean_error = error_sum / reference.size();
             std::cout << std::fixed << std::setprecision(4) << name(mode)
                       << " stage=" << mean(stage) << " h2d=" << mean(h2d)
+                      << " resize=" << mean(resize) << " conversion=" << mean(conversion)
                       << " gpu=" << mean(preprocess) << " d2h=" << mean(d2h)
                       << " max_error=" << max_error << " mean_error=" << mean_error << '\n';
             if (mean_error > 0.02 || max_error > 0.30)
                 throw std::runtime_error("GPU preprocessing exceeded numerical tolerance");
             csv << name(mode) << ',' << mean(cpu_times) << ',' << mean(stage) << ',' << mean(h2d)
-                << ',' << mean(preprocess) << ',' << mean(d2h) << ',' << max_error << ','
-                << mean_error << '\n';
+                << ',' << mean(resize) << ',' << mean(conversion) << ',' << mean(preprocess) << ','
+                << mean(d2h) << ',' << max_error << ',' << mean_error << '\n';
         }
         if (!csv || !environment) throw std::runtime_error("failed to write benchmark evidence");
         std::cout << "GPU=" << properties.name << " compute_capability=" << properties.major << '.'

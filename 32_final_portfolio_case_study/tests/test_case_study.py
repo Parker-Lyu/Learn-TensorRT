@@ -35,7 +35,7 @@ class CaseStudyTests(unittest.TestCase):
         script = ROOT / "32_final_portfolio_case_study/build_local_checks.sh"
         self.assertTrue(script.is_file())
         text = script.read_text()
-        self.assertIn("31_cpp_interview_katas", text)
+        self.assertIn("31_nsight_compute_kernel_analysis", text)
         self.assertIn("CMAKE_BUILD_TYPE=Release", text)
 
     def test_case_study_uses_quality_and_performance_for_precision_choice(self):

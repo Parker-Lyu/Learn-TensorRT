@@ -42,6 +42,8 @@ can:
 - Process multiple video streams with clear scheduling, batching, and dropped-frame policies.
 - Debug unsupported operators with ONNX GraphSurgeon and a runnable TensorRT custom plugin.
 - Use Nsight Systems to prove where CPU/GPU time is spent.
+- Use Nsight Compute to explain a selected CUDA kernel and decide whether further optimization is
+  justified by system-level evidence.
 - Understand DeepStream and GStreamer enough to run multi-stream industrial demos.
 - Understand Jetson Orin/Xavier deployment, cross compilation, and DLA constraints.
 - Package C++ inference as a `.so` and call it from Python.
@@ -101,8 +103,8 @@ lesson provides one runnable artifact and one concise README.
 ## Learning Flow
 
 Use the core path in order. After the core path, choose an elective track from the job descriptions
-you are targeting instead of completing every elective sequentially. `31_cpp_interview_katas` runs
-alongside the course rather than waiting until the end.
+you are targeting instead of completing every elective sequentially. Lesson 31 is an advanced
+profiling follow-up to Lessons 13 and 20, not a prerequisite for the final synthesis.
 
 | Path | Sequence | Focus |
 | --- | --- | --- |
@@ -117,7 +119,7 @@ alongside the course rather than waiting until the end.
 | Advanced TensorRT elective | `25`, `26` | Graph surgery and a runnable TensorRT plugin |
 | CPU/Intel elective | `23` | OpenVINO CPU inference comparison |
 | LLM awareness elective | `30` | Entry-level LLM inference concepts and measurements |
-| Ongoing interview practice | `31` | Deployment-relevant C++ exercises tied to completed lessons |
+| CUDA kernel analysis elective | `31` | Nsight Systems selection, Nsight Compute evidence, and optimization stop decisions |
 | Final synthesis | `32` | Portfolio case study, packaging, resume evidence, and English presentation |
 
 ## Course Plan
@@ -1445,56 +1447,72 @@ Acceptance criteria:
 - The report separates model-weight memory from an estimated KV-cache contribution and records any
   configuration that cannot run within available memory.
 
-## Ongoing Interview Practice
+## Advanced CUDA Profiling
 
-### `31_cpp_interview_katas`
+### `31_nsight_compute_kernel_analysis`
 
 Purpose:
 
-- Prepare for practical C++ interview questions related to CV deployment instead of generic puzzle-style questions.
-- Practice each group after its related core lesson instead of postponing all exercises until the
-  end.
+- Use system and microarchitectural evidence to decide whether optimizing Lesson 20's custom
+  preprocessing kernel is worth the engineering cost.
+- Treat retaining the baseline or stopping optimization as valid outcomes when the evidence does
+  not support a deployment benefit.
 
 Learning outcomes:
 
-- Implement deployment-relevant C++ algorithms and ownership patterns without framework wrappers.
-- Explain validation, complexity, boundary behavior, ownership, and synchronization choices.
-- Use focused tests to practice each kata after its related course lesson.
+- Use Nsight Systems to separate host staging, transfers, NPP resize, custom conversion, and idle
+  gaps before selecting a kernel for deeper analysis.
+- Read occupancy, register, scheduler, memory-workload, Speed-of-Light, and warp-stall evidence
+  together instead of optimizing one metric in isolation.
+- Compare matched CUDA kernel variants without confusing profiler replay duration with benchmark
+  timing.
+- Distinguish standalone kernel improvement from GPU preprocessing and end-to-end deployment gains.
 
 Topics:
 
-- IoU
-- NMS
-- Bilinear interpolation
-- Letterbox coordinate mapping
-- HWC to CHW memory reorder
-- Thread-safe queue
-- Top-K filtering
-- Simple ring buffer
-- RAII wrapper for CUDA memory
+- Nsight Systems hotspot selection and NVTX/CUDA event measurement boundaries
+- Fixed-input standalone CUDA benchmarking with warmup and repeated measurements
+- Nsight Compute launch, occupancy, Speed-of-Light, memory workload, scheduler, and warp-state
+  sections
+- Registers per thread, achieved occupancy, cache/DRAM throughput, access coalescing, and warp
+  stalls
+- Controlled block-shape, indexing, vectorized-read, and fused-versus-unfused variants
+- Numerical validation against Lesson 20's preprocessing contract
+- Kernel, complete GPU preprocessing, and matched pipeline evidence
 
 Deliverables:
 
-- Reusable C++17 kata library and demo executable
-- Focused CPU algorithm, queue, ring-buffer, and CUDA ownership tests
-- Documented practice timing tied to earlier lessons
+- C++17/CUDA standalone benchmark with five controlled variants and focused correctness tests
+- Reproducible Nsight Systems and Nsight Compute capture workflow
+- Environment-specific `.nsys-rep`/`.ncu-rep`, metric summary, benchmark JSON, and generated decision
+  report under ignored output/report directories
 
 Design notes:
 
-**Suggested timing:**
-
-- After `03`: letterbox mapping and HWC-to-CHW.
-- After `08`: RAII wrappers and move-only resource ownership.
-- After `11`: IoU, NMS, and Top-K.
-- After `16`: bounded queues and ring buffers.
+- Lesson 13 is required because system-level selection precedes kernel-level profiling.
+- Lesson 20 supplies the target kernel and numerical contract. Lesson 21 evidence is optional but
+  required before claiming an end-to-end deployment improvement.
+- Nsight Compute can replay a kernel to collect counters, so its displayed duration is not used as
+  benchmark evidence.
+- Raw profiler reports are environment-specific generated evidence; the committed workflow and
+  summary generator make them reproducible on another target.
+- TensorRT internal kernels are outside this lesson. Lesson 26's plugin kernel is a later, more
+  complex case.
 
 Acceptance criteria:
 
-- Each kata has a small C++ implementation and either a focused executable check or Google Test
-  coverage.
-- Focused executables or tests exercise IoU, NMS, letterbox mapping, and bounded-queue implementations.
-- Destructive edge cases are covered for empty inputs, extreme coordinates, overlapping boxes, and
-  queue boundary behavior.
+- Nsight Systems separates NPP resize, the custom conversion kernel, copies, and host staging. If
+  the custom kernel is not material, the report explicitly stops the deployment optimization claim.
+- The workflow regenerates `.ncu-rep` files and a concise metric summary for the baseline and
+  controlled variants with complete environment identity.
+- Every variant satisfies Lesson 20's numerical constraints and uses matched input, warmup,
+  iteration count, allocation boundary, and CUDA event timing.
+- Kernel, complete GPU preprocessing, and available end-to-end pipeline timing are reported
+  separately; missing pipeline evidence remains explicit.
+- A kernel metric or microbenchmark improvement is not accepted as deployment benefit without
+  matched higher-level improvement.
+- The report may conclude that the baseline is preferable or further optimization has low expected
+  value; no predetermined improvement percentage is required.
 
 ## Final Synthesis
 

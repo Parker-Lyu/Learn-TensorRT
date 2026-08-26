@@ -10,6 +10,8 @@ optional multi-stage delivery image. It consumes generated evidence from lessons
 
 - Complete the checkpoint reports and only the elective evidence that will be presented.
 - Build the required lesson 11, 17, and 29 artifacts in the pinned development environment.
+- Lesson 31 profiling reports are optional portfolio evidence; its CUDA correctness and tooling
+  tests remain part of the local verification matrix.
 
 ## Deliverables
 
