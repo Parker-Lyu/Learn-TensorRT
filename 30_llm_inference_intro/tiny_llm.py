@@ -43,6 +43,38 @@ class TinyTransformer:
                  np.empty((batch, self.config.heads, 0, head_dim), np.float32)]
                 for _ in range(self.config.layers)]
 
+    def prefill(self, token_ids: np.ndarray, cache) -> np.ndarray:
+        if token_ids.ndim != 2:
+            raise ValueError("prefill token_ids must have shape [batch, sequence]")
+        batch, sequence_length = token_ids.shape
+        if batch == 0 or sequence_length == 0:
+            raise ValueError("prefill requires a non-empty batch and sequence")
+        if any(layer_cache[0].shape[2] != 0 for layer_cache in cache):
+            raise ValueError("prefill requires an empty KV cache")
+
+        x = self.embedding[token_ids]
+        heads = self.config.heads
+        head_dim = self.config.hidden_size // heads
+        causal_mask = np.triu(
+            np.ones((sequence_length, sequence_length), dtype=bool), k=1)
+        for index, (wq, wk, wv, wo, w1, w2) in enumerate(self.layers):
+            q = (x @ wq).reshape(batch, sequence_length, heads, head_dim).transpose(0, 2, 1, 3)
+            k = (x @ wk).reshape(batch, sequence_length, heads, head_dim).transpose(0, 2, 1, 3)
+            v = (x @ wv).reshape(batch, sequence_length, heads, head_dim).transpose(0, 2, 1, 3)
+            cache[index][0] = k
+            cache[index][1] = v
+
+            scores = np.einsum("bhqd,bhkd->bhqk", q, k) / math.sqrt(head_dim)
+            scores = np.where(causal_mask[None, None, :, :], -np.inf, scores)
+            scores -= scores.max(axis=-1, keepdims=True)
+            attention = np.exp(scores)
+            attention /= attention.sum(axis=-1, keepdims=True)
+            context = np.einsum("bhqk,bhkd->bhqd", attention, v)
+            context = context.transpose(0, 2, 1, 3).reshape(batch, sequence_length, -1)
+            x = x + context @ wo
+            x = x + np.tanh(x @ w1) @ w2
+        return (x @ self.lm_head)[:, -1, :]
+
     def step(self, token_ids: np.ndarray, cache) -> np.ndarray:
         x = self.embedding[token_ids]
         batch = x.shape[0]

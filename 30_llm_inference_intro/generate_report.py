@@ -4,10 +4,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 data = json.loads((ROOT / "outputs/llm_benchmark.json").read_text())
+
+
+def format_metric(value, precision):
+    return "N/A" if value is None else f"{value:.{precision}f}"
+
+
 rows = "\n".join(
     f"| {r['input_length']} | {r['batch']} | {r['ttft_ms']:.3f} | "
-    f"{r['time_per_output_token_ms']:.3f} | {r['prefill_tokens_per_second']:.1f} | "
-    f"{r['decode_tokens_per_second']:.1f} | {r['total_tokens_per_second']:.1f} | "
+    f"{format_metric(r['time_per_output_token_ms'], 3)} | {r['prefill_tokens_per_second']:.1f} | "
+    f"{format_metric(r['decode_tokens_per_second'], 1)} | {r['total_tokens_per_second']:.1f} | "
     f"{r['estimated_kv_cache_mib']:.3f} |" for r in data["results"])
 text = f"""# Tiny Local LLM Inference Benchmark
 

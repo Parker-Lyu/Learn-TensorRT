@@ -6,6 +6,11 @@ This awareness elective runs a deterministic two-layer autoregressive Transforme
 small enough to inspect, but still performs tokenization, causal attention, prefill, token-by-token
 decode, and real KV-cache growth.
 
+Prefill accepts the complete `[batch, sequence]` prompt, computes all prompt positions in parallel
+under a causal mask, and fills each layer's KV cache in one call. Decode then processes one new token
+per sequence at each step. This distinction mirrors the execution shape of optimized LLM runtimes;
+production servers may split long prompts into chunks, but do not treat prefill as repeated decode.
+
 ## Prerequisites
 
 - Use the pinned development container or another Python environment with the documented NumPy dependency.
@@ -29,6 +34,8 @@ length constant, compares input lengths 16/64 and batches 1/4, performs warmup a
 and reports TTFT, TPOT, prefill/decode/total throughput, weight memory, estimated KV memory, peak
 host RSS, and zero GPU memory for this CPU backend. The evidence records the CPU model, logical CPU
 count, Python version, and NumPy version beside those measurements.
+When the requested output length is one, no decode step exists, so TPOT and decode throughput are
+reported as `N/A` rather than as zero.
 
 This is not a pretrained language model or serving-stack benchmark. It isolates inference mechanics.
 Mention TensorRT-LLM for optimized NVIDIA deployment, vLLM for paged-attention server throughput,

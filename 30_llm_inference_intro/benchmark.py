@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parent
 
 
 def run_once(model, input_ids, output_length):
+    if output_length <= 0:
+        raise ValueError("output_length must be positive")
     batch, input_length = input_ids.shape
     cache = model.new_cache(batch)
     started = time.perf_counter()
-    logits = None
-    for position in range(input_length):
-        logits = model.step(input_ids[:, position], cache)
+    logits = model.prefill(input_ids, cache)
     token = np.argmax(logits, axis=-1)
     first_token_at = time.perf_counter()
     decode_times = []
@@ -36,9 +36,11 @@ def run_once(model, input_ids, output_length):
     ttft = first_token_at - started
     decode_total = sum(decode_times)
     return {"ttft_ms": ttft * 1000.0,
-            "time_per_output_token_ms": statistics.fmean(decode_times) * 1000.0,
+            "time_per_output_token_ms": (
+                statistics.fmean(decode_times) * 1000.0 if decode_times else None),
             "prefill_tokens_per_second": batch * input_length / ttft,
-            "decode_tokens_per_second": batch * (output_length - 1) / decode_total,
+            "decode_tokens_per_second": (
+                batch * (output_length - 1) / decode_total if decode_times else None),
             "total_tokens_per_second": batch * (input_length + output_length) / (finished - started)}
 
 
@@ -63,7 +65,9 @@ def main() -> int:
             samples = [run_once(model, inputs, args.output_length) for _ in range(args.repetitions)]
             row = {"input_length": input_length, "batch": batch,
                    "output_length": args.output_length}
-            for key in samples[0]: row[key] = statistics.fmean(sample[key] for sample in samples)
+            for key in samples[0]:
+                values = [sample[key] for sample in samples]
+                row[key] = None if values[0] is None else statistics.fmean(values)
             row["estimated_kv_cache_mib"] = model.kv_cache_bytes(
                 batch, input_length + args.output_length) / 2**20
             rows.append(row)
