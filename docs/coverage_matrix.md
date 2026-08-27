@@ -25,7 +25,7 @@ TensorRT 10.14, CUDA Toolkit 13.0, and ISO C++17. ModelOpt workflows run in that
 | TensorRT custom plugin implementation | Covered as portfolio differentiator | `26_custom_tensorrt_plugin` |
 | TensorRT 10.14 plugin API, lifecycle, and validation | Covered as advanced path | `26_custom_tensorrt_plugin` |
 | Performance diagnosis with `trtexec` and Nsight Systems | Covered as advanced path | `06_trtexec_engine`, `13_nsight_performance_diagnosis` |
-| CUDA kernel diagnosis with Nsight Compute | Covered as advanced path; optimization may be rejected when system evidence is weak | `20_cuda_preprocess_npp`, `31_nsight_compute_kernel_analysis` |
+| CUDA kernel diagnosis and optimization with Nsight Compute | Covered as advanced path; controlled fusion is measured separately from rejected candidates and deployment-value decisions | `20_cuda_preprocess_npp`, `31_nsight_compute_kernel_analysis` |
 | CUDA or NPP preprocessing optimization | Covered as advanced path | `20_cuda_preprocess_npp` |
 | Single-stream video pipeline | Integrated TensorRT implementation covered | `16_cpp_producer_consumer`, `18_async_video_pipeline`, `21_integrated_tensorrt_video_pipeline` |
 | Multi-stream video pipeline | Integrated dynamic-batch TensorRT implementation covered | `17_dynamic_batching`, `19_multistream_video_pipeline`, `21_integrated_tensorrt_video_pipeline` |

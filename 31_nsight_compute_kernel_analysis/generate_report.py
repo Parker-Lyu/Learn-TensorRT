@@ -36,24 +36,66 @@ def validate_benchmark(data: Any) -> list[dict[str, Any]]:
     return results
 
 
-def kernel_decision(results: list[dict[str, Any]]) -> tuple[str, float]:
+def result_by_name(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     by_name = {result["variant"]: result for result in results}
-    if "baseline_16x16" not in by_name:
-        raise ValueError("baseline_16x16 result is required")
-    baseline = by_name["baseline_16x16"]["timing_ms"]["p50"]
-    best = min(results, key=lambda item: item["timing_ms"]["p50"])
-    improvement = (baseline - best["timing_ms"]["p50"]) / baseline * 100.0
-    if best["variant"] == "baseline_16x16" or improvement <= 0.0:
+    required = {"unfused", "baseline_16x16", "block_32x8", "linear", "vectorized"}
+    missing = required - by_name.keys()
+    if missing:
+        raise ValueError(f"kernel benchmark is missing variants: {', '.join(sorted(missing))}")
+    return by_name
+
+
+def fusion_decision(results: list[dict[str, Any]]) -> tuple[str, float, float]:
+    by_name = result_by_name(results)
+    unfused = by_name["unfused"]["timing_ms"]["p50"]
+    fused = by_name["baseline_16x16"]["timing_ms"]["p50"]
+    reduction = (unfused - fused) / unfused * 100.0
+    speedup = unfused / fused
+    if reduction <= 0.0:
         return (
-            "No variant reduces the observed baseline P50; retain the readable baseline unless "
-            "new system-level evidence justifies more work.",
+            "Fusing conversion and layout transformation does not reduce the observed standalone "
+            "P50 on this target, so the fusion hypothesis is rejected for this environment.",
+            reduction,
+            speedup,
+        )
+    return (
+        f"Fusing conversion and layout transformation reduces standalone kernel P50 by "
+        f"{reduction:.2f}% ({speedup:.2f}x). The fused implementation passes the exact numerical "
+        "contract, so the controlled kernel optimization is accepted.",
+        reduction,
+        speedup,
+    )
+
+
+def alternative_decision(results: list[dict[str, Any]]) -> tuple[str, float]:
+    by_name = result_by_name(results)
+    baseline = by_name["baseline_16x16"]["timing_ms"]["p50"]
+    alternatives = [by_name[name] for name in ("block_32x8", "linear", "vectorized")]
+    best = min(alternatives, key=lambda item: item["timing_ms"]["p50"])
+    improvement = (baseline - best["timing_ms"]["p50"]) / baseline * 100.0
+    if improvement <= 0.0:
+        return (
+            "No block-shape, indexing, or vectorized-read candidate reduces the observed fused "
+            "baseline P50; retain the readable 16x16 production kernel.",
             max(0.0, improvement),
         )
     return (
-        f"{best['variant']} improves standalone kernel P50 by {improvement:.2f}%, but it is not a "
-        "deployment win until matched GPU-preprocessing and pipeline evidence also improve.",
+        f"{best['variant']} reduces fused-baseline standalone P50 by {improvement:.2f}%. Treat this "
+        "as a kernel candidate until complete preprocessing evidence also improves.",
         improvement,
     )
+
+
+def candidate_table(results: list[dict[str, Any]]) -> str:
+    by_name = result_by_name(results)
+    baseline = by_name["baseline_16x16"]["timing_ms"]["p50"]
+    rows = []
+    for name in ("block_32x8", "linear", "vectorized"):
+        candidate = by_name[name]["timing_ms"]["p50"]
+        change = (baseline - candidate) / baseline * 100.0
+        status = "candidate" if change > 0.0 else "inconclusive" if change == 0.0 else "rejected"
+        rows.append(f"| {name} | {candidate:.6f} | {change:.2f}% | {status} |")
+    return "\n".join(rows)
 
 
 def load_lesson20_rows(path: Path) -> list[dict[str, str]]:
@@ -117,8 +159,8 @@ def pipeline_section(manifest: dict[str, Any]) -> str:
     pipeline = manifest.get("pipeline", {})
     if not pipeline.get("available"):
         return (
-            "No matched Lesson 21 pipeline evidence was supplied. Kernel and preprocessing results "
-            "therefore cannot be described as an end-to-end deployment improvement."
+            "No Lesson 21 pipeline context was supplied. Standalone kernel and preprocessing "
+            "results cannot be described as an end-to-end deployment improvement."
         )
     metrics = load_json(Path(pipeline["artifact"]))
     required = ("fps", "p50_ms", "p90_ms", "p99_ms", "preprocess_ms", "inference_ms")
@@ -126,12 +168,12 @@ def pipeline_section(manifest: dict[str, Any]) -> str:
     if missing:
         raise ValueError(f"Lesson 21 pipeline evidence is missing: {', '.join(missing)}")
     return (
-        f"Matched Lesson 21 evidence reports `{metrics['fps']:.3f}` FPS, capture-to-dispatch "
+        f"The supplied Lesson 21 run reports `{metrics['fps']:.3f}` FPS, capture-to-dispatch "
         f"P50/P90/P99 `{metrics['p50_ms']:.3f}/{metrics['p90_ms']:.3f}/"
         f"{metrics['p99_ms']:.3f}` ms, cumulative GPU preprocessing "
         f"`{metrics['preprocess_ms']:.3f}` ms, and cumulative TensorRT inference "
-        f"`{metrics['inference_ms']:.3f}` ms. These values are accepted only when its recorded "
-        "environment and workload match the comparison."
+        f"`{metrics['inference_ms']:.3f}` ms. This single run supplies scale and context only; an "
+        "end-to-end optimization claim requires matched baseline and candidate implementations."
     )
 
 
@@ -148,7 +190,8 @@ def main() -> int:
     manifest = load_json(input_dir / "profile_manifest.json")
     metrics = load_json(input_dir / "ncu_metrics_summary.json")
     lesson20_rows = load_lesson20_rows(input_dir / "lesson20_preprocess_benchmark.csv")
-    decision, improvement = kernel_decision(results)
+    fusion, fusion_reduction, fusion_speedup = fusion_decision(results)
+    alternatives, alternative_improvement = alternative_decision(results)
 
     timing_rows = "\n".join(
         f"| {item['variant']} | {item['kernel_launches_per_iteration']} | "
@@ -159,15 +202,27 @@ def main() -> int:
     environment = manifest["environment"]
     nsys = manifest.get("nsight_systems", {})
     ncu = manifest.get("nsight_compute", {})
-    text = f"""# Lesson 31 Nsight Compute Kernel Analysis
+    text = f"""# Lesson 31 Evidence-Driven CUDA Kernel Optimization
 
-## Decision
+## Controlled Fusion Result
 
-{decision}
+{fusion}
 
-The best standalone improvement is `{improvement:.2f}%`. Nsight Compute replay duration is excluded
-from all timing comparisons. A better occupancy, stall, or memory metric is diagnostic evidence, not
-an optimization result by itself.
+Measured fusion reduction: `{fusion_reduction:.2f}%`; measured speedup: `{fusion_speedup:.2f}x`.
+This result compares the two-launch teaching baseline with the one-launch fused kernel only. Nsight
+Compute replay duration is excluded from the timing comparison.
+
+## Candidate Variant Decision
+
+{alternatives}
+
+The best candidate reduction relative to the fused 16x16 kernel is
+`{alternative_improvement:.2f}%`. A better occupancy, stall, or memory metric is diagnostic evidence,
+not an optimization result by itself.
+
+| Candidate | P50 ms | Reduction vs fused baseline | Status |
+| --- | ---: | ---: | --- |
+{candidate_table(results)}
 
 ## Environment
 
@@ -185,18 +240,18 @@ an optimization result by itself.
 {timing_rows}
 
 All variants use the same deterministic 640x640 packed-BGR input, preallocated buffers, warmup,
-iteration count, CUDA event boundaries, and exact CPU reference. The unfused row includes both
-kernel launches and its intermediate global-memory traffic.
+iteration count, CUDA event boundaries, and exact CPU reference. `unfused` is the teaching baseline:
+it materializes an RGB HWC float tensor and launches a second kernel to reorder HWC to CHW.
+`baseline_16x16` is the readable fused kernel used by Lesson 20.
 
 ## Nsight Systems Evidence
 
 Capture available: **{'yes' if nsys.get('available') else 'no'}**. The Lesson 20 timeline separates
 host staging, H2D, NPP resize submission, conversion submission, D2H, and the corresponding CUDA
 work across pageable, pinned, and mapped modes. The Lesson 20 table below quantifies conversion's
-share of the measured path rather than declaring a hotspot from kernel duration alone. Mapped mode
+share of the production path rather than declaring a hotspot from standalone improvement. Mapped mode
 executes against host-visible memory on this discrete GPU, so its conversion duration is evidence
-about that transfer strategy, not a device-memory kernel baseline. If the custom conversion kernel
-is not material in the target path, this lesson treats that as evidence to stop.
+about that transfer strategy, not a device-memory kernel baseline.
 
 ## Nsight Compute Metrics
 
@@ -221,12 +276,14 @@ measured throughput relative to peak plus an explanation of bytes moved per outp
 
 {pipeline_section(manifest)}
 
-## Boundary
+## Deployment Decision Boundary
 
-Kernel metrics improving without matched GPU-preprocessing and end-to-end improvement is not a
-deployment gain. It is valid to retain the baseline or conclude that further optimization has low
-expected value. TensorRT internal kernels are outside this lesson; Lesson 26 provides a later custom
-plugin-kernel case.
+The controlled fusion result explains why Lesson 20 uses a fused kernel; it does not claim that the
+production pipeline became faster during this lesson. Further changes to the already-fused production
+kernel require matched complete-preprocessing evidence, and an end-to-end claim additionally requires
+matched pipeline evidence. Retain the readable fused kernel when the remaining candidates do not
+improve those higher-level measurements. TensorRT internal kernels are outside this lesson; Lesson 26
+provides a later custom plugin-kernel case.
 """
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")

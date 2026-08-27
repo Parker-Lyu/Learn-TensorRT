@@ -71,14 +71,55 @@ class MetricTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
-    def test_decision_does_not_equate_kernel_win_with_deployment_win(self):
-        results = [
-            {"variant": "baseline_16x16", "timing_ms": {"p50": 1.0}},
-            {"variant": "linear", "timing_ms": {"p50": 0.8}},
+    @staticmethod
+    def results(**p50):
+        return [
+            {"variant": name, "timing_ms": {"p50": value}}
+            for name, value in p50.items()
         ]
-        decision, improvement = REPORT.kernel_decision(results)
+
+    def test_fusion_decision_accepts_measured_kernel_improvement(self):
+        results = self.results(
+            unfused=2.0,
+            baseline_16x16=1.0,
+            block_32x8=1.1,
+            linear=1.2,
+            vectorized=1.3,
+        )
+        decision, reduction, speedup = REPORT.fusion_decision(results)
+        self.assertAlmostEqual(reduction, 50.0)
+        self.assertAlmostEqual(speedup, 2.0)
+        self.assertIn("accepted", decision)
+
+    def test_alternative_decision_does_not_claim_deployment_win(self):
+        results = [
+            {"variant": "unfused", "timing_ms": {"p50": 2.0}},
+            {"variant": "baseline_16x16", "timing_ms": {"p50": 1.0}},
+            {"variant": "block_32x8", "timing_ms": {"p50": 1.1}},
+            {"variant": "linear", "timing_ms": {"p50": 0.8}},
+            {"variant": "vectorized", "timing_ms": {"p50": 1.2}},
+        ]
+        decision, improvement = REPORT.alternative_decision(results)
         self.assertAlmostEqual(improvement, 20.0)
-        self.assertIn("not a deployment win", decision)
+        self.assertIn("kernel candidate", decision)
+
+    def test_decisions_require_complete_controlled_variant_set(self):
+        results = self.results(unfused=2.0, baseline_16x16=1.0)
+        with self.assertRaisesRegex(ValueError, "missing variants"):
+            REPORT.fusion_decision(results)
+
+    def test_candidate_table_classifies_each_follow_up(self):
+        results = self.results(
+            unfused=2.0,
+            baseline_16x16=1.0,
+            block_32x8=0.9,
+            linear=1.0,
+            vectorized=1.2,
+        )
+        table = REPORT.candidate_table(results)
+        self.assertIn("block_32x8 | 0.900000 | 10.00% | candidate", table)
+        self.assertIn("linear | 1.000000 | 0.00% | inconclusive", table)
+        self.assertIn("vectorized | 1.200000 | -20.00% | rejected", table)
 
     def test_benchmark_validation_rejects_numerical_failure(self):
         data = {
@@ -107,6 +148,7 @@ class ReportTests(unittest.TestCase):
             text = REPORT.pipeline_section({"pipeline": {"available": True, "artifact": str(path)}})
         self.assertIn("42.000", text)
         self.assertIn("P50/P90/P99", text)
+        self.assertIn("context only", text)
 
 
 if __name__ == "__main__":

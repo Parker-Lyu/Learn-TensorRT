@@ -233,8 +233,8 @@ KernelVariant parse_variant(const std::string& name) {
 }
 
 std::vector<KernelVariant> all_variants() {
-    return {KernelVariant::Baseline16x16, KernelVariant::Block32x8,
-            KernelVariant::Linear, KernelVariant::Vectorized, KernelVariant::Unfused};
+    return {KernelVariant::Unfused, KernelVariant::Baseline16x16,
+            KernelVariant::Block32x8, KernelVariant::Linear, KernelVariant::Vectorized};
 }
 
 std::vector<BenchmarkResult> benchmark_variants(

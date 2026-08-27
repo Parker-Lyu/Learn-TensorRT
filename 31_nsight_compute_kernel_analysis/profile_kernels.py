@@ -19,7 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LESSON = Path(__file__).resolve().parent
-VARIANTS = ("baseline_16x16", "block_32x8", "linear", "vectorized", "unfused")
+VARIANTS = ("unfused", "baseline_16x16", "block_32x8", "linear", "vectorized")
 SECTIONS = (
     "LaunchStats",
     "Occupancy",

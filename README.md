@@ -82,7 +82,7 @@ prerequisites below; Lesson `32` is the final synthesis.
 | Advanced TensorRT | `25_onnx_graph_surgery_plugin`, `26_custom_tensorrt_plugin` | **25 → 26**: repair the same unsupported `com.acme::AcmeSwish` model with GraphSurgeon, then with a TensorRT plugin. |
 | CPU and Intel | `23_openvino_yolov8` | Independent branch; reuse the ONNX and comparison evidence from Lessons 05/15 as documented. |
 | LLM awareness | `30_llm_inference_intro` | Independent branch; no YOLO/TensorRT elective prerequisite. |
-| CUDA kernel analysis | `31_nsight_compute_kernel_analysis` | Complete Lessons 13 and 20 first; use Lesson 21 only for matched end-to-end evidence. |
+| CUDA kernel optimization | `31_nsight_compute_kernel_analysis` | Complete Lessons 13 and 20 first; practice controlled fusion, rejected candidates, and production stop decisions. |
 | Final synthesis | `32_final_portfolio_case_study` | Complete after the core checkpoints and only the elective evidence you plan to present. |
 
 

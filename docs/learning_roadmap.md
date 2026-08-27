@@ -103,8 +103,8 @@ lesson provides one runnable artifact and one concise README.
 ## Learning Flow
 
 Use the core path in order. After the core path, choose an elective track from the job descriptions
-you are targeting instead of completing every elective sequentially. Lesson 31 is an advanced
-profiling follow-up to Lessons 13 and 20, not a prerequisite for the final synthesis.
+you are targeting instead of completing every elective sequentially. Lesson 31 is an advanced CUDA
+optimization follow-up to Lessons 13 and 20, not a prerequisite for the final synthesis.
 
 | Path | Sequence | Focus |
 | --- | --- | --- |
@@ -119,7 +119,7 @@ profiling follow-up to Lessons 13 and 20, not a prerequisite for the final synth
 | Advanced TensorRT elective | `25`, `26` | Graph surgery and a runnable TensorRT plugin |
 | CPU/Intel elective | `23` | OpenVINO CPU inference comparison |
 | LLM awareness elective | `30` | Entry-level LLM inference concepts and measurements |
-| CUDA kernel analysis elective | `31` | Nsight Systems selection, Nsight Compute evidence, and optimization stop decisions |
+| CUDA kernel optimization elective | `31` | Controlled fusion, Nsight Compute evidence, failed candidates, and production stop decisions |
 | Final synthesis | `32` | Portfolio case study, packaging, resume evidence, and English presentation |
 
 ## Course Plan
@@ -1447,51 +1447,56 @@ Acceptance criteria:
 - The report separates model-weight memory from an estimated KV-cache contribution and records any
   configuration that cannot run within available memory.
 
-## Advanced CUDA Profiling
+## Advanced CUDA Optimization
 
 ### `31_nsight_compute_kernel_analysis`
 
 Purpose:
 
-- Use system and microarchitectural evidence to decide whether optimizing Lesson 20's custom
-  preprocessing kernel is worth the engineering cost.
-- Treat retaining the baseline or stopping optimization as valid outcomes when the evidence does
-  not support a deployment benefit.
+- Complete a controlled CUDA optimization cycle from an unfused conversion/layout baseline to a
+  fused implementation, with matched correctness and timing evidence.
+- Use system and microarchitectural evidence to decide whether further optimization of Lesson 20's
+  already-fused production kernel is worth the engineering cost.
+- Separate a successful standalone kernel optimization from a preprocessing or deployment claim.
 
 Learning outcomes:
 
-- Use Nsight Systems to separate host staging, transfers, NPP resize, custom conversion, and idle
-  gaps before selecting a kernel for deeper analysis.
+- Diagnose the extra launch and intermediate global-memory traffic in an unfused teaching baseline,
+  then validate a fusion hypothesis against an exact reference.
 - Read occupancy, register, scheduler, memory-workload, Speed-of-Light, and warp-stall evidence
   together instead of optimizing one metric in isolation.
-- Compare matched CUDA kernel variants without confusing profiler replay duration with benchmark
-  timing.
+- Compare matched block-shape, indexing, and vectorized-read candidates without confusing profiler
+  replay duration with benchmark timing.
 - Distinguish standalone kernel improvement from GPU preprocessing and end-to-end deployment gains.
 
 Topics:
 
-- Nsight Systems hotspot selection and NVTX/CUDA event measurement boundaries
+- Two-launch unfused baseline, intermediate HWC storage, and one-launch fusion
+- Nsight Systems production-path context and NVTX/CUDA event measurement boundaries
 - Fixed-input standalone CUDA benchmarking with warmup and repeated measurements
 - Nsight Compute launch, occupancy, Speed-of-Light, memory workload, scheduler, and warp-state
   sections
 - Registers per thread, achieved occupancy, cache/DRAM throughput, access coalescing, and warp
   stalls
-- Controlled block-shape, indexing, vectorized-read, and fused-versus-unfused variants
+- Controlled fusion, block-shape, indexing, and vectorized-read hypotheses
 - Numerical validation against Lesson 20's preprocessing contract
-- Kernel, complete GPU preprocessing, and matched pipeline evidence
+- Kernel, complete GPU preprocessing, pipeline context, and matched A/B evidence requirements
 
 Deliverables:
 
-- C++17/CUDA standalone benchmark with five controlled variants and focused correctness tests
+- C++17/CUDA standalone benchmark with an unfused teaching baseline, a fused implementation, three
+  follow-up candidates, and focused correctness tests
 - Reproducible Nsight Systems and Nsight Compute capture workflow
 - Environment-specific `.nsys-rep`/`.ncu-rep`, metric summary, benchmark JSON, and generated decision
   report under ignored output/report directories
 
 Design notes:
 
-- Lesson 13 is required because system-level selection precedes kernel-level profiling.
-- Lesson 20 supplies the target kernel and numerical contract. Lesson 21 evidence is optional but
-  required before claiming an end-to-end deployment improvement.
+- Lesson 13 supplies the system-profiling foundation and measurement discipline.
+- The unfused/fused pair provides a complete, controlled optimization exercise. Lesson 20 supplies
+  the production fused kernel and numerical contract used to judge whether more kernel work matters.
+- Lesson 21 evidence may establish pipeline context, but an end-to-end optimization claim requires a
+  matched production implementation and A/B run rather than a single metrics file.
 - Nsight Compute can replay a kernel to collect counters, so its displayed duration is not used as
   benchmark evidence.
 - Raw profiler reports are environment-specific generated evidence; the committed workflow and
@@ -1501,8 +1506,13 @@ Design notes:
 
 Acceptance criteria:
 
-- Nsight Systems separates NPP resize, the custom conversion kernel, copies, and host staging. If
-  the custom kernel is not material, the report explicitly stops the deployment optimization claim.
+- The report accepts or rejects the fusion hypothesis from matched standalone timing only after all
+  variants pass the exact numerical contract.
+- Nsight Compute evidence explains the launch, intermediate-memory, register, occupancy, scheduler,
+  memory-workload, and warp-stall behavior of the controlled variants.
+- Nsight Systems separates NPP resize, the production fused conversion kernel, copies, and host
+  staging. If remaining kernel work is not material, the report explicitly stops further production
+  optimization.
 - The workflow regenerates `.ncu-rep` files and a concise metric summary for the baseline and
   controlled variants with complete environment identity.
 - Every variant satisfies Lesson 20's numerical constraints and uses matched input, warmup,
@@ -1511,8 +1521,11 @@ Acceptance criteria:
   separately; missing pipeline evidence remains explicit.
 - A kernel metric or microbenchmark improvement is not accepted as deployment benefit without
   matched higher-level improvement.
-- The report may conclude that the baseline is preferable or further optimization has low expected
-  value; no predetermined improvement percentage is required.
+- The report identifies the controlled optimization result and classifies each follow-up candidate
+  as a standalone candidate, rejected, or inconclusive. No predetermined improvement percentage is
+  required.
+- A successful unfused-to-fused microbenchmark is not presented as a production change or
+  end-to-end deployment gain.
 
 ## Final Synthesis
 
