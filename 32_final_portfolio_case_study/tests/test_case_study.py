@@ -11,6 +11,25 @@ SPEC.loader.exec_module(MODULE)
 
 
 class CaseStudyTests(unittest.TestCase):
+    def test_schema_v3_pipeline_tables_are_parsed_by_heading_and_column(self):
+        report = """## Real Integrated Load Matrix
+
+| Batch | Completed | FPS | P50 ms | P90 ms | P99 ms | Queue peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2 | 43.196 | 44.779 | 44.779 | 44.779 | 2 |
+
+## Overload and Freshness Policies
+
+| Policy | Captured | Completed | Evicted | Aborted | Queue peak | FPS | P99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| block | 200 | 200 | 0 | 0 | 4 | 367.457 | 63.499 |
+"""
+        load = MODULE.markdown_table(report, "Real Integrated Load Matrix")
+        policies = MODULE.markdown_table(report, "Overload and Freshness Policies")
+
+        self.assertEqual("43.196", load[0]["FPS"])
+        self.assertEqual("200", policies[0]["Completed"])
+
     def test_checkpoint_reports_are_generated_inputs_not_tracked_fixtures(self):
         ignore_lines = (ROOT / ".gitignore").read_text().splitlines()
         self.assertIn("reports/", ignore_lines)

@@ -29,6 +29,55 @@ def row(report_section: str, precision: str) -> list[str]:
     return [value.strip() for value in match.group(1).split("|") if value.strip()]
 
 
+def markdown_table(report: str, heading: str) -> list[dict[str, str]]:
+    heading_match = re.search(rf"^## {re.escape(heading)}\s*$", report, re.M)
+    if not heading_match:
+        raise ValueError(f"missing {heading} section")
+
+    section_text = report[heading_match.end() :]
+    next_heading = re.search(r"^## ", section_text, re.M)
+    if next_heading:
+        section_text = section_text[: next_heading.start()]
+    lines = section_text.splitlines()
+    table_start = next(
+        (index for index, line in enumerate(lines) if line.startswith("|")), None
+    )
+    if table_start is None or table_start + 2 >= len(lines):
+        raise ValueError(f"missing table in {heading} section")
+
+    def cells(line: str) -> list[str]:
+        return [value.strip() for value in line.strip().strip("|").split("|")]
+
+    headers = cells(lines[table_start])
+    separator = cells(lines[table_start + 1])
+    if len(separator) != len(headers) or not all(
+        re.fullmatch(r":?-{3,}:?", value) for value in separator
+    ):
+        raise ValueError(f"malformed table in {heading} section")
+
+    rows = []
+    for line in lines[table_start + 2 :]:
+        if not line.startswith("|"):
+            break
+        values = cells(line)
+        if len(values) != len(headers):
+            raise ValueError(f"malformed row in {heading} section")
+        rows.append(dict(zip(headers, values)))
+    if not rows:
+        raise ValueError(f"empty table in {heading} section")
+    return rows
+
+
+def markdown_rows(rows: list[dict[str, str]], columns: tuple[str, ...]) -> str:
+    try:
+        return "\n".join(
+            "| " + " | ".join(item[column] for column in columns) + " |"
+            for item in rows
+        )
+    except KeyError as error:
+        raise ValueError(f"missing table column: {error.args[0]}") from error
+
+
 def docker_image_rows(path: Path) -> str:
     if not path.exists():
         return "| Not generated | - | - |"
@@ -74,7 +123,7 @@ def choose_precision(
 def main() -> int:
     report12 = read(ROOT / "reports/12_end_to_end_validation.md")
     report15 = read(ROOT / "reports/15_precision_performance.md")
-    report21 = read(ROOT / "reports/22_pipeline_performance.md")
+    report22 = read(ROOT / "reports/22_pipeline_performance.md")
     checks = json.loads(read(ROOT / "32_final_portfolio_case_study/outputs/local_checks.json"))
     performance = section(report15, "Performance", "Detection Quality and Release Gate")
     quality = section(
@@ -87,13 +136,17 @@ def main() -> int:
     precision_decision, precision_next = choose_precision(
         gates, fp16_throughput, int8_throughput
     )
-    single = re.search(
-        r"\| (\d+) \| (\d+) \| (\d+) \| (\d+) \| ([0-9.]+) \| "
-        r"([0-9.]+) \| ([0-9.]+) \| ([0-9.]+) \|",
-        report21,
+    load_rows = markdown_table(report22, "Real Integrated Load Matrix")
+    batch_one = next((item for item in load_rows if item.get("Batch") == "1"), None)
+    if batch_one is None:
+        raise ValueError("missing batch-1 integrated load evidence")
+    policy_rows = markdown_table(report22, "Overload and Freshness Policies")
+    batch_columns = ("Batch", "Completed", "FPS", "P50 ms", "P90 ms", "P99 ms", "Queue peak")
+    policy_columns = (
+        "Policy", "Captured", "Completed", "Evicted", "Aborted", "Queue peak", "FPS", "P99 ms"
     )
-    if not single:
-        raise ValueError("missing single-stream evidence")
+    batch_row = markdown_rows([batch_one], batch_columns)
+    rendered_policy_rows = markdown_rows(policy_rows, policy_columns)
     commit = subprocess.check_output(
         ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True
     ).strip()
@@ -124,7 +177,7 @@ preprocessing, server/edge integration exercises, and reusable language bindings
 
 - [12 functional and architecture validation](12_end_to_end_validation.md)
 - [15 precision and performance decision](15_precision_performance.md)
-- [21 pipeline performance and reliability](22_pipeline_performance.md)
+- [22 pipeline performance and reliability](22_pipeline_performance.md)
 
 The linked reports retain commands and raw-artifact paths; this case study does not duplicate them.
 
@@ -155,13 +208,18 @@ reliability.
 
 ## Pipeline Result
 
-| Captured | Processed | Dropped | Queue peak | FPS | P50 ms | P90 ms | P99 ms |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| {' | '.join(single.groups())} |
+| Batch | Completed | FPS | P50 ms | P90 ms | P99 ms | Queue peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{batch_row}
 
-The latest-frame bounded queue trades completeness for freshness under sustained overload. Normal
-EOS drains work; cancellation and failure discard queued work and join all workers. Multi-stream
-round-robin scheduling protects fairness, while dynamic batching trades queue delay for throughput.
+| Policy | Captured | Completed | Evicted | Aborted | Queue peak | FPS | P99 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+{rendered_policy_rows}
+
+The bounded queue's policy determines whether overload applies producer backpressure or explicitly
+evicts stale work. Normal EOS drains work; cancellation and failure discard queued work and join
+all workers. Multi-stream round-robin scheduling protects fairness, while dynamic batching trades
+queue delay for throughput.
 
 ## Reusable Structure
 
