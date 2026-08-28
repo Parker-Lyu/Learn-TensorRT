@@ -48,7 +48,7 @@ cd Learn-TensorRT
 ```
 
 2. Follow [`00_environment_check/README.md`](00_environment_check/README.md) to start the pinned
-development environment and verify TensorRT, CUDA, and GPU access.
+development environment.
 
 3. Optionally install VS Code and the Dev Containers extension, then attach to the running container
 and open the mounted project directory.

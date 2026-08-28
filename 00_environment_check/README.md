@@ -2,9 +2,7 @@
 
 ## Purpose
 
-Build and verify the single development environment used throughout this course. Confirm that the
-pinned container provides GPU access and all required CUDA, TensorRT, C++ and Python tooling before
-starting later lessons.
+Build and verify the single development environment used throughout this course.
 
 ## Prerequisites
 
