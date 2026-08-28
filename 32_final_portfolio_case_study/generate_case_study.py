@@ -258,40 +258,6 @@ ONNX graph surgery, a runnable custom TensorRT CUDA plugin, DeepStream multi-str
 and parser code, Jetson/DLA target procedures, a C ABI Python integration, and LLM inference
 awareness. This is not a fully completed runtime-validated elective track: Triton, DeepStream, and
 Jetson acceptance remains pending in their required containers or target hardware.
-
-## Bottleneck and Future Work
-
-Nsight Systems evidence identified CPU preprocessing/postprocessing as the original end-to-end
-bottleneck. Lesson 31 keeps standalone kernel timing separate from Nsight Compute replay and from
-pipeline benefit; CUDA/NPP transfer strategy still matters. Next work is to
-{precision_next}, complete the formal soak/TSAN gates, and validate runtime behavior on
-Triton, DeepStream, and Jetson hardware.
-
-## Resume Bullets
-
-- Built and validated a modular C++17 YOLOv8 TensorRT pipeline with FP32/FP16/INT8 release gates,
-  CUDA/NPP preprocessing, dynamic batching, bounded multi-stream scheduling, and fault injection.
-- Implemented a serialized CUDA TensorRT plugin, ONNX graph repair workflow, C ABI shared library,
-  Python integration, and reproducible latency/accuracy/report generation.
-- Profiled system and CUDA-kernel bottlenecks with Nsight Systems/Compute and documented honest
-  deployment boundaries for Triton, DeepStream, Jetson DLA, OpenVINO CPU, and local autoregressive
-  LLM inference.
-
-## Five-Minute English Presentation
-
-Start with the deployment goal and controlled YOLOv8 model. Explain ONNX/TensorRT correctness and
-why raw alignment precedes detection metrics. Present the measured precision decision from the 15
-gate. Walk through the bounded single/multi-stream design and capture-to-result tail latency. Show
-the CUDA preprocessing and custom plugin evidence. Finish with reproducibility,
-remaining soak/TSAN/hardware gates, and why those limitations are reported rather than hidden.
-
-## Longer Interview Walkthrough
-
-Discuss RAII ownership, dynamic profiles, tensor offsets, decode/NMS coordinate transforms, queue
-close semantics, exception propagation, scheduling fairness, CUDA streams and transfer modes,
-plugin registration/serialization, C ABI ownership, and deployment image contents. For every number,
-trace it to the linked generated report and raw artifact; if evidence is incomplete, state the exact
-command and environment needed to complete it.
 """
     output = ROOT / "reports/32_final_portfolio_case_study.md"
     output.write_text(text, encoding="utf-8")
