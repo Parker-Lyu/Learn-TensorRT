@@ -11,8 +11,7 @@ A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance 
 Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export
 and production-oriented deployment. It includes explicit Q/DQ quantization, measured CUDA memory
 paths and preprocessing, CPU-testable asynchronous multi-stream scheduling, and Nsight Systems
-profiling. The scheduling lessons still require integration with the real TensorRT backend before
-they constitute a fully GPU-executed video pipeline.
+profiling.
 
 
 ## Target Audience
@@ -30,9 +29,9 @@ execution, and build-system fundamentals.
 
 ## Learning Roadmap
 
-Read [`docs/learning_roadmap.md`](docs/learning_roadmap.md) first. Use
+You could read [`docs/learning_roadmap.md`](docs/learning_roadmap.md) first. Use
 [`docs/coverage_matrix.md`](docs/coverage_matrix.md) to map the core and elective topics to
-production deployment skills.
+production deployment skills. Alternatively, you can simply work through the course in order.
 
 
 The project is organized as small lessons. Each lesson should produce one runnable artifact and one short note about what was learned.
@@ -41,7 +40,7 @@ Shared images and other reusable resources live in the root `assets` folder.
 ## How To Use
 This course is developed and tested on Ubuntu. Windows or WSL setups may work, but they are not the reference environment and may require extra troubleshooting. 
 
-1. Clone this repository on an Ubuntu machine:
+1. Clone this repository on an Ubuntu machine with an available NVIDIA GPU:
 
 ```bash
 git clone git@github.com:Parker-Lyu/Learn-TensorRT.git

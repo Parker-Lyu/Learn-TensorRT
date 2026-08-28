@@ -2,9 +2,9 @@
 
 ## Purpose
 
-- Record the local machine, driver, CUDA, TensorRT, Python, compiler, and OpenCV versions.
-- Keep reproducible commands for checking the environment.
-- Verify the single `nvcr.io/nvidia/pytorch:25.11-py3` development environment before later lessons.
+Build and verify the single development environment used throughout this course. Confirm that the
+pinned container provides GPU access and all required CUDA, TensorRT, C++ and Python tooling before
+starting later lessons.
 
 ## Prerequisites
 
