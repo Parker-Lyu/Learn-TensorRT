@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[1]
 LESSON = Path(__file__).resolve().parent
 CORRECTNESS_LIMIT = 2.0e-4
 
@@ -118,7 +117,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", type=Path, default=LESSON / "outputs")
     parser.add_argument(
-        "--output", type=Path, default=ROOT / "reports/31_nsight_compute_kernel_analysis.md"
+        "--output", type=Path, default=LESSON / "outputs/optimization_decision.md"
     )
     args = parser.parse_args()
     input_dir = args.input_dir.resolve()

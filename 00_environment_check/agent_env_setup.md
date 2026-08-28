@@ -221,7 +221,7 @@ docker inspect learn-tensorrt --format '{{json .HostConfig.CapAdd}}'
 docker exec --user root learn-tensorrt bash -lc \
   'cd /workspace/Learn-TensorRT && \
    python3 31_nsight_compute_kernel_analysis/profile_kernels.py && \
-   chown -R 1000:1000 31_nsight_compute_kernel_analysis/outputs reports'
+   chown -R 1000:1000 31_nsight_compute_kernel_analysis/outputs'
 ```
 
 Replace `1000:1000` with the UID/GID used to build the image when they differ. After profiling,

@@ -129,7 +129,7 @@ this README. Generated artifacts remain ignored:
 - `outputs/nsys/nsys_stats.txt`: text summaries used for initial kernel selection
 - `outputs/ncu/*.ncu-rep`: baseline and fused LayerNorm counter captures
 - `outputs/ncu_metrics_summary.json`: compact metrics extracted from raw reports
-- `reports/31_nsight_compute_kernel_analysis.md`: local optimization decision
+- `outputs/optimization_decision.md`: local optimization decision
 
 The workload is representative, not a deployed service. Results from one GPU or shape are not a
 portable production claim.
