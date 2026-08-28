@@ -104,7 +104,8 @@ lesson provides one runnable artifact and one concise README.
 
 Use the core path in order. After the core path, choose an elective track from the job descriptions
 you are targeting instead of completing every elective sequentially. Lesson 31 is an advanced CUDA
-optimization follow-up to Lessons 13 and 20, not a prerequisite for the final synthesis.
+optimization follow-up to Lesson 13 that also builds on Lesson 26's source-owned kernel boundary; it
+is not a prerequisite for the final synthesis.
 
 | Path | Sequence | Focus |
 | --- | --- | --- |
@@ -119,7 +120,7 @@ optimization follow-up to Lessons 13 and 20, not a prerequisite for the final sy
 | Advanced TensorRT elective | `25`, `26` | Graph surgery and a runnable TensorRT plugin |
 | CPU/Intel elective | `23` | OpenVINO CPU inference comparison |
 | LLM awareness elective | `30` | Entry-level LLM inference concepts and measurements |
-| CUDA kernel optimization elective | `31` | Controlled fusion, Nsight Compute evidence, failed candidates, and production stop decisions |
+| CUDA kernel optimization elective | `31` | Systems-driven kernel selection, LayerNorm fusion, operator/network evidence, and production stop decisions |
 | Final synthesis | `32` | Portfolio case study, packaging, resume evidence, and English presentation |
 
 ## Course Plan
@@ -1453,79 +1454,77 @@ Acceptance criteria:
 
 Purpose:
 
-- Complete a controlled CUDA optimization cycle from an unfused conversion/layout baseline to a
-  fused implementation, with matched correctness and timing evidence.
-- Use system and microarchitectural evidence to decide whether further optimization of Lesson 20's
-  already-fused production kernel is worth the engineering cost.
-- Separate a successful standalone kernel optimization from a preprocessing or deployment claim.
+- Complete a profiling-driven CUDA optimization cycle on a small but complete inference workload.
+- Use Nsight Systems to select material source-owned work before using Nsight Compute to explain and
+  optimize it.
+- Separate an operator-level improvement from a complete-network or production deployment claim.
 
 Learning outcomes:
 
-- Diagnose the extra launch and intermediate global-memory traffic in an unfused teaching baseline,
-  then validate a fusion hypothesis against an exact reference.
+- Profile a manually assembled `Linear -> LayerNorm -> Linear` MLP and justify whether its
+  source-owned LayerNorm warrants deeper work.
+- Diagnose the extra launch and row-statistics global-memory traffic in a conventional two-stage
+  LayerNorm, then validate a fusion hypothesis against a CPU reference.
 - Read occupancy, register, scheduler, memory-workload, Speed-of-Light, and warp-stall evidence
   together instead of optimizing one metric in isolation.
-- Compare matched block-shape, indexing, and vectorized-read candidates without confusing profiler
-  replay duration with benchmark timing.
-- Distinguish standalone kernel improvement from GPU preprocessing and end-to-end deployment gains.
+- Use the CUDA occupancy API for a portable launch starting point without architecture-specific
+  tuning tables, configuration searches, or JIT auto-tuning.
+- Distinguish LayerNorm improvement from complete-network and real deployment gains.
 
 Topics:
 
-- Two-launch unfused baseline, intermediate HWC storage, and one-launch fusion
-- Nsight Systems production-path context and NVTX/CUDA event measurement boundaries
-- Fixed-input standalone CUDA benchmarking with warmup and repeated measurements
+- cuBLAS linear layers, a two-launch LayerNorm baseline, and one-launch row-wise fusion
+- Nsight Systems complete-workload diagnosis and NVTX/CUDA event measurement boundaries
+- Matched operator and complete-network benchmarking with warmup and repeated measurements
 - Nsight Compute launch, occupancy, Speed-of-Light, memory workload, scheduler, and warp-state
   sections
 - Registers per thread, achieved occupancy, cache/DRAM throughput, access coalescing, and warp
   stalls
-- Controlled fusion, block-shape, indexing, and vectorized-read hypotheses
-- Numerical validation against Lesson 20's preprocessing contract
-- Kernel, complete GPU preprocessing, pipeline context, and matched A/B evidence requirements
+- Algorithmic fusion and runtime occupancy-based launch selection
+- Full-network numerical validation against a deterministic CPU reference
+- Operator, complete-network, and production deployment evidence boundaries
 
 Deliverables:
 
-- C++17/CUDA standalone benchmark with an unfused teaching baseline, a fused implementation, three
-  follow-up candidates, and focused correctness tests
+- C++17/CUDA MLP benchmark with a conventional LayerNorm baseline, fused implementation, cuBLAS
+  integration, and focused correctness tests
 - Reproducible Nsight Systems and Nsight Compute capture workflow
 - Environment-specific `.nsys-rep`/`.ncu-rep`, metric summary, benchmark JSON, and generated decision
   report under ignored output/report directories
 
 Design notes:
 
-- Lesson 13 supplies the system-profiling foundation and measurement discipline.
-- The unfused/fused pair provides a complete, controlled optimization exercise. Lesson 20 supplies
-  the production fused kernel and numerical contract used to judge whether more kernel work matters.
-- Lesson 21 evidence may establish pipeline context, but an end-to-end optimization claim requires a
-  matched production implementation and A/B run rather than a single metrics file.
+- Lesson 13 supplies the system-profiling foundation and measurement discipline. Lesson 26 supplies
+  the custom-kernel integration context, but its tiny demonstration model is not reused.
+- The baseline is a reasonable staged LayerNorm rather than an intentionally serialized strawman.
+- cuBLAS owns the linear kernels; the lesson only changes LayerNorm code that it owns.
 - Nsight Compute can replay a kernel to collect counters, so its displayed duration is not used as
   benchmark evidence.
 - Raw profiler reports are environment-specific generated evidence; the committed workflow and
   summary generator make them reproducible on another target.
-- TensorRT internal kernels are outside this lesson. Lesson 26's plugin kernel is a later, more
-  complex case.
+- The representative MLP is not presented as evidence from a deployed production service.
 
 Acceptance criteria:
 
-- The report accepts or rejects the fusion hypothesis from matched standalone timing only after all
-  variants pass the exact numerical contract.
+- Nsight Systems identifies the complete-workload kernel distribution before Nsight Compute is used;
+  the workflow permits an explicit stop when LayerNorm is immaterial.
+- The report accepts fusion for the workload only when both matched LayerNorm and complete-network
+  timing improve after both variants pass the numerical contract.
 - Nsight Compute evidence explains the launch, intermediate-memory, register, occupancy, scheduler,
   memory-workload, and warp-stall behavior of the controlled variants.
-- Nsight Systems separates NPP resize, the production fused conversion kernel, copies, and host
-  staging. If remaining kernel work is not material, the report explicitly stops further production
-  optimization.
+- Nsight Systems separates both linear layers and the baseline/fused LayerNorm NVTX ranges and
+  kernels.
 - The workflow regenerates `.ncu-rep` files and a concise metric summary for the baseline and
   controlled variants with complete environment identity.
-- Every variant satisfies Lesson 20's numerical constraints and uses matched input, warmup,
-  iteration count, allocation boundary, and CUDA event timing.
-- Kernel, complete GPU preprocessing, and available end-to-end pipeline timing are reported
-  separately; missing pipeline evidence remains explicit.
+- Every variant satisfies the full-network CPU-reference tolerance and uses matched input, weights,
+  precision, epsilon, warmup, iteration count, allocation boundary, and CUDA event timing.
+- LayerNorm and complete-network timing are reported separately; production evidence remains an
+  explicit additional requirement.
 - A kernel metric or microbenchmark improvement is not accepted as deployment benefit without
   matched higher-level improvement.
-- The report identifies the controlled optimization result and classifies each follow-up candidate
-  as a standalone candidate, rejected, or inconclusive. No predetermined improvement percentage is
-  required.
-- A successful unfused-to-fused microbenchmark is not presented as a production change or
-  end-to-end deployment gain.
+- The launch policy uses runtime occupancy information and contains no architecture-specific tuning
+  table, launch-configuration search, or JIT auto-tuning.
+- A successful LayerNorm/MLP result is not presented as a production service gain.
 
 ## Final Synthesis
 
@@ -1644,12 +1643,15 @@ After `25_onnx_graph_surgery_plugin` and `26_custom_tensorrt_plugin`, you should
 - How is a plugin registered, serialized, deserialized, and called from `enqueue`?
 - How do you validate plugin output against a reference implementation?
 
-After `13_nsight_performance_diagnosis` and `20_cuda_preprocess_npp`, you should be able to answer:
+After `13_nsight_performance_diagnosis`, `20_cuda_preprocess_npp`, and
+`31_nsight_compute_kernel_analysis`, you should be able to answer:
 
 - How do you prove GPU starvation from a timeline?
 - How do pinned memory and async copies affect overlap?
 - When is GPU preprocessing worth the added complexity?
 - How do you compare two optimization attempts fairly?
+- Why must Nsight Systems select material work before Nsight Compute analyzes a kernel?
+- When can an optimized kernel still be the wrong production change?
 
 After `15_precision_performance_report` and `22_pipeline_performance_report`, you should be able to answer:
 

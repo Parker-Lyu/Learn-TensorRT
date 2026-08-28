@@ -11,26 +11,26 @@ endif()
 include(CTest)
 find_package(CUDAToolkit REQUIRED)
 
-add_library(lesson31_kernel_variants src/kernel_variants.cu)
-target_compile_features(lesson31_kernel_variants PUBLIC cxx_std_17)
-target_include_directories(lesson31_kernel_variants PUBLIC include)
-target_link_libraries(lesson31_kernel_variants PUBLIC CUDA::cudart CUDA::nvtx3)
-set_target_properties(lesson31_kernel_variants PROPERTIES
+add_library(lesson31_mlp src/mlp_layernorm.cu)
+target_compile_features(lesson31_mlp PUBLIC cxx_std_17)
+target_include_directories(lesson31_mlp PUBLIC include)
+target_link_libraries(lesson31_mlp PUBLIC CUDA::cublas CUDA::cudart CUDA::nvtx3)
+set_target_properties(lesson31_mlp PROPERTIES
     CUDA_STANDARD 17
     CUDA_STANDARD_REQUIRED ON
     CUDA_EXTENSIONS OFF
 )
 
-add_executable(lesson31_kernel_benchmark src/main.cpp)
-target_compile_features(lesson31_kernel_benchmark PRIVATE cxx_std_17)
-target_link_libraries(lesson31_kernel_benchmark PRIVATE lesson31_kernel_variants)
+add_executable(lesson31_mlp_benchmark src/benchmark_main.cpp)
+target_compile_features(lesson31_mlp_benchmark PRIVATE cxx_std_17)
+target_link_libraries(lesson31_mlp_benchmark PRIVATE lesson31_mlp)
 
 if(BUILD_TESTING)
-    add_executable(lesson31_kernel_tests tests/test_kernel_variants.cpp)
-    target_compile_features(lesson31_kernel_tests PRIVATE cxx_std_17)
-    target_link_libraries(lesson31_kernel_tests PRIVATE lesson31_kernel_variants)
-    add_test(NAME lesson31_kernel_variants COMMAND lesson31_kernel_tests)
-    set_tests_properties(lesson31_kernel_variants PROPERTIES SKIP_RETURN_CODE 77)
+    add_executable(lesson31_mlp_tests tests/test_mlp_layernorm.cpp)
+    target_compile_features(lesson31_mlp_tests PRIVATE cxx_std_17)
+    target_link_libraries(lesson31_mlp_tests PRIVATE lesson31_mlp)
+    add_test(NAME lesson31_mlp_layernorm COMMAND lesson31_mlp_tests)
+    set_tests_properties(lesson31_mlp_layernorm PROPERTIES SKIP_RETURN_CODE 77)
 
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(

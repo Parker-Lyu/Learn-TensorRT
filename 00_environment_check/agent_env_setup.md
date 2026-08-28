@@ -185,6 +185,49 @@ ownership afterward. Do not change or reload the host driver merely to complete 
 the capability by recreating the normal container after profiling. A host configured to permit
 non-admin profiling does not need this exception.
 
+Check the policy and current container capability before recreating anything:
+
+```bash
+grep RmProfilingAdminOnly /proc/driver/nvidia/params
+docker inspect learn-tensorrt --format '{{json .HostConfig.CapAdd}}'
+```
+
+When the policy is `1` and `CAP_SYS_ADMIN` is absent, use the complete profiling-container command
+below from the repository root. The bind mount preserves repository files, but state stored only in
+the old container's writable layer is discarded:
+
+```bash
+docker rm -f learn-tensorrt
+
+docker run -dit \
+  --name learn-tensorrt \
+  --gpus all \
+  --cap-add SYS_ADMIN \
+  --network host \
+  --ipc=host \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  --mount type=bind,source="$(pwd)",target=/workspace/Learn-TensorRT \
+  --workdir /workspace/Learn-TensorRT \
+  learn-tensorrt:25.11
+```
+
+Confirm the capability in Docker's configuration. The normal UID 1000 process intentionally has no
+effective capabilities; invoke only the profiler workflow as container root:
+
+```bash
+docker inspect learn-tensorrt --format '{{json .HostConfig.CapAdd}}'
+
+docker exec --user root learn-tensorrt bash -lc \
+  'cd /workspace/Learn-TensorRT && \
+   python3 31_nsight_compute_kernel_analysis/profile_kernels.py && \
+   chown -R 1000:1000 31_nsight_compute_kernel_analysis/outputs reports'
+```
+
+Replace `1000:1000` with the UID/GID used to build the image when they differ. After profiling,
+recreate the normal container with the first command in this section, which omits
+`--cap-add SYS_ADMIN`. This avoids retaining a broad capability during ordinary lesson work.
+
 `--network host` gives the container the host's network namespace. Lesson 24 runs the Triton
 server with `--network host` on the host's ports, so the client inside the development container
 can reach it at `localhost:8000` only when both share one network namespace. The trade-offs:

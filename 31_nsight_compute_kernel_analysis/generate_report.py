@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the lesson 31 decision report from local profiler evidence."""
+"""Generate the Lesson 31 optimization decision from local evidence."""
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LESSON = Path(__file__).resolve().parent
+CORRECTNESS_LIMIT = 2.0e-4
 
 
 def load_json(path: Path) -> Any:
@@ -21,131 +21,84 @@ def load_json(path: Path) -> Any:
 
 
 def validate_benchmark(data: Any) -> list[dict[str, Any]]:
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
-        raise ValueError("unsupported kernel benchmark schema")
+    if not isinstance(data, dict) or data.get("schema_version") != 2:
+        raise ValueError("unsupported MLP benchmark schema")
     results = data.get("results")
     if not isinstance(results, list) or not results:
-        raise ValueError("kernel benchmark requires non-empty results")
+        raise ValueError("MLP benchmark requires non-empty results")
+    by_name = {result.get("variant"): result for result in results}
+    missing = {"baseline", "fused"} - by_name.keys()
+    if missing:
+        raise ValueError(f"MLP benchmark is missing variants: {', '.join(sorted(missing))}")
     for result in results:
-        if result.get("maximum_absolute_error", 1.0) > 1e-6:
-            raise ValueError(f"kernel correctness failed: {result.get('variant', 'unknown')}")
-        timing = result.get("timing_ms", {})
-        if not all(isinstance(timing.get(key), (int, float)) and timing[key] > 0
-                   for key in ("mean", "p50", "p90")):
-            raise ValueError("kernel timing summary is incomplete")
+        if result.get("maximum_absolute_error", 1.0) > CORRECTNESS_LIMIT:
+            raise ValueError(f"network correctness failed: {result.get('variant', 'unknown')}")
+        for timing_name in ("layernorm_timing_ms", "network_timing_ms"):
+            timing = result.get(timing_name, {})
+            if not all(isinstance(timing.get(key), (int, float)) and timing[key] > 0
+                       for key in ("mean", "p50", "p90")):
+                raise ValueError(f"{timing_name} is incomplete")
     return results
 
 
-def result_by_name(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def optimization_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
     by_name = {result["variant"]: result for result in results}
-    required = {"unfused", "baseline_16x16", "block_32x8", "linear", "vectorized"}
-    missing = required - by_name.keys()
-    if missing:
-        raise ValueError(f"kernel benchmark is missing variants: {', '.join(sorted(missing))}")
-    return by_name
-
-
-def fusion_decision(results: list[dict[str, Any]]) -> tuple[str, float, float]:
-    by_name = result_by_name(results)
-    unfused = by_name["unfused"]["timing_ms"]["p50"]
-    fused = by_name["baseline_16x16"]["timing_ms"]["p50"]
-    reduction = (unfused - fused) / unfused * 100.0
-    speedup = unfused / fused
-    if reduction <= 0.0:
-        return (
-            "Fusing conversion and layout transformation does not reduce the observed standalone "
-            "P50 on this target, so the fusion hypothesis is rejected for this environment.",
-            reduction,
-            speedup,
+    baseline = by_name["baseline"]
+    fused = by_name["fused"]
+    baseline_operator = baseline["layernorm_timing_ms"]["p50"]
+    fused_operator = fused["layernorm_timing_ms"]["p50"]
+    baseline_network = baseline["network_timing_ms"]["p50"]
+    fused_network = fused["network_timing_ms"]["p50"]
+    operator_reduction = (baseline_operator - fused_operator) / baseline_operator * 100.0
+    network_reduction = (baseline_network - fused_network) / baseline_network * 100.0
+    if operator_reduction <= 0.0:
+        conclusion = "The fused kernel is rejected because it does not improve matched LayerNorm P50."
+    elif network_reduction <= 0.0:
+        conclusion = (
+            "The kernel optimization succeeds in isolation but is rejected for this workload because "
+            "matched complete-network P50 does not improve."
         )
-    return (
-        f"Fusing conversion and layout transformation reduces standalone kernel P50 by "
-        f"{reduction:.2f}% ({speedup:.2f}x). The fused implementation passes the exact numerical "
-        "contract, so the controlled kernel optimization is accepted.",
-        reduction,
-        speedup,
-    )
-
-
-def alternative_decision(results: list[dict[str, Any]]) -> tuple[str, float]:
-    by_name = result_by_name(results)
-    baseline = by_name["baseline_16x16"]["timing_ms"]["p50"]
-    alternatives = [by_name[name] for name in ("block_32x8", "linear", "vectorized")]
-    best = min(alternatives, key=lambda item: item["timing_ms"]["p50"])
-    improvement = (baseline - best["timing_ms"]["p50"]) / baseline * 100.0
-    if improvement <= 0.0:
-        return (
-            "No block-shape, indexing, or vectorized-read candidate reduces the observed fused "
-            "baseline P50; retain the readable 16x16 production kernel.",
-            max(0.0, improvement),
+    else:
+        conclusion = (
+            "The fused implementation is accepted for this workload: it passes the numerical contract "
+            "and improves both matched LayerNorm and complete-network P50."
         )
-    return (
-        f"{best['variant']} reduces fused-baseline standalone P50 by {improvement:.2f}%. Treat this "
-        "as a kernel candidate until complete preprocessing evidence also improves.",
-        improvement,
-    )
-
-
-def candidate_table(results: list[dict[str, Any]]) -> str:
-    by_name = result_by_name(results)
-    baseline = by_name["baseline_16x16"]["timing_ms"]["p50"]
-    rows = []
-    for name in ("block_32x8", "linear", "vectorized"):
-        candidate = by_name[name]["timing_ms"]["p50"]
-        change = (baseline - candidate) / baseline * 100.0
-        status = "candidate" if change > 0.0 else "inconclusive" if change == 0.0 else "rejected"
-        rows.append(f"| {name} | {candidate:.6f} | {change:.2f}% | {status} |")
-    return "\n".join(rows)
-
-
-def load_lesson20_rows(path: Path) -> list[dict[str, str]]:
-    if not path.is_file():
-        return []
-    with path.open(newline="", encoding="utf-8") as stream:
-        return list(csv.DictReader(stream))
-
-
-def lesson20_table(rows: list[dict[str, str]]) -> str:
-    if not rows:
-        return "| Not captured | - | - | - | - | - | - | - |"
-    rendered = []
-    for row in rows:
-        stage = float(row["host_stage_ms"])
-        h2d = float(row["h2d_ms"])
-        resize = float(row["npp_resize_ms"])
-        conversion = float(row["conversion_ms"])
-        gpu = float(row["gpu_preprocess_ms"])
-        d2h = float(row["d2h_ms"])
-        measured_path = stage + h2d + gpu + d2h
-        conversion_share = conversion / measured_path * 100.0 if measured_path > 0.0 else 0.0
-        rendered.append(
-            f"| {row['mode']} | {stage:.4f} | {h2d:.4f} | {resize:.4f} | {conversion:.4f} | "
-            f"{gpu:.4f} | {measured_path:.4f} | {conversion_share:.2f}% |"
-        )
-    return "\n".join(rendered)
+    return {
+        "operator_reduction": operator_reduction,
+        "operator_speedup": baseline_operator / fused_operator,
+        "network_reduction": network_reduction,
+        "network_speedup": baseline_network / fused_network,
+        "operator_share": baseline_operator / baseline_network * 100.0,
+        "conclusion": conclusion,
+    }
 
 
 def compact_metrics(metrics: dict[str, Any]) -> str:
     rows = []
+    exact_metrics = {
+        "launch__block_size", "launch__registers_per_thread",
+        "sm__warps_active.avg.pct_of_peak_sustained_active",
+        "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed",
+        "l1tex__t_sector_hit_rate.pct", "lts__t_sector_hit_rate.pct",
+    }
     for variant, items in metrics.get("variants", {}).items():
         by_kernel: dict[str, list[dict[str, str]]] = {}
         for item in items:
             by_kernel.setdefault(item.get("kernel", "unknown"), []).append(item)
         for kernel, kernel_items in by_kernel.items():
-            exact_metrics = {
-                "launch__registers_per_thread",
-                "sm__warps_active.avg.pct_of_peak_sustained_active",
-                "gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed",
-                "l1tex__t_sector_hit_rate.pct",
-                "lts__t_sector_hit_rate.pct",
-            }
             selected = [item for item in kernel_items if item.get("metric") in exact_metrics]
             stalls = [
                 item for item in kernel_items
                 if item.get("metric", "").startswith("smsp__average_warps_issue_stalled_")
             ]
-            if stalls:
-                selected.append(max(stalls, key=lambda item: float(item.get("value", "0"))))
+            numeric_stalls = []
+            for item in stalls:
+                try:
+                    numeric_stalls.append((float(item.get("value", "0").replace(",", "")), item))
+                except ValueError:
+                    continue
+            if numeric_stalls:
+                selected.append(max(numeric_stalls, key=lambda pair: pair[0])[1])
             short_kernel = kernel.split("(", 1)[0]
             for item in selected:
                 rows.append(
@@ -155,26 +108,10 @@ def compact_metrics(metrics: dict[str, Any]) -> str:
     return "\n".join(rows) if rows else "| Not captured | - | - |"
 
 
-def pipeline_section(manifest: dict[str, Any]) -> str:
-    pipeline = manifest.get("pipeline", {})
-    if not pipeline.get("available"):
-        return (
-            "No Lesson 21 pipeline context was supplied. Standalone kernel and preprocessing "
-            "results cannot be described as an end-to-end deployment improvement."
-        )
-    metrics = load_json(Path(pipeline["artifact"]))
-    required = ("fps", "p50_ms", "p90_ms", "p99_ms", "preprocess_ms", "inference_ms")
-    missing = [key for key in required if key not in metrics]
-    if missing:
-        raise ValueError(f"Lesson 21 pipeline evidence is missing: {', '.join(missing)}")
-    return (
-        f"The supplied Lesson 21 run reports `{metrics['fps']:.3f}` FPS, capture-to-dispatch "
-        f"P50/P90/P99 `{metrics['p50_ms']:.3f}/{metrics['p90_ms']:.3f}/"
-        f"{metrics['p99_ms']:.3f}` ms, cumulative GPU preprocessing "
-        f"`{metrics['preprocess_ms']:.3f}` ms, and cumulative TensorRT inference "
-        f"`{metrics['inference_ms']:.3f}` ms. This single run supplies scale and context only; an "
-        "end-to-end optimization claim requires matched baseline and candidate implementations."
-    )
+def profiler_status(evidence: dict[str, Any], label: str) -> str:
+    if evidence.get("available"):
+        return f"{label} capture is available in the local output directory."
+    return f"{label} capture is unavailable: {evidence.get('reason', 'no reason recorded')}."
 
 
 def main() -> int:
@@ -185,44 +122,74 @@ def main() -> int:
     )
     args = parser.parse_args()
     input_dir = args.input_dir.resolve()
-    benchmark = load_json(input_dir / "kernel_benchmark.json")
+    benchmark = load_json(input_dir / "mlp_benchmark.json")
     results = validate_benchmark(benchmark)
     manifest = load_json(input_dir / "profile_manifest.json")
     metrics = load_json(input_dir / "ncu_metrics_summary.json")
-    lesson20_rows = load_lesson20_rows(input_dir / "lesson20_preprocess_benchmark.csv")
-    fusion, fusion_reduction, fusion_speedup = fusion_decision(results)
-    alternatives, alternative_improvement = alternative_decision(results)
-
-    timing_rows = "\n".join(
-        f"| {item['variant']} | {item['kernel_launches_per_iteration']} | "
-        f"{item['timing_ms']['mean']:.6f} | {item['timing_ms']['p50']:.6f} | "
-        f"{item['timing_ms']['p90']:.6f} | {item['maximum_absolute_error']:.8f} |"
-        for item in results
-    )
+    decision = optimization_decision(results)
+    configuration = benchmark["configuration"]
     environment = manifest["environment"]
     nsys = manifest.get("nsight_systems", {})
     ncu = manifest.get("nsight_compute", {})
-    text = f"""# Lesson 31 Evidence-Driven CUDA Kernel Optimization
 
-## Controlled Fusion Result
+    timing_rows = "\n".join(
+        f"| {item['variant']} | {item['layernorm_launches']} | "
+        f"{item['launch_configuration']['reduction_block_size']} | "
+        f"{item['layernorm_timing_ms']['p50']:.6f} | "
+        f"{item['network_timing_ms']['p50']:.6f} | "
+        f"{item['maximum_absolute_error']:.8f} |"
+        for item in results
+    )
+    text = f"""# Lesson 31 MLP LayerNorm Optimization Report
 
-{fusion}
+## Decision
 
-Measured fusion reduction: `{fusion_reduction:.2f}%`; measured speedup: `{fusion_speedup:.2f}x`.
-This result compares the two-launch teaching baseline with the one-launch fused kernel only. Nsight
-Compute replay duration is excluded from the timing comparison.
+{decision['conclusion']}
 
-## Candidate Variant Decision
+- LayerNorm P50 reduction: `{decision['operator_reduction']:.2f}%` (`{decision['operator_speedup']:.2f}x`)
+- Complete-network P50 reduction: `{decision['network_reduction']:.2f}%` (`{decision['network_speedup']:.2f}x`)
+- Separately measured baseline LayerNorm/network ratio: `{decision['operator_share']:.2f}%`
 
-{alternatives}
+The ratio is a prioritization signal, not an additive timing decomposition. LayerNorm and the full
+network are measured in separate CUDA-event loops. The conclusion applies to this workload and GPU;
+it is not a claim about an unrelated production model.
 
-The best candidate reduction relative to the fused 16x16 kernel is
-`{alternative_improvement:.2f}%`. A better occupancy, stall, or memory metric is diagnostic evidence,
-not an optimization result by itself.
+## Workload
 
-| Candidate | P50 ms | Reduction vs fused baseline | Status |
-| --- | ---: | ---: | --- |
-{candidate_table(results)}
+The manually assembled network is `Linear -> LayerNorm -> Linear`. Linear layers use cuBLAS; only
+the source-owned LayerNorm is changed. Shape: rows `{configuration['rows']}`, input features
+`{configuration['input_features']}`, hidden features `{configuration['hidden_features']}`, output
+features `{configuration['output_features']}`. Both variants use identical tensors, FP32 math,
+epsilon, warmup, iteration count, allocation boundary, and CPU reference.
+
+| Variant | LayerNorm launches | Runtime-selected reduction block | LayerNorm P50 ms | Network P50 ms | Max abs error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+{timing_rows}
+
+The baseline uses a row-statistics kernel followed by a normalization/affine kernel. The fused
+variant computes statistics and writes normalized output in one row-wise kernel, eliminating the
+mean/inverse-standard-deviation round trip and one launch. CUDA's occupancy API supplies a runtime
+upper bound and row width prevents idle whole warps; the lesson performs no architecture-specific
+table lookup, search, or JIT tuning.
+
+## Nsight Systems
+
+{profiler_status(nsys, 'Nsight Systems')} Read its CUDA kernel summary and NVTX GPU projection first.
+The `network_*`, `linear_*`, and `layernorm_*` ranges establish whether a source-owned LayerNorm is
+material enough to justify deeper analysis. Do not choose it merely because its source is available.
+
+## Nsight Compute
+
+{profiler_status(ncu, 'Nsight Compute')} When capture is permitted, the filter collects only
+`layer_norm_*_kernel` launches. Profiler replay duration is excluded from all timing decisions.
+
+| Variant / kernel | Metric | Value |
+| --- | --- | ---: |
+{compact_metrics(metrics)}
+
+Interpret registers, achieved occupancy, DRAM throughput, cache hit rates, scheduler activity, and
+dominant warp stalls together. Fusion is supported when the removed launch and intermediate traffic
+explain measured timing without introducing a countervailing occupancy or stall regression.
 
 ## Environment
 
@@ -233,57 +200,12 @@ not an optimization result by itself.
 - Nsight Systems: `{environment['nsight_systems'].splitlines()[-1]}`
 - Nsight Compute: `{environment['nsight_compute'].splitlines()[-1]}`
 
-## Standalone Kernel Timing
+## Production Boundary
 
-| Variant | Launches | Mean ms | P50 ms | P90 ms | Max abs error |
-| --- | ---: | ---: | ---: | ---: | ---: |
-{timing_rows}
-
-All variants use the same deterministic 640x640 packed-BGR input, preallocated buffers, warmup,
-iteration count, CUDA event boundaries, and exact CPU reference. `unfused` is the teaching baseline:
-it materializes an RGB HWC float tensor and launches a second kernel to reorder HWC to CHW.
-`baseline_16x16` is the readable fused kernel used by Lesson 20.
-
-## Nsight Systems Evidence
-
-Capture available: **{'yes' if nsys.get('available') else 'no'}**. The Lesson 20 timeline separates
-host staging, H2D, NPP resize submission, conversion submission, D2H, and the corresponding CUDA
-work across pageable, pinned, and mapped modes. The Lesson 20 table below quantifies conversion's
-share of the production path rather than declaring a hotspot from standalone improvement. Mapped mode
-executes against host-visible memory on this discrete GPU, so its conversion duration is evidence
-about that transfer strategy, not a device-memory kernel baseline.
-
-## Nsight Compute Metrics
-
-Capture available: **{'yes' if ncu.get('available') else 'no'}**. Raw reports remain local and
-environment-specific; the table is regenerated from the selected 2025.3.1 sections.
-
-| Variant | Metric | Value |
-| --- | --- | ---: |
-{compact_metrics(metrics)}
-
-Occupancy is not maximized as an objective. Warp stalls are interpreted together with scheduler,
-memory-workload, register, and Speed-of-Light evidence. A bandwidth-limit conclusion requires
-measured throughput relative to peak plus an explanation of bytes moved per output.
-
-## Lesson 20 GPU Preprocessing
-
-| Memory mode | Host stage ms | H2D ms | NPP resize ms | Conversion ms | GPU preprocess ms | Measured path ms | Conversion share |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-{lesson20_table(lesson20_rows)}
-
-## End-to-End Pipeline
-
-{pipeline_section(manifest)}
-
-## Deployment Decision Boundary
-
-The controlled fusion result explains why Lesson 20 uses a fused kernel; it does not claim that the
-production pipeline became faster during this lesson. Further changes to the already-fused production
-kernel require matched complete-preprocessing evidence, and an end-to-end claim additionally requires
-matched pipeline evidence. Retain the readable fused kernel when the remaining candidates do not
-improve those higher-level measurements. TensorRT internal kernels are outside this lesson; Lesson 26
-provides a later custom plugin-kernel case.
+This is a representative inference workload, not evidence from a deployed service. Shipping the
+same change elsewhere requires a matched A/B in that model and its real request shapes. If Nsight
+Systems shows LayerNorm has negligible share, or complete-network timing does not improve, stop even
+when an isolated kernel counter looks better.
 """
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")

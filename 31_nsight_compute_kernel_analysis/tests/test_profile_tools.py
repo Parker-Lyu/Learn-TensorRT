@@ -1,7 +1,5 @@
 import importlib.util
-import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,23 +21,32 @@ REPORT = load_module("lesson31_report", "generate_report.py")
 
 
 class CommandTests(unittest.TestCase):
-    def test_ncu_command_separates_replay_from_benchmark(self):
+    def test_ncu_filters_owned_kernels_and_skips_warmup(self):
         command = PROFILE.ncu_command(
             "ncu", Path("bench"), Path("capture"), Path("target.json"),
-            "unfused", warmup=3,
+            "baseline", warmup=3,
         )
-        self.assertIn("--replay-mode", command)
         self.assertEqual(command[command.index("--launch-skip") + 1], "6")
         self.assertEqual(command[command.index("--launch-count") + 1], "2")
+        self.assertEqual(command[command.index("--kernel-name") + 1],
+                         "regex:layer_norm_.*_kernel")
+        self.assertEqual(command[command.index("--scope") + 1], "layernorm")
         self.assertIn("WarpStateStats", command)
 
-    def test_nsys_command_has_cuda_and_nvtx_trace(self):
+    def test_counter_permission_error_is_classified(self):
+        result = PROFILE.CommandResult([], 1, 0.1, "ERR_NVGPUCTRPERM", "")
+        self.assertTrue(PROFILE.is_counter_permission_error(result))
+        other = PROFILE.CommandResult([], 1, 0.1, "other failure", "")
+        self.assertFalse(PROFILE.is_counter_permission_error(other))
+
+    def test_nsys_profiles_the_complete_mlp_with_nvtx(self):
         command = PROFILE.nsys_command(
-            "nsys", Path("lesson20"), Path("capture"), iterations=3
+            "nsys", Path("mlp"), Path("capture"), Path("target.json"), 2, 4
         )
-        self.assertIn("--trace=cuda,nvtx", command)
-        self.assertIn("lesson20", command)
-        self.assertIn("--iterations", command)
+        self.assertIn("--trace=cuda,nvtx,cublas", command)
+        self.assertIn("mlp", command)
+        self.assertEqual(command[command.index("--iterations") + 1], "4")
+        self.assertEqual(command[command.index("--scope") + 1], "network")
 
 
 class MetricTests(unittest.TestCase):
@@ -61,7 +68,8 @@ class MetricTests(unittest.TestCase):
 
     def test_parses_current_wide_ncu_csv(self):
         text = (
-            '"ID","Kernel Name","launch__registers_per_thread","gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed"\n'
+            '"ID","Kernel Name","launch__registers_per_thread",'
+            '"gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed"\n'
             '"","","register/thread","%"\n'
             '"0","kernel","24","55.5"\n'
         )
@@ -72,83 +80,44 @@ class MetricTests(unittest.TestCase):
 
 class ReportTests(unittest.TestCase):
     @staticmethod
-    def results(**p50):
-        return [
-            {"variant": name, "timing_ms": {"p50": value}}
-            for name, value in p50.items()
-        ]
-
-    def test_fusion_decision_accepts_measured_kernel_improvement(self):
-        results = self.results(
-            unfused=2.0,
-            baseline_16x16=1.0,
-            block_32x8=1.1,
-            linear=1.2,
-            vectorized=1.3,
-        )
-        decision, reduction, speedup = REPORT.fusion_decision(results)
-        self.assertAlmostEqual(reduction, 50.0)
-        self.assertAlmostEqual(speedup, 2.0)
-        self.assertIn("accepted", decision)
-
-    def test_alternative_decision_does_not_claim_deployment_win(self):
-        results = [
-            {"variant": "unfused", "timing_ms": {"p50": 2.0}},
-            {"variant": "baseline_16x16", "timing_ms": {"p50": 1.0}},
-            {"variant": "block_32x8", "timing_ms": {"p50": 1.1}},
-            {"variant": "linear", "timing_ms": {"p50": 0.8}},
-            {"variant": "vectorized", "timing_ms": {"p50": 1.2}},
-        ]
-        decision, improvement = REPORT.alternative_decision(results)
-        self.assertAlmostEqual(improvement, 20.0)
-        self.assertIn("kernel candidate", decision)
-
-    def test_decisions_require_complete_controlled_variant_set(self):
-        results = self.results(unfused=2.0, baseline_16x16=1.0)
-        with self.assertRaisesRegex(ValueError, "missing variants"):
-            REPORT.fusion_decision(results)
-
-    def test_candidate_table_classifies_each_follow_up(self):
-        results = self.results(
-            unfused=2.0,
-            baseline_16x16=1.0,
-            block_32x8=0.9,
-            linear=1.0,
-            vectorized=1.2,
-        )
-        table = REPORT.candidate_table(results)
-        self.assertIn("block_32x8 | 0.900000 | 10.00% | candidate", table)
-        self.assertIn("linear | 1.000000 | 0.00% | inconclusive", table)
-        self.assertIn("vectorized | 1.200000 | -20.00% | rejected", table)
-
-    def test_benchmark_validation_rejects_numerical_failure(self):
-        data = {
-            "schema_version": 1,
-            "results": [{
-                "variant": "baseline_16x16",
-                "maximum_absolute_error": 0.1,
-                "timing_ms": {"mean": 1.0, "p50": 1.0, "p90": 1.0},
-            }],
+    def result(variant: str, layernorm: float, network: float, error: float = 0.0):
+        timing = lambda value: {"mean": value, "p50": value, "p90": value}
+        return {
+            "variant": variant,
+            "layernorm_timing_ms": timing(layernorm),
+            "network_timing_ms": timing(network),
+            "maximum_absolute_error": error,
         }
-        with self.assertRaisesRegex(ValueError, "correctness"):
+
+    def test_accepts_only_when_operator_and_network_improve(self):
+        decision = REPORT.optimization_decision([
+            self.result("baseline", 2.0, 8.0),
+            self.result("fused", 1.0, 7.0),
+        ])
+        self.assertAlmostEqual(decision["operator_reduction"], 50.0)
+        self.assertAlmostEqual(decision["network_reduction"], 12.5)
+        self.assertIn("accepted", decision["conclusion"])
+
+    def test_rejects_kernel_only_win_for_workload(self):
+        decision = REPORT.optimization_decision([
+            self.result("baseline", 2.0, 8.0),
+            self.result("fused", 1.0, 8.5),
+        ])
+        self.assertIn("kernel optimization succeeds", decision["conclusion"])
+        self.assertIn("rejected for this workload", decision["conclusion"])
+
+    def test_validation_requires_both_variants(self):
+        data = {"schema_version": 2, "results": [self.result("baseline", 1.0, 2.0)]}
+        with self.assertRaisesRegex(ValueError, "missing variants"):
             REPORT.validate_benchmark(data)
 
-    def test_pipeline_section_uses_lesson21_schema(self):
-        metrics = {
-            "fps": 42.0,
-            "p50_ms": 3.0,
-            "p90_ms": 4.0,
-            "p99_ms": 5.0,
-            "preprocess_ms": 6.0,
-            "inference_ms": 7.0,
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "metrics.json"
-            path.write_text(json.dumps(metrics), encoding="utf-8")
-            text = REPORT.pipeline_section({"pipeline": {"available": True, "artifact": str(path)}})
-        self.assertIn("42.000", text)
-        self.assertIn("P50/P90/P99", text)
-        self.assertIn("context only", text)
+    def test_validation_rejects_numerical_failure(self):
+        data = {"schema_version": 2, "results": [
+            self.result("baseline", 1.0, 2.0),
+            self.result("fused", 0.8, 1.8, error=0.1),
+        ]}
+        with self.assertRaisesRegex(ValueError, "correctness"):
+            REPORT.validate_benchmark(data)
 
 
 if __name__ == "__main__":
