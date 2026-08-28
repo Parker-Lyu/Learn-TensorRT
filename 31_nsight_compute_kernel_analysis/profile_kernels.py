@@ -254,11 +254,20 @@ def main() -> int:
         nsys_dir = output_dir / "nsys"
         nsys_dir.mkdir(exist_ok=True)
         report_base = nsys_dir / "mlp_inference"
+        report = report_base.with_suffix(".nsys-rep")
+        report.unlink(missing_ok=True)
         result = run(nsys_command(
             nsys, executable, report_base, nsys_dir / "target.json",
             args.profile_warmup, args.profile_iterations,
         ), env=profiler_env)
-        report = report_base.with_suffix(".nsys-rep")
+        if not report.is_file():
+            artifacts = sorted(path.name for path in nsys_dir.glob(f"{report_base.name}.*"))
+            raise RuntimeError(
+                "Nsight Systems completed without producing the expected report "
+                f"{report}. Generated artifacts: {artifacts or ['none']}.\n"
+                f"nsys profile stdout:\n{result.stdout}\n"
+                f"nsys profile stderr:\n{result.stderr}"
+            )
         stats = run([
             nsys, "stats", "--force-export=true", "--report",
             "cuda_gpu_kern_sum,nvtx_gpu_proj_sum,cuda_api_sum", str(report),
