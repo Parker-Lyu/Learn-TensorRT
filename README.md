@@ -8,10 +8,21 @@
 A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance deployment** and
 **low-latency pipeline engineering**.
 
-Built around an end-to-end YOLOv8 pipeline, this project bridges the gap between basic model export
-and production-oriented deployment. It includes explicit Q/DQ quantization, measured CUDA memory
-paths and preprocessing, CPU-testable asynchronous multi-stream scheduling, and Nsight Systems
-profiling.
+Built around an end-to-end YOLOv8 pipeline, this project turns model export into a disciplined
+deployment system. The course develops the C++17 foundations behind reliable inference: RAII-based
+ownership, explicit resource lifetimes, target-based CMake, defensive validation, reproducible
+build and runtime evidence, and interfaces that can evolve from a single executable into reusable
+pipeline components.
+
+From there, the curriculum follows the performance-critical path end to end: ONNX graph inspection
+and repair, TensorRT engine construction and dynamic shapes, CUDA stream and event synchronization,
+measured host-to-device memory paths, NPP/CUDA preprocessing, YOLOv8 postprocessing, explicit Q/DQ
+INT8 quantization, bounded asynchronous producer-consumer and multi-stream scheduling, sanitizer
+and soak-test evidence, and Nsight Systems/Compute profiling. Advanced electives extend the same
+engineering model to TensorRT plugins, Triton, DeepStream, Jetson DLA, OpenVINO, Python bindings,
+and LLM inference awareness. The result is not a collection of `trtexec` commands, but a portfolio
+of runnable, measurable deployment artifacts with clear correctness, ownership, concurrency, and
+performance boundaries.
 
 
 ## Target Audience
