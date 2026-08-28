@@ -237,6 +237,12 @@ def main() -> int:
 
     profiler_env = os.environ.copy()
     profiler_env.pop("LD_PRELOAD", None)
+    # The container's /tmp/nvidia directory can be root-owned after another
+    # profiling tool runs. Keep profiler scratch files with ignored lesson output.
+    profiler_tmp_dir = output_dir / "profiler_tmp"
+    profiler_tmp_dir.mkdir(exist_ok=True)
+    profiler_tmp_dir.chmod(0o700)
+    profiler_env["TMPDIR"] = str(profiler_tmp_dir)
     if args.skip_nsys:
         manifest["nsight_systems"] = prior_manifest.get(
             "nsight_systems", {"available": False, "reason": "skipped by request"}

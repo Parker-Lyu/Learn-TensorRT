@@ -18,9 +18,7 @@ source-level optimization without pretending that TensorRT or cuBLAS internal ke
 - Understand the CUDA-kernel integration boundary introduced by Lesson 26. This lesson reuses that
   engineering pattern, not Lesson 26's `[1, 4]` demonstration model.
 - Use the persistent pinned development container with an accessible NVIDIA GPU.
-- Nsight Compute hardware counters require profiling permission. When
-  `/proc/driver/nvidia/params` reports `RmProfilingAdminOnly: 1`, follow
-  `00_environment_check/agent_env_setup.md` to give the persistent container `SYS_ADMIN`.
+
 
 ## Deliverables
 
