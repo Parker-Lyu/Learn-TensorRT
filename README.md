@@ -8,21 +8,17 @@
 A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance deployment** and
 **low-latency pipeline engineering**.
 
-Built around an end-to-end YOLOv8 pipeline, this project turns model export into a disciplined
-deployment system. The course develops the C++17 foundations behind reliable inference: RAII-based
-ownership, explicit resource lifetimes, target-based CMake, defensive validation, reproducible
-build and runtime evidence, and interfaces that can evolve from a single executable into reusable
-pipeline components.
+Build a complete YOLOv8 deployment pipeline in C++17, from exported model to a measurable inference
+system. Learn the engineering practices that make it dependable: RAII-based ownership, explicit
+resource lifetimes, target-based CMake, defensive validation, reproducible evidence, and components
+that can grow beyond a single executable.
 
-From there, the curriculum follows the performance-critical path end to end: ONNX graph inspection
-and repair, TensorRT engine construction and dynamic shapes, CUDA stream and event synchronization,
-measured host-to-device memory paths, NPP/CUDA preprocessing, YOLOv8 postprocessing, explicit Q/DQ
-INT8 quantization, bounded asynchronous producer-consumer and multi-stream scheduling, sanitizer
-and soak-test evidence, and Nsight Systems/Compute profiling. Advanced electives extend the same
-engineering model to TensorRT plugins, Triton, DeepStream, Jetson DLA, OpenVINO, Python bindings,
-and LLM inference awareness. The result is not a collection of `trtexec` commands, but a portfolio
-of runnable, measurable deployment artifacts with clear correctness, ownership, concurrency, and
-performance boundaries.
+Follow the performance-critical path end to end: inspect and repair ONNX graphs, build TensorRT
+engines with dynamic shapes, move data efficiently with CUDA and NPP, and implement YOLOv8
+postprocessing. Then optimize and operate the system through explicit Q/DQ INT8 quantization,
+asynchronous multi-stream scheduling, sanitizer and soak testing, and Nsight profiling. Advanced
+electives cover plugins, Triton, DeepStream, Jetson DLA, OpenVINO, Python bindings, and LLM
+inference. You finish with runnable, measurable deployment artifacts, not just `trtexec` commands.
 
 
 ## Target Audience
