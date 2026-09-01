@@ -64,16 +64,10 @@ project.
 
 ## Run
 
-Run the lesson commands from its directory:
-
-```bash
-cd 05_torch_to_onnx
-```
-
 Export a simplified static-shape ONNX model:
 
 ```bash
-python3 export_yolov8_onnx.py
+python3 05_torch_to_onnx/export_yolov8_onnx.py
 ```
 
 The default command writes:
@@ -85,7 +79,7 @@ outputs/yolov8n.onnx
 Export a simplified dynamic-shape ONNX model for later TensorRT optimization-profile experiments:
 
 ```bash
-python3 export_yolov8_onnx.py --dynamic
+python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 ```
 
 The dynamic command writes:
@@ -99,7 +93,7 @@ TensorRT build inputs. Export an unsimplified graph only when you want to compar
 debug a simplifier issue:
 
 ```bash
-python3 export_yolov8_onnx.py --no-simplify --output outputs/yolov8n_raw.onnx
+python3 05_torch_to_onnx/export_yolov8_onnx.py --no-simplify --output 05_torch_to_onnx/outputs/yolov8n_raw.onnx
 ```
 
 The default simplified artifacts are the handoff contract to lesson 06:
@@ -123,7 +117,7 @@ later lessons can reuse the same file.
 Check the simplified static model and write a JSON report:
 
 ```bash
-python3 inspect_onnx.py
+python3 05_torch_to_onnx/inspect_onnx.py
 ```
 
 The report is written to:
@@ -151,9 +145,9 @@ Open the ONNX file in Netron and confirm:
 Inspect the dynamic model separately when preparing for TensorRT optimization profiles:
 
 ```bash
-python3 inspect_onnx.py \
-  --onnx outputs/yolov8n_dynamic.onnx \
-  --report outputs/onnx_dynamic_inspection.json
+python3 05_torch_to_onnx/inspect_onnx.py \
+  --onnx 05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
+  --report 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
 ```
 
 ### Validate
@@ -161,7 +155,7 @@ python3 inspect_onnx.py \
 Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 
 ```bash
-python3 validate_onnx_runtime.py
+python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
 The script uses the same preprocessing convention as the C++ preprocessing lesson:
@@ -186,13 +180,13 @@ The validation command writes:
 Use a different image:
 
 ```bash
-python3 validate_onnx_runtime.py --image /path/to/image.jpg
+python3 05_torch_to_onnx/validate_onnx_runtime.py --image /path/to/image.jpg
 ```
 
 Use a different tolerance:
 
 ```bash
-python3 validate_onnx_runtime.py --rtol 1e-3 --atol 1e-3
+python3 05_torch_to_onnx/validate_onnx_runtime.py --rtol 1e-3 --atol 1e-3
 ```
 
 The command exits with status `2` if the outputs are not close enough. That is intentional: a failed

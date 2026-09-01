@@ -84,12 +84,10 @@ CUDA allocations.
 
 ## Build
 
-Run from this lesson directory:
-
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S 08_tensorrt_raii_resource -B 08_tensorrt_raii_resource/build
+cmake --build 08_tensorrt_raii_resource/build
+ctest --test-dir 08_tensorrt_raii_resource/build --output-on-failure
 ```
 
 ## Run
@@ -97,41 +95,42 @@ ctest --test-dir build --output-on-failure
 Run the default static FP32 engine from lesson 06:
 
 ```bash
-./build/tensorrt_raii_resource
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
 ```
 
 Use a specific engine:
 
 ```bash
-./build/tensorrt_raii_resource \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine
 ```
 
 Run a dynamic engine by supplying runtime input dimensions:
 
 ```bash
-./build/tensorrt_raii_resource \
-  --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
+  --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
   --input-shape images:1x3x640x640
 ```
 
 Adjust warmup and measurement count:
 
 ```bash
-./build/tensorrt_raii_resource --warmup 3 --iterations 10
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource --warmup 3 --iterations 10
 ```
 
 Exercise repeated construction/destruction after three unmeasured priming cycles:
 
 ```bash
-./build/tensorrt_raii_resource --repeat 100
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource --repeat 100
 ```
 
 Inject a failure after the first tensor buffer has been acquired, repeat it, and verify that already
 owned resources are released during stack unwinding:
 
 ```bash
-./build/tensorrt_raii_resource \
+./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
   --repeat 100 \
   --inject-failure first-buffer \
   --memory-tolerance-mib 16

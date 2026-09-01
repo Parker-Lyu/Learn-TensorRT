@@ -76,10 +76,8 @@ and whether synchronization leaves the GPU idle between requests.
 
 ## Run
 
-Run from this lesson directory:
-
 ```bash
-python3 profile_yolov8_cpp.py
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
 ```
 
 Defaults:
@@ -91,7 +89,7 @@ Defaults:
 Run a fast smoke diagnosis without Nsight:
 
 ```bash
-python3 profile_yolov8_cpp.py \
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --warmup-iterations 2 \
   --iterations 5 \
   --skip-nsys
@@ -100,14 +98,14 @@ python3 profile_yolov8_cpp.py \
 Collect a more stable tail-latency sample:
 
 ```bash
-python3 profile_yolov8_cpp.py --warmup-iterations 10 --iterations 200
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py --warmup-iterations 10 --iterations 200
 ```
 
 Profile another engine or shorten the trace:
 
 ```bash
-python3 profile_yolov8_cpp.py \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
   --nsys-warmup-iterations 1 \
   --nsys-iterations 3
 ```
@@ -115,7 +113,7 @@ python3 profile_yolov8_cpp.py \
 Skip rebuilding lesson 11 when it is already current:
 
 ```bash
-python3 profile_yolov8_cpp.py --skip-build
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py --skip-build
 ```
 
 ## Outputs
@@ -143,7 +141,7 @@ startup are outside the steady-state total.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s 13_nsight_performance_diagnosis/tests -v
 ```
 
 The tests cover nearest-rank percentiles, invalid report values, per-request composition, and the
@@ -161,8 +159,7 @@ minimum lead required before the report declares one category dominant.
 
 ## Appendix: Commands Executed By The Default Run
 
-The following commands are the important subprocesses used by the default run. Run them from
-`13_nsight_performance_diagnosis/` so the relative paths resolve as shown. The script locates
+The following commands are the important subprocesses used by the default run. The script locates
 `nsys` through `PATH` and removes the development image's `LD_PRELOAD` only from Nsight
 subprocesses because that HPC-X preload conflicts with Nsight library injection; in the pinned
 development container it resolved to
@@ -171,25 +168,23 @@ development container it resolved to
 Start the complete workflow:
 
 ```bash
-python3 profile_yolov8_cpp.py
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
 ```
 
 Configure and build the lesson 11 application:
 
 ```bash
-cmake -S . -B build
-cmake --build build -j2
+cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build
+cmake --build 11_yolov8_trt_cpp/build -j2
 ```
-
-These two commands are executed with `../11_yolov8_trt_cpp` as their working directory.
 
 Collect the steady-state baseline with 5 warmup iterations and 50 measured iterations:
 
 ```bash
-../11_yolov8_trt_cpp/build/yolov8_trt_cpp \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image ../assets/img.jpeg \
-  --output-dir outputs/baseline_run \
+./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg \
+  --output-dir 13_nsight_performance_diagnosis/outputs/baseline_run \
   --confidence 0.25 \
   --iou 0.45 \
   --max-detections 100 \
@@ -203,11 +198,11 @@ Capture a shorter Nsight Systems trace with 2 warmup iterations and 5 measured i
 nsys profile \
   --trace=cuda,nvtx,osrt \
   --force-overwrite=true \
-  --output outputs/nsys/yolov8_trt_cpp \
-  ../11_yolov8_trt_cpp/build/yolov8_trt_cpp \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image ../assets/img.jpeg \
-  --output-dir outputs/nsys/target_run \
+  --output 13_nsight_performance_diagnosis/outputs/nsys/yolov8_trt_cpp \
+  ./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg \
+  --output-dir 13_nsight_performance_diagnosis/outputs/nsys/target_run \
   --confidence 0.25 \
   --iou 0.45 \
   --max-detections 100 \

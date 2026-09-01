@@ -85,11 +85,9 @@ the FP32 reference does not silently use TensorFloat-32 math.
 
 ## Build
 
-Run from this lesson directory:
-
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake -S 09_tensorrt_cpp_basic -B 09_tensorrt_cpp_basic/build
+cmake --build 09_tensorrt_cpp_basic/build
 ```
 
 ## Run
@@ -98,15 +96,17 @@ Build a static FP32 engine from lesson 05 ONNX, save it under this lesson's `out
 it, and run one smoke inference:
 
 ```bash
-./build/tensorrt_cpp_basic
+./09_tensorrt_cpp_basic/build/tensorrt_cpp_basic \
+  --onnx 05_torch_to_onnx/outputs/yolov8n.onnx \
+  --engine 09_tensorrt_cpp_basic/outputs/yolov8n_cpp_basic.engine
 ```
 
 Allow TF32 kernel math while keeping the ONNX and engine tensor types FP32:
 
 ```bash
-./build/tensorrt_cpp_basic \
+./09_tensorrt_cpp_basic/build/tensorrt_cpp_basic \
   --allow-tf32 \
-  --engine outputs/yolov8n_cpp_basic_tf32.engine
+  --engine 09_tensorrt_cpp_basic/outputs/yolov8n_cpp_basic_tf32.engine
 ```
 
 TensorRT 10.12 deprecated `BuilderFlag::kFP16` in favor of strong typing. This lesson therefore does
@@ -125,25 +125,25 @@ the engine already exists.
 Load an engine that this lesson already built, skipping ONNX parsing and build time:
 
 ```bash
-./build/tensorrt_cpp_basic \
+./09_tensorrt_cpp_basic/build/tensorrt_cpp_basic \
   --load-engine \
-  --engine outputs/yolov8n_cpp_basic.engine
+  --engine 09_tensorrt_cpp_basic/outputs/yolov8n_cpp_basic.engine
 ```
 
 Build and run the dynamic ONNX model with a single-shape optimization profile:
 
 ```bash
-./build/tensorrt_cpp_basic \
-  --onnx ../05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
-  --engine outputs/yolov8n_dynamic_cpp_basic.engine \
-  --timing-cache outputs/tensorrt_timing_dynamic.cache \
+./09_tensorrt_cpp_basic/build/tensorrt_cpp_basic \
+  --onnx 05_torch_to_onnx/outputs/yolov8n_dynamic.onnx \
+  --engine 09_tensorrt_cpp_basic/outputs/yolov8n_dynamic_cpp_basic.engine \
+  --timing-cache 09_tensorrt_cpp_basic/outputs/tensorrt_timing_dynamic.cache \
   --input-shape images:1x3x640x640
 ```
 
 Tune workspace and measurement count:
 
 ```bash
-./build/tensorrt_cpp_basic --workspace-mib 4096 --warmup 3 --iterations 10
+./09_tensorrt_cpp_basic/build/tensorrt_cpp_basic --workspace-mib 4096 --warmup 3 --iterations 10
 ```
 
 ## Outputs

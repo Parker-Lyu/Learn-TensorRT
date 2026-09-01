@@ -80,13 +80,10 @@ each part can evolve without turning the example into one large source file.
 
 ## Build
 
-Run the lesson commands from its directory:
-
 ```bash
-cd 03_opencv_preprocess
-cmake -S . -B build
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+cmake -S 03_opencv_preprocess -B 03_opencv_preprocess/build
+cmake --build 03_opencv_preprocess/build --parallel
+ctest --test-dir 03_opencv_preprocess/build --output-on-failure
 ```
 
 ## Run
@@ -94,19 +91,19 @@ ctest --test-dir build --output-on-failure
 Use the shared sample image:
 
 ```bash
-./build/opencv_preprocess
+./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg
 ```
 
 Use your own image:
 
 ```bash
-./build/opencv_preprocess /path/to/your/image.jpg
+./03_opencv_preprocess/build/opencv_preprocess /path/to/your/image.jpg
 ```
 
 Choose a different input size and output folder:
 
 ```bash
-./build/opencv_preprocess ../assets/img.jpeg 640 384 outputs_640x384
+./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg 640 384 03_opencv_preprocess/outputs_640x384
 ```
 
 ## Outputs

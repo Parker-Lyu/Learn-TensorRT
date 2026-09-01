@@ -63,7 +63,7 @@ Export the static course ONNX model, establish the four references, then export,
 and inspect the Q/DQ INT8 candidate:
 
 ```bash
-(cd 05_torch_to_onnx && python3 export_yolov8_onnx.py)
+python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/inspect_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 python3 14_yolov8_int8_quantization_engineering/modelopt/export_qdq.py \

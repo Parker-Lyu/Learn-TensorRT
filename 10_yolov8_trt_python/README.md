@@ -44,32 +44,30 @@ assets/img.jpeg
 
 ## Run
 
-Run from this lesson directory:
-
 ```bash
-python3 infer_yolov8_trt.py
+python3 10_yolov8_trt_python/infer_yolov8_trt.py
 ```
 
 Use a specific engine or image:
 
 ```bash
-python3 infer_yolov8_trt.py \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/img.jpeg
+python3 10_yolov8_trt_python/infer_yolov8_trt.py \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --image assets/img.jpeg
 ```
 
 Run a dynamic engine by supplying runtime dimensions:
 
 ```bash
-python3 infer_yolov8_trt.py \
-  --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+python3 10_yolov8_trt_python/infer_yolov8_trt.py \
+  --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
   --input-shape images:1x3x640x640
 ```
 
 Run an optional Ultralytics reference check:
 
 ```bash
-python3 infer_yolov8_trt.py --reference
+python3 10_yolov8_trt_python/infer_yolov8_trt.py --reference
 ```
 
 ## Outputs

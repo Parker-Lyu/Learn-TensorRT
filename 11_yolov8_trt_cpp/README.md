@@ -46,11 +46,9 @@ pipelines, and service-style reporting.
 
 ## Build
 
-Run from this lesson directory:
-
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build
+cmake --build 11_yolov8_trt_cpp/build
 ```
 
 ## Run
@@ -58,28 +56,37 @@ cmake --build build
 Run with the default lesson 06 static FP32 engine and shared image:
 
 ```bash
-./build/yolov8_trt_cpp
+./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg \
+  --output-dir 11_yolov8_trt_cpp/outputs
 ```
 
 Use a different engine or image:
 
 ```bash
-./build/yolov8_trt_cpp \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image ../assets/img.jpeg \
-  --output-dir outputs
+./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --image assets/img.jpeg \
+  --output-dir 11_yolov8_trt_cpp/outputs
 ```
 
 Adjust thresholds:
 
 ```bash
-./build/yolov8_trt_cpp --confidence 0.20 --iou 0.50 --max-detections 50
+./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg --output-dir 11_yolov8_trt_cpp/outputs \
+  --confidence 0.20 --iou 0.50 --max-detections 50
 ```
 
 Collect steady-state samples in one process:
 
 ```bash
-./build/yolov8_trt_cpp --warmup-iterations 5 --iterations 50
+./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg --output-dir 11_yolov8_trt_cpp/outputs \
+  --warmup-iterations 5 --iterations 50
 ```
 
 The engine, execution context, CUDA stream, events, and device buffers are created once and reused.
@@ -105,10 +112,8 @@ NVTX ranges mark warmup/measured iterations and the major pipeline stages for le
 
 ## Tests
 
-Run focused tests from the lesson build directory:
-
 ```bash
-./build/yolov8_cpp_tests
+./11_yolov8_trt_cpp/build/yolov8_cpp_tests
 ```
 
 The tests cover:

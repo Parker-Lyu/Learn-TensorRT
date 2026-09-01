@@ -152,12 +152,9 @@ paths, but the data movement cost and synchronization behavior can be very diffe
 
 ## Build
 
-Run the lesson commands from its directory:
-
 ```bash
-cd 04_cuda_memory_stream
-cmake -S . -B build
-cmake --build build
+cmake -S 04_cuda_memory_stream -B 04_cuda_memory_stream/build
+cmake --build 04_cuda_memory_stream/build
 ```
 
 ## Run
@@ -165,19 +162,19 @@ cmake --build build
 Run with the default tensor size and 20 measured iterations:
 
 ```bash
-./build/cuda_memory_stream
+./04_cuda_memory_stream/build/cuda_memory_stream
 ```
 
 Run a faster smoke test:
 
 ```bash
-./build/cuda_memory_stream 262144 5
+./04_cuda_memory_stream/build/cuda_memory_stream 262144 5
 ```
 
 Use a larger buffer to make transfer cost easier to see:
 
 ```bash
-./build/cuda_memory_stream 4194304 20
+./04_cuda_memory_stream/build/cuda_memory_stream 4194304 20
 ```
 
 ## Outputs

@@ -39,12 +39,6 @@ The generated build directory is ignored.
 
 ## Run
 
-Start in the repository root. Remove the ignored build directory first when you want a clean,
-from-scratch build:
-
-```bash
-rm -rf 01_hello_world/build
-```
 
 Run the resulting artifact:
 

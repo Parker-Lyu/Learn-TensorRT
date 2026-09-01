@@ -18,9 +18,8 @@
 ## Build
 
 ```bash
-cd 02_opencv_read_image_info
-cmake -S . -B build
-cmake --build build --parallel
+cmake -S 02_opencv_read_image_info -B 02_opencv_read_image_info/build
+cmake --build 02_opencv_read_image_info/build --parallel
 ```
 
 ## Run
@@ -28,7 +27,7 @@ cmake --build build --parallel
 Use the sample image:
 
 ```bash
-./build/opencv_read_image_info
+./02_opencv_read_image_info/build/opencv_read_image_info assets/img.jpeg
 ```
 
 By default, the program reads the shared sample image from `../assets/img.jpeg`.
@@ -36,7 +35,7 @@ By default, the program reads the shared sample image from `../assets/img.jpeg`.
 Use your own image:
 
 ```bash
-./build/opencv_read_image_info /path/to/your/image.jpg
+./02_opencv_read_image_info/build/opencv_read_image_info /path/to/your/image.jpg
 ```
 
 Example output:
