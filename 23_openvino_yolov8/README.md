@@ -70,11 +70,40 @@ generated canonical TensorRT evidence at
 lesson 14's reproduction procedure, then run lesson 15's report generator to validate the linked
 performance, quality, engine, dataset, and runtime identities before comparing results.
 
+Run the OpenVINO benchmark and then generate the cross-runtime comparison:
+
 ```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
   python3 23_openvino_yolov8/run_openvino.py
+```
+
+Example output (local run, key fields):
+
+<details><summary>Example output (partial)</summary>
+
+```text
+"device": "CPU"
+"openvino": "2025.4.1-20426-82bbf0292c5-releases/2025/4"
+"sync": {"requests": 100, "p50": 12.151046001235954, "p99": 18.029920000117272,
+  "throughput_requests_per_second": 78.68285560653464}
+"async": {"requests": 100, "p50": 42.26073900099436, "p99": 81.51981199989677,
+  "throughput_requests_per_second": 162.74137878611148}
+"alignment_vs_onnxruntime": {"max_abs": 0.001979827880859375,
+  "mean_abs": 1.2711770978057757e-06}
+```
+</details>
+
+Run the comparison report generator after the benchmark:
+
+```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
   python3 23_openvino_yolov8/generate_comparison.py
+```
+
+Example output (local run):
+
+```text
+wrote /workspace/Learn-TensorRT/23_openvino_yolov8/outputs/comparison.md
 ```
 
 `run_openvino.py` performs ten warmups per compiled mode and at least 100 measured requests, records

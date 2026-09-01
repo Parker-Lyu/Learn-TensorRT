@@ -66,7 +66,7 @@ The mirror variable is optional. Packages are installed under ignored `.deps/`.
 
 ## Run
 
-Run every command from the repository root. The inline `#` comments explain what each line does:
+Run the graph-surgery workflow from the repository root. Each command is annotated with its purpose:
 
 ```bash
 # Disable user-level site-packages so only the container baseline packages are visible.
@@ -94,6 +94,21 @@ trtexec \
   --onnx=25_onnx_graph_surgery_plugin/outputs/rewritten_swish.onnx \
   --saveEngine=25_onnx_graph_surgery_plugin/outputs/rewritten_swish.engine
 ```
+
+Example output (local run, key lines):
+
+<details><summary>Example output (partial)</summary>
+
+```text
+wrote /workspace/Learn-TensorRT/25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
+"node_count": 3
+"op_type": "AcmeSwish", "domain": "com.acme"
+&&&& FAILED TensorRT.trtexec [TensorRT v101401] [b48] # trtexec --stronglyTyped --onnx=25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
+replaced 1 node and wrote /workspace/Learn-TensorRT/25_onnx_graph_surgery_plugin/outputs/rewritten_swish.onnx
+max_abs=0.00000009
+&&&& PASSED TensorRT.trtexec [TensorRT v101401]
+```
+</details>
 
 ### Handoff to Lesson 26
 

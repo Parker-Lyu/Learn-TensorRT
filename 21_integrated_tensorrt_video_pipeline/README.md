@@ -41,16 +41,23 @@ cmake --build 21_integrated_tensorrt_video_pipeline/build --parallel
 
 ## Run
 
-CPU ownership and reverse-completion smoke test:
+Run the CPU ownership and reverse-completion smoke test:
 
 ```bash
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline
 ```
 
+Example output (local run):
+
+```text
+wrote 2 identity records to 21_integrated_tensorrt_video_pipeline/output/detections.jsonl
+This CPU run is not TensorRT performance evidence.
+```
+
 This smoke path is explicitly not TensorRT or performance evidence. Formal GPU acceptance requires
 the dynamic engine and the pinned GPU container.
 
-Real integrated run with NPP letterbox, two TensorRT contexts/streams, dynamic batches, YOLO decode/NMS, and structured output:
+Run the real GPU-integrated path with NPP letterbox, TensorRT contexts/streams, dynamic batches, and YOLO decode/NMS:
 
 ```bash
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \

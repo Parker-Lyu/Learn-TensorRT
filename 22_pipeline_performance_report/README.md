@@ -20,6 +20,8 @@ mark a short smoke run as a completed 30-minute soak.
 
 ## Generate the Report
 
+Run the short local evidence collection and report generation:
+
 ```bash
 python3 22_pipeline_performance_report/collect_pipeline_evidence.py
 python3 22_pipeline_performance_report/generate_report.py
@@ -34,15 +36,14 @@ python3 22_pipeline_performance_report/collect_pipeline_evidence.py \
   --run-sanitizers
 python3 22_pipeline_performance_report/generate_report.py
 ```
-<details><summary>Example output (local run)</summary>
+Example output (local run):
 
 ```text
 wrote /workspace/Learn-TensorRT/22_pipeline_performance_report/outputs/evidence.json
 wrote /workspace/Learn-TensorRT/reports/22_pipeline_performance.md
 ```
-</details>
 
-The default command is deliberately short: it runs three restart cycles, a three-second
+The default commands are deliberately short: they run three restart cycles, a three-second
 single-process soak, the real Lesson 21 batch/policy/multi-stream matrix, reference checks, and the
 integrated fault matrix. Formal soak, restart, and sanitizer gates remain `INCOMPLETE`.
 

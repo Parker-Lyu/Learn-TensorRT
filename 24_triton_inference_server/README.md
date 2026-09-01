@@ -63,7 +63,7 @@ python3 -m pip install --target 24_triton_inference_server/.deps \
 
 ### 1. Prepare the Model Repository
 
-Run the generator **in the dev container**. It validates `config.pbtxt` and copies lesson 17's
+Run the model-repository generator **in the dev container**. It validates `config.pbtxt` and copies lesson 17's
 engine into the versioned repository layout:
 
 ```bash
@@ -71,17 +71,34 @@ engine into the versioned repository layout:
 python3 24_triton_inference_server/prepare_model_repository.py
 ```
 
+Example output (local run):
+
+```text
+copied 17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine -> 24_triton_inference_server/model_repository/yolov8/1/model.plan
+```
+
 ### 2. Start the Triton Server
 
 Run the server **from the host shell** at the repository root. This is Docker container management,
 which is host work; the server itself runs in the temporary Triton container in the foreground:
+
+Start the Triton server from the host shell; keep this foreground process running while testing:
 
 ```bash
 # Host shell (repository root)
 docker run --rm --gpus all --network host \
   -v "$PWD/24_triton_inference_server/model_repository:/models:ro" \
   nvcr.io/nvidia/tritonserver:25.11-py3 \
-  tritonserver --model-repository=/models --disable-auto-complete-config
+tritonserver --model-repository=/models --disable-auto-complete-config
+```
+
+Example output (local run, key lines):
+
+```text
+| Model  | Version | Status |
+| yolov8 | 1       | READY  |
+Started HTTPService at 0.0.0.0:8000
+Started Metrics Service at 0.0.0.0:8002
 ```
 
 Keep this terminal open; the server log shows model loading and batching decisions. Stop it with
@@ -91,6 +108,8 @@ Keep this terminal open; the server log shows model loading and batching decisio
 
 In a second terminal, confirm the health endpoints **from the host shell or the dev container**
 (both reach the host-networked server):
+
+Confirm both server health endpoints before sending inference requests:
 
 ```bash
 # Host shell or dev container
@@ -110,6 +129,25 @@ Run the client **in the dev container**. Leave the server running from step 2:
 PYTHONNOUSERSITE=1 PYTHONPATH=24_triton_inference_server/.deps \
 python3 24_triton_inference_server/client.py --concurrency 1 --requests 100
 
+```
+
+Example output (local run, concurrency 1):
+
+<details><summary>Example output (partial)</summary>
+
+```text
+"server_version": "2.63.0"
+"concurrency": 1,
+"requests": 100,
+"p50": 10.752620999483042,
+"p99": 20.533939999950235,
+"throughput_requests_per_second": 78.74079125066447
+```
+</details>
+
+Run the higher-concurrency variant to observe dynamic batching under load:
+
+```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=24_triton_inference_server/.deps \
 python3 24_triton_inference_server/client.py --concurrency 4 --requests 100
 ```
