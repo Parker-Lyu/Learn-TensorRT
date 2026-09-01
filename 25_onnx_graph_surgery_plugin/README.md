@@ -95,15 +95,6 @@ trtexec \
   --saveEngine=25_onnx_graph_surgery_plugin/outputs/rewritten_swish.engine
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-validation: allclose=True
-rewritten_swish.onnx written
-```
-</details>
-
-
 ### Handoff to Lesson 26
 
 Keep `outputs/unsupported_swish.onnx` as the plugin-path input. Do not replace it with

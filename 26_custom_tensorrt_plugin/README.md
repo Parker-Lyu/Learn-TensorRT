@@ -66,14 +66,6 @@ validates the serialized engine:
 ./26_custom_tensorrt_plugin/build_and_validate.sh
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-plugin validation: pass
-engine validation completed successfully
-```
-</details>
-
 The equivalent explicit commands are:
 
 ```bash

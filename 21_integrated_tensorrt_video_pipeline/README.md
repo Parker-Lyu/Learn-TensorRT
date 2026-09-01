@@ -47,14 +47,6 @@ CPU ownership and reverse-completion smoke test:
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-status: completed
-outputs written to outputs/
-```
-</details>
-
 This smoke path is explicitly not TensorRT or performance evidence. Formal GPU acceptance requires
 the dynamic engine and the pinned GPU container.
 

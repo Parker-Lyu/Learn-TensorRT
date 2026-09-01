@@ -80,14 +80,6 @@ and whether synchronization leaves the GPU idle between requests.
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-profile command completed
-report written to outputs/
-```
-</details>
-
 Defaults:
 
 - 5 warmup iterations and 50 measured baseline iterations

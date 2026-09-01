@@ -59,14 +59,6 @@ python3 14_yolov8_int8_quantization_engineering/tools/analyze_calibration_repres
 python3 14_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-run summary written to outputs/
-```
-</details>
-
-
 Export the static course ONNX model, establish the four references, then export, build, evaluate,
 and inspect the Q/DQ INT8 candidate:
 

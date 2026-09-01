@@ -71,15 +71,6 @@ engine into the versioned repository layout:
 python3 24_triton_inference_server/prepare_model_repository.py
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-HTTP health: 200
-client requests completed successfully
-```
-</details>
-
-
 ### 2. Start the Triton Server
 
 Run the server **from the host shell** at the repository root. This is Docker container management,

@@ -36,15 +36,6 @@ python3 05_torch_to_onnx/validate_onnx_runtime.py
 python3 29_cpp_shared_library_python_binding/python/trt_ctypes.py --batch 2
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-batch: 2
-status: inference completed
-```
-</details>
-
-
 The ABI uses opaque session ownership, plain pointers, sizes, error codes, and one result struct.
 C++ exceptions never cross the language boundary; they become a nonzero code plus thread-local
 `trt_last_error()`. Python owns input memory until the synchronous call returns, while C++ owns the

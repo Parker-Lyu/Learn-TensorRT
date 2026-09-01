@@ -74,14 +74,6 @@ evidence:
   --output 31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json
 ```
 
-Example output:
-
-```text
-baseline layernorm_p50_ms=0.006816 network_p50_ms=0.017408 max_error=0.000000 reduction_block=128
-fused layernorm_p50_ms=0.004800 network_p50_ms=0.014336 max_error=0.000000 reduction_block=128
-wrote "31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json"
-```
-
 Next capture the complete MLP with Nsight Systems, but do not run Nsight Compute yet:
 
 ```bash

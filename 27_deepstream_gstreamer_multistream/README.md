@@ -68,14 +68,6 @@ python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
 deepstream-app -c 27_deepstream_gstreamer_multistream/outputs/deepstream_app_config.txt
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-config written to outputs/
-status: ready
-```
-</details>
-
 `sample_720p.mp4` and `sample_office.mp4` are real video files shipped in the official DeepStream
 container. The two sources exercise the multi-stream mux and batch-2 inference without requiring a
 camera or external media. To use your own files, replace both `--source` arguments with paths that

@@ -83,17 +83,6 @@ Use the pinned TensorRT development container:
   --iterations 50
 ```
 
-<details><summary>Example output (local run)</summary>
-
-```text
-batch=1 compute=0.901 ms throughput=1109.927 images/s output_offset[1]=0
-batch=2 compute=1.089 ms throughput=1836.264 images/s output_offset[1]=705600
-batch=4 compute=1.537 ms throughput=2602.540 images/s output_offset[1]=705600
-saved batch_benchmark.csv and batch_benchmark_environment.json
-```
-</details>
-
-
 The explicit `--engine` argument above matches the program's default engine path and may be omitted.
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
 allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It uses
