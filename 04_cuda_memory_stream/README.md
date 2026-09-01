@@ -165,7 +165,7 @@ Run with the default tensor size and 20 measured iterations (compares all four m
 ./04_cuda_memory_stream/build/cuda_memory_stream
 ```
 
-**Example output** (captured on an RTX 4090; 15 important lines shown in a collapsed block):
+**Example output** (captured on an RTX 4090; 11 important lines shown in a collapsed block):
 
 <details><summary>Example output (partial)</summary>
 
@@ -190,47 +190,12 @@ Run a faster smoke test (262,144 elements and five iterations):
 ./04_cuda_memory_stream/build/cuda_memory_stream 262144 5
 ```
 
-**Example output** (15 lines; shown collapsed):
-
-<details><summary>Example output</summary>
-
-```text
-CUDA device:    0 - NVIDIA GeForce RTX 4090
-Mapped host:    supported
-GPU type:       discrete
-Elements:       262144 float32 values
-Buffer size:    1048576 bytes
-Iterations:     5
-pageable host: H2D + kernel + D2H                        0.204 ms        9.59 GiB/s      pass
-pinned host: async H2D + kernel + D2H                    0.118 ms       16.51 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           0.081 ms       24.14 GiB/s      pass
-unified memory: prefetched kernel access                 0.003 ms         n/a      pass
-```
-</details>
-
 Use a larger buffer to make transfer cost easier to see (4,194,304 elements):
 
 ```bash
 ./04_cuda_memory_stream/build/cuda_memory_stream 4194304 20
 ```
 
-**Example output** (10 important lines; shown collapsed):
-
-<details><summary>Example output</summary>
-
-```text
-CUDA device:    0 - NVIDIA GeForce RTX 4090
-Mapped host:    supported
-GPU type:       discrete
-Elements:       4194304 float32 values
-Buffer size:    16777216 bytes
-Iterations:     20
-pageable host: H2D + kernel + D2H                        1.931 ms       16.18 GiB/s      pass
-pinned host: async H2D + kernel + D2H                    1.615 ms       19.35 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           1.989 ms       15.71 GiB/s      pass
-unified memory: prefetched kernel access                 0.010 ms         n/a      pass
-```
-</details>
 
 ## Outputs
 

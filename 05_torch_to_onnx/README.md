@@ -70,7 +70,7 @@ Export a simplified static-shape ONNX model (writes the canonical static artifac
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 ```
 
-**Example output** (14 important lines; shown collapsed):
+**Example output** (10 important lines from the longer export log; shown collapsed as partial output):
 <details><summary>Example output (partial)</summary>
 
 ```text
@@ -99,14 +99,6 @@ Export a simplified dynamic-shape ONNX model for later TensorRT optimization-pro
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 ```
 
-**Example output** (captured locally):
-
-```text
-onnx: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n_dynamic.onnx
-dynamic: True
-simplify: True
-```
-
 The dynamic command writes:
 
 ```text
@@ -119,14 +111,6 @@ debug a simplifier issue:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --no-simplify --output 05_torch_to_onnx/outputs/yolov8n_raw.onnx
-```
-
-**Example output** (captured locally):
-
-```text
-onnx: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n_raw.onnx
-dynamic: False
-simplify: False
 ```
 
 The default simplified artifacts are the handoff contract to lesson 06:
@@ -197,17 +181,6 @@ python3 05_torch_to_onnx/inspect_onnx.py \
   --report 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
 ```
 
-**Example output** (captured locally):
-
-```text
-inputs:
-  images: FLOAT ['batch', 3, 'height', 'width']
-outputs:
-  output0: FLOAT ['batch', 84, 'anchors']
-nodes: 323
-report: 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
-```
-
 ### Validate
 
 Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
@@ -254,17 +227,11 @@ Use a different image:
 python3 05_torch_to_onnx/validate_onnx_runtime.py --image /path/to/image.jpg
 ```
 
-**Example output** (run with `assets/img.jpeg`): `allclose(rtol=0.001, atol=0.001): True` and
-`report: .../outputs/validation_report.json`.
-
 Use a different tolerance:
 
 ```bash
 python3 05_torch_to_onnx/validate_onnx_runtime.py --rtol 1e-3 --atol 1e-3
 ```
-
-**Example output:** `max abs error: 0.00155640`, `mean abs error: 0.00000143`, and
-`allclose(rtol=0.001, atol=0.001): True`.
 
 The command exits with status `2` if the outputs are not close enough. That is intentional: a failed
 validation should stop the deployment chain until the mismatch is understood.
