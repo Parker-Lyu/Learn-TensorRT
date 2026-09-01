@@ -165,9 +165,7 @@ Run with the default tensor size and 20 measured iterations (compares all four m
 ./04_cuda_memory_stream/build/cuda_memory_stream
 ```
 
-**Example output** (captured locally on an RTX 4090; partial output, 11 important lines):
-
-<details><summary>Example output (partial)</summary>
+<details><summary>Example output (RTX 4090, partial)</summary>
 
 ```text
 CUDA device:    0 - NVIDIA GeForce RTX 4090
