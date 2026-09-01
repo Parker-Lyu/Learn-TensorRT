@@ -24,24 +24,35 @@ cmake --build 02_opencv_read_image_info/build --parallel
 
 ## Run
 
-Use the sample image:
+Use the shared sample image. This command loads the image and prints its decoded dimensions,
+channel count, and OpenCV data type:
 
 ```bash
 ./02_opencv_read_image_info/build/opencv_read_image_info assets/img.jpeg
 ```
 
-By default, the program reads the shared sample image from `../assets/img.jpeg`.
+Example output captured in the development container:
 
-Use your own image:
+```text
+Loaded image: assets/img.jpeg
+Width: 800
+Height: 1067
+Channels: 3
+Data type: CV_8UC3 (uint8 per channel)
+```
+
+Use your own image by replacing the placeholder path. The command reports metadata for the file you
+provide:
 
 ```bash
 ./02_opencv_read_image_info/build/opencv_read_image_info /path/to/your/image.jpg
 ```
 
-Example output:
+The exact path and metadata depend on your input. For example, using the shared image through an
+absolute path produces:
 
 ```text
-Loaded image: ../assets/img.jpeg
+Loaded image: /workspace/Learn-TensorRT/assets/img.jpeg
 Width: 800
 Height: 1067
 Channels: 3

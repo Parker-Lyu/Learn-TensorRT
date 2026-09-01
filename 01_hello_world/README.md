@@ -46,15 +46,10 @@ success message to standard output:
 ./01_hello_world/build/hello_world
 ```
 
-<details>
-<summary>Example output from this command</summary>
-
 ```text
 Hello World
 Congratulations! You have successfully compiled and run your first C++ program.
 ```
-
-</details>
 
 ## Outputs
 
