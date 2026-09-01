@@ -74,6 +74,14 @@ evidence:
   --output 31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json
 ```
 
+Example output:
+
+```text
+baseline layernorm_p50_ms=0.006816 network_p50_ms=0.017408 max_error=0.000000 reduction_block=128
+fused layernorm_p50_ms=0.004800 network_p50_ms=0.014336 max_error=0.000000 reduction_block=128
+wrote "31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json"
+```
+
 Next capture the complete MLP with Nsight Systems, but do not run Nsight Compute yet:
 
 ```bash
@@ -102,7 +110,7 @@ size first, then registers, achieved occupancy, DRAM/cache behavior, scheduler a
 stalls together. Do not optimize an isolated counter.
 
 For a non-interactive reproduction after the investigation is understood, collect both profilers in
-one invocation:
+one invocation (this may take a long time; it was not run for this documentation update):
 
 ```bash
 python3 31_nsight_compute_kernel_analysis/profile_kernels.py

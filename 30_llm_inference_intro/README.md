@@ -26,7 +26,30 @@ production servers may split long prompts into chunks, but do not treat prefill 
 
 ```bash
 python3 30_llm_inference_intro/benchmark.py
+```
+
+<details><summary>Example output (local run, partial)</summary>
+
+```text
+"backend": "NumPy CPU autoregressive"
+"weight_memory_mib": 0.375
+"input_length": 16, "batch": 1, "ttft_ms": 0.164
+"input_length": 64, "batch": 4, "total_tokens_per_second": 49306.9
+"peak_gpu_memory_mib": 0.0
+```
+</details>
+
+Generate the Markdown summary from the benchmark JSON:
+
+```bash
 python3 30_llm_inference_intro/generate_report.py
+```
+
+Example output (partial):
+
+```text
+# Tiny Local LLM Inference Benchmark
+Peak GPU memory: 0 MiB because this controlled example uses CPU NumPy.
 ```
 
 The fixed revision is derived from the committed architecture and seed. The benchmark holds output

@@ -11,8 +11,8 @@ optional multi-stage delivery image. It consumes generated evidence from lessons
 - Complete the checkpoint reports and only the elective evidence that will be presented. Follow
   each checkpoint README to collect its required evidence, then generate the three required inputs:
 
-  ```bash
-  python3 12_end_to_end_validation_report/generate_report.py
+```bash
+python3 12_end_to_end_validation_report/generate_report.py
   python3 15_precision_performance_report/generate_report.py
   python3 22_pipeline_performance_report/generate_report.py
   ```
@@ -63,6 +63,16 @@ Then collect the matrix and render the report:
 ```bash
 python3 32_final_portfolio_case_study/run_local_checks.py
 python3 32_final_portfolio_case_study/generate_case_study.py
+```
+
+Example output:
+
+```text
+{
+  "passed": true,
+  "checks": 8
+}
+wrote /workspace/Learn-TensorRT/reports/32_final_portfolio_case_study.md
 ```
 
 The report is written to `reports/32_final_portfolio_case_study.md`; raw local-check output is
