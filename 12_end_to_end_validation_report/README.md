@@ -73,6 +73,14 @@ assets/img.jpeg
 python3 12_end_to_end_validation_report/generate_report.py
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+evidence: /workspace/Learn-TensorRT/12_end_to_end_validation_report/outputs/evidence.json
+report: /workspace/Learn-TensorRT/reports/12_end_to_end_validation.md
+```
+</details>
+
 This writes:
 
 - `12_end_to_end_validation_report/outputs/evidence.json`: selected machine-readable evidence.
