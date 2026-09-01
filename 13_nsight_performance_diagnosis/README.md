@@ -80,7 +80,7 @@ and whether synchronization leaves the GPU idle between requests.
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --lesson11-dir 11_yolov8_trt_cpp \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image assets/img.jpeg
+  --image assets/img.jpeg --warmup-iterations 2 --iterations 5 --skip-nsys
 ```
 
 <details><summary>Example output (local smoke run, Nsight skipped)</summary>
@@ -102,7 +102,7 @@ Defaults:
 - 2 warmup iterations and 5 measured iterations in the Nsight capture
 - P99 warning when fewer than 100 measured baseline samples are used
 
-Run a fast smoke diagnosis without Nsight:
+Run a fast smoke diagnosis without Nsight (the command above is the reproducible local smoke run):
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
@@ -114,7 +114,7 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --skip-nsys
 ```
 
-Collect a more stable tail-latency sample:
+Collect a larger steady-state sample to make tail percentiles more stable:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
@@ -122,7 +122,7 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --image assets/img.jpeg --warmup-iterations 10 --iterations 200
 ```
 
-Profile another engine or shorten the trace:
+Profile the FP16 engine while keeping the Nsight capture short:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
@@ -133,7 +133,7 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --nsys-iterations 3
 ```
 
-Skip rebuilding lesson 11 when it is already current:
+Skip the CMake rebuild when the lesson 11 executable is already current:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \

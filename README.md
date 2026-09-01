@@ -6,7 +6,7 @@
 [![Container](https://img.shields.io/badge/NGC_PyTorch-25.11-orange.svg)](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
 
 A practical, hands-on C++17 course focused on **TensorRT 10.14 high-performance deployment** and
-**low-latency pipeline engineering**.
+**low-latency pipeline engineering** - covering **YOLOv8, CUDA preprocessing, INT8 quantization, async pipelines, Triton, DeepStream and Nsight profiling**
 
 Build a complete YOLOv8 deployment pipeline in C++17, from exported model to a measurable inference
 system. Learn the engineering practices that make it dependable: RAII-based ownership, explicit

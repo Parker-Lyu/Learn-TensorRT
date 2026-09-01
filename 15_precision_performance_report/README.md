@@ -70,7 +70,19 @@ The command runs the evidence-identity and release-decision unit tests without r
 <details><summary>Example output (local run)</summary>
 
 ```text
-wrote /workspace/Learn-TensorRT/reports/15_precision_performance.md
+test_dataset_identity_mismatch_is_rejected (test_generate_report.GenerateReportTests.test_dataset_identity_mismatch_is_rejected) ... ok
+test_engine_identity_mismatch_is_rejected (test_generate_report.GenerateReportTests.test_engine_identity_mismatch_is_rejected) ... ok
+test_failed_int8_performance_is_rejected (test_generate_report.GenerateReportTests.test_failed_int8_performance_is_rejected) ... ok
+test_invalid_throughput_is_rejected (test_generate_report.GenerateReportTests.test_invalid_throughput_is_rejected) ... ok
+test_layer_audit_context_is_rendered (test_generate_report.GenerateReportTests.test_layer_audit_context_is_rendered) ... ok
+test_passing_but_slower_int8_retains_fp16 (test_generate_report.GenerateReportTests.test_passing_but_slower_int8_retains_fp16) ... ok
+test_performance_must_reference_the_same_evaluation (test_generate_report.GenerateReportTests.test_performance_must_reference_the_same_evaluation) ... ok
+test_report_renders_dynamic_decisions_and_drift (test_generate_report.GenerateReportTests.test_report_renders_dynamic_decisions_and_drift) ... ok
+test_short_performance_sample_is_rejected (test_generate_report.GenerateReportTests.test_short_performance_sample_is_rejected) ... ok
+
+Ran 9 tests in 0.001s
+
+OK
 ```
 </details>
 

@@ -80,6 +80,13 @@ and inspect the Q/DQ INT8 candidate:
 The following block exports and inspects the ONNX graph, creates the Q/DQ graph, builds TensorRT
 engines, compares outputs, audits layer precision, and validates decoded detections:
 
+- `export_yolov8_onnx.py`: export the fixed-shape course graph.
+- `inspect_onnx.py` and `validate_onnx_runtime.py`: inspect and establish the ONNX Runtime reference.
+- `export_qdq.py`: create the explicit-Q/DQ ModelOpt graph.
+- `build_engines.py`: build the FP32, FP16, and INT8-candidate engines.
+- `compare_engines.py`: evaluate quality gates; `inspect_precision.py` audits actual layer types.
+- `validate_outputs.py`: verify TensorRT output and postprocessing contracts.
+
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/inspect_onnx.py
@@ -101,9 +108,18 @@ Collect the canonical matched runtime evidence and generate the concise Lesson 1
 
 Benchmark the accepted candidates with matched settings, then write the concise execution summary:
 
+- `benchmark_engines.py`: collect matched latency/throughput evidence (INT8 is gated).
+- `generate_run_summary.py`: render the concise, machine-readable-backed summary.
+
 ```bash
 python3 14_yolov8_int8_quantization_engineering/modelopt/benchmark_engines.py
 python3 14_yolov8_int8_quantization_engineering/tools/generate_run_summary.py
+```
+
+Example output (local run):
+
+```text
+Run summary: /workspace/Learn-TensorRT/14_yolov8_int8_quantization_engineering/outputs/summary/quantization_run_summary.md
 ```
 
 The benchmark tool verifies that the engines are the same artifacts used by `compare_engines.py`.
@@ -127,7 +143,8 @@ application-facing decision report; Lesson 14 does not generate a root-level cou
 
 ## Tests
 
-Run both CPU-only suites from the repository root:
+Run the contract/evaluator suite (first command), then the ModelOpt-specific unit suite (second
+command), both CPU-only and independent of GPU artifacts:
 
 ```bash
 PYTHONPATH=14_yolov8_int8_quantization_engineering \
