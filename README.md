@@ -92,17 +92,13 @@ prerequisites below; Lesson `32` is the final synthesis.
 | Final synthesis | `32_final_portfolio_case_study` | Complete after the core checkpoints and only the elective evidence you plan to present. |
 
 
-## General Build Pattern
+## Learning Approach
 
-There is no one-size-fits-all command sequence for every lesson. For each C++ lesson, follow that
-lesson's `README.md` as the source of truth for setup, build, execution, and verification. Run the
-steps and checkpoints in the documented order, and inspect the generated outputs rather than
-assuming that a successful process exit proves the implementation is correct.
+Follow each lesson's `README.md` to build and run the code, then inspect the outputs.
 
-AI can help explain unfamiliar code, suggest experiments, and troubleshoot failures, but it is not
-an authority. Use it critically: question its assumptions, verify claims against the source code,
-TensorRT/CUDA documentation, and test results, and make sure you can explain the design choices
-yourself. The objective is to understand and evaluate the implementation—not merely to make it run.
+Obtaining the expected output is only the beginning. With AI as a learning aid, approach the code in
+each lesson with a critical mindset and work toward understanding the implementation, rather than
+simply making the program run.
 
 ## Requirements
 
