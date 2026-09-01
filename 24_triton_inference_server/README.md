@@ -76,7 +76,16 @@ python3 24_triton_inference_server/prepare_model_repository.py
 Run the server **from the host shell** at the repository root. This is Docker container management,
 which is host work; the server itself runs in the temporary Triton container in the foreground:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+HTTP health: 200
+client requests completed successfully
+```
+</details>
+bash
 # Host shell (repository root)
 docker run --rm --gpus all --network host \
   -v "$PWD/24_triton_inference_server/model_repository:/models:ro" \

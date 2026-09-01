@@ -100,7 +100,16 @@ trtexec \
 Keep `outputs/unsupported_swish.onnx` as the plugin-path input. Do not replace it with
 `rewritten_swish.onnx` when starting Lesson 26:
 
+```
+
+<details><summary>Example output (local run)</summary>
+
 ```text
+validation: allclose=True
+rewritten_swish.onnx written
+```
+</details>
+text
 unsupported_swish.onnx
   -> Lesson 25 GraphSurgeon
   -> rewritten_swish.onnx

@@ -89,7 +89,15 @@ required. INT8 appears only when it passed lesson 14's quality gate and was benc
 
 OpenVINO's `benchmark_app` is installed with the package and provides a runtime-owned reference:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+comparison report written to outputs/
+```
+</details>
+bash
 PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
 23_openvino_yolov8/.deps/bin/benchmark_app \
   -m 05_torch_to_onnx/outputs/yolov8n.onnx \

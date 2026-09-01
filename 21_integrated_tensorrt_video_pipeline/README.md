@@ -52,7 +52,16 @@ the dynamic engine and the pinned GPU container.
 
 Real integrated run with NPP letterbox, two TensorRT contexts/streams, dynamic batches, YOLO decode/NMS, and structured output:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+status: completed
+outputs written to outputs/
+```
+</details>
+bash
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
   17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg 16 4 2
 ```

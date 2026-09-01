@@ -64,7 +64,18 @@ Run with the default lesson 06 static FP32 engine and shared image:
 
 Use a different engine or image:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Detections: 6
+Last latency ms: preprocess=2.75377, h2d=0.265952, enqueue_host=30.7236, gpu_compute=30.4057, d2h=0.138976, postprocess=0.427954, total=35.0845
+JSON report: 11_yolov8_trt_cpp/outputs/detections.json
+```
+</details>
+bash
 ./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
   --image assets/img.jpeg \

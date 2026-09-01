@@ -83,7 +83,16 @@ match the mux, using the batch-4 configuration below for the included engine's m
 The engine built by this lesson has a dynamic batch profile up to four images. To exercise four
 concurrent sources with matching `nvstreammux` and `nvinfer` batch sizes, run:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+config written to outputs/
+status: ready
+```
+</details>
+bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov \

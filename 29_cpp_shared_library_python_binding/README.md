@@ -60,7 +60,16 @@ or serialize access at the caller.
 
 Run the Python tests from the repository root:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+batch: 2
+status: inference completed
+```
+</details>
+bash
 python3 -m unittest discover -s 29_cpp_shared_library_python_binding/tests -v
 ```
 

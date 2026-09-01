@@ -84,7 +84,20 @@ The default locates the repository's `assets/img.jpeg` from the executable,
 produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four frames, and retain
 the newest frames:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+frames read: 20
+frames processed: 9
+frames dropped: 11
+queue high watermark: 4/4
+average queue latency: 49.94 ms
+max queue latency: 122.82 ms
+```
+</details>
+bash
 ./16_cpp_producer_consumer/build/cpp_producer_consumer \
   --frames 100 \
   --queue-capacity 4 \

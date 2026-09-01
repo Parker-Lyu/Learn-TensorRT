@@ -62,7 +62,15 @@ python3 14_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parit
 Export the static course ONNX model, establish the four references, then export, build, evaluate,
 and inspect the Q/DQ INT8 candidate:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+run summary written to outputs/
+```
+</details>
+bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 python3 05_torch_to_onnx/inspect_onnx.py
 python3 05_torch_to_onnx/validate_onnx_runtime.py

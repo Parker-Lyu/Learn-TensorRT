@@ -54,7 +54,15 @@ GPU, driver, model, dataset, or runtime identity differs.
 
 Run the Python tests from the repository root:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+wrote /workspace/Learn-TensorRT/reports/15_precision_performance.md
+```
+</details>
+bash
 python3 -m unittest discover -s 15_precision_performance_report/tests -v
 ```
 

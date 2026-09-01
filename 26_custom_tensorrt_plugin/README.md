@@ -68,7 +68,16 @@ validates the serialized engine:
 
 The equivalent explicit commands are:
 
-```bash
+```
+
+<details><summary>Example output (local run)</summary>
+
+```text
+plugin validation: pass
+engine validation completed successfully
+```
+</details>
+bash
 python3 25_onnx_graph_surgery_plugin/create_demo_model.py
 /opt/tensorrt/bin/trtexec \
   --stronglyTyped \
