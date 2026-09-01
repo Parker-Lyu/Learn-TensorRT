@@ -53,7 +53,8 @@ cmake --build 11_yolov8_trt_cpp/build
 
 ## Run
 
-Run with the default lesson 06 static FP32 engine and shared image:
+Run with the default lesson 06 static FP32 engine and shared image (executes one inference and writes
+the annotated image plus JSON report):
 
 ```bash
 ./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
@@ -66,8 +67,14 @@ Run with the default lesson 06 static FP32 engine and shared image:
 
 ```text
 Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Image: assets/img.jpeg
+Input tensor: images
+Output tensor: output0
+Warmup iterations: 0
+Measured iterations: 1
 Detections: 6
-Last latency ms: preprocess=3.28376, h2d=0.266304, enqueue_host=30.443, gpu_compute=30.121, d2h=0.140992, postprocess=0.418949, total=35.3077
+Last latency ms: preprocess=2.82688, h2d=0.26624, enqueue_host=30.2215, gpu_compute=29.9015, d2h=0.147552, postprocess=0.418271, total=34.623
+Output image: 11_yolov8_trt_cpp/outputs/img_yolov8_trt_cpp.jpg
 JSON report: 11_yolov8_trt_cpp/outputs/detections.json
 ```
 </details>

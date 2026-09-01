@@ -16,32 +16,50 @@ default detection thresholds.
 
 Run every command from the repository root:
 
+Create the report directory and capture the shared environment check:
+
 ```bash
 mkdir -p 12_end_to_end_validation_report/outputs/cpp
 bash 00_environment_check/check_env.sh \
   > 12_end_to_end_validation_report/outputs/environment_check.log 2>&1
+```
 
+Export the ONNX model and verify one image with ONNX Runtime:
+
+```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
-python3 05_torch_to_onnx/validate_onnx_runtime.py \
-  --image assets/img.jpeg
+python3 05_torch_to_onnx/validate_onnx_runtime.py --image assets/img.jpeg
+```
 
-python3 06_trtexec_engine/build_and_benchmark.py \
-  --builds static_fp32
+Build the static FP32 TensorRT reference engine:
 
+```bash
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
+```
+
+Align TensorRT and ONNX Runtime raw outputs using the saved input tensor:
+
+```bash
 python3 07_polygraphy_precision_alignment/align_precision.py \
   --input-npy 05_torch_to_onnx/outputs/input_nchw_float32.npy \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+```
 
+Build the C++ pipeline and run its focused tests:
+
+```bash
 cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build
 cmake --build 11_yolov8_trt_cpp/build
 ./11_yolov8_trt_cpp/build/yolov8_cpp_tests \
   > 12_end_to_end_validation_report/outputs/cpp_tests.log 2>&1
+```
 
+Run the 10-warmup/100-measurement C++ baseline and save its evidence:
+
+```bash
 ./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
-  --image assets/img.jpeg \
-  --warmup-iterations 10 \
-  --iterations 100 \
+  --image assets/img.jpeg --warmup-iterations 10 --iterations 100 \
   --output-dir 12_end_to_end_validation_report/outputs/cpp
 ```
 
@@ -73,13 +91,12 @@ assets/img.jpeg
 python3 12_end_to_end_validation_report/generate_report.py
 ```
 
-<details><summary>Example output (local run)</summary>
+Example output (local run):
 
 ```text
 evidence: /workspace/Learn-TensorRT/12_end_to_end_validation_report/outputs/evidence.json
 report: /workspace/Learn-TensorRT/reports/12_end_to_end_validation.md
 ```
-</details>
 
 This writes:
 

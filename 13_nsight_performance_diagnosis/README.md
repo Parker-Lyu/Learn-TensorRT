@@ -29,10 +29,10 @@ the allocation APIs needed by this lesson without changing application behavior.
 Complete lessons 06 and 11 first:
 
 ```bash
-python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
-cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build
-cmake --build 11_yolov8_trt_cpp/build
-nsys --version
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32  # build the reference engine
+cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build                 # configure the C++ lesson
+cmake --build 11_yolov8_trt_cpp/build                                  # compile the executable
+nsys --version                                                           # verify Nsight Systems
 ```
 
 ## Deliverables
@@ -77,8 +77,24 @@ and whether synchronization leaves the GPU idle between requests.
 ## Run
 
 ```bash
-python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg
 ```
+
+<details><summary>Example output (local smoke run, Nsight skipped)</summary>
+
+```text
+Warmup iterations: 2
+Measured iterations: 5
+Steady-state total P50: 2.739 ms
+Heuristic diagnosis: No category dominates strongly; use the Nsight timeline to inspect gaps and synchronization.
+Summary JSON: outputs/diagnosis_summary.json
+Report Markdown: outputs/diagnosis_report.md
+Nsight capture skipped: skipped by --skip-nsys
+```
+</details>
 
 Defaults:
 
@@ -90,6 +106,9 @@ Run a fast smoke diagnosis without Nsight:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg \
   --warmup-iterations 2 \
   --iterations 5 \
   --skip-nsys
@@ -98,14 +117,18 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
 Collect a more stable tail-latency sample:
 
 ```bash
-python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py --warmup-iterations 10 --iterations 200
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg --warmup-iterations 10 --iterations 200
 ```
 
 Profile another engine or shorten the trace:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp \
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --image assets/img.jpeg \
   --nsys-warmup-iterations 1 \
   --nsys-iterations 3
 ```
@@ -113,7 +136,9 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
 Skip rebuilding lesson 11 when it is already current:
 
 ```bash
-python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py --skip-build
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg --skip-build
 ```
 
 ## Outputs

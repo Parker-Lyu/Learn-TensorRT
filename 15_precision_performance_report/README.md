@@ -33,6 +33,14 @@ before rendering an application-facing precision and performance decision report
 python3 15_precision_performance_report/generate_report.py
 ```
 
+This validates Lesson 14 evidence identities and renders the application-facing decision report.
+
+Example output (local run):
+
+```text
+wrote /workspace/Learn-TensorRT/reports/15_precision_performance.md
+```
+
 Complete `14_yolov8_int8_quantization_engineering/docs/reproduction.md` first. The generator rejects
 mismatched manifest, engine, runtime, sample, and release-gate identities. A failed INT8 candidate
 must have no INT8 performance measurement; the report records the rejection and uses the available
@@ -57,6 +65,8 @@ Run the Python tests from the repository root:
 ```bash
 python3 -m unittest discover -s 15_precision_performance_report/tests -v
 ```
+
+The command runs the evidence-identity and release-decision unit tests without requiring a GPU.
 <details><summary>Example output (local run)</summary>
 
 ```text

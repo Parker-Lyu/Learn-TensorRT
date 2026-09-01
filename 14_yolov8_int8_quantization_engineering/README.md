@@ -59,8 +59,26 @@ python3 14_yolov8_int8_quantization_engineering/tools/analyze_calibration_repres
 python3 14_yolov8_int8_quantization_engineering/tools/verify_preprocessing_parity.py
 ```
 
+The first command downloads (or reuses) the pinned COCO archives; the remaining commands materialize
+calibration images, check geometry coverage, and verify preprocessing byte parity.
+
+<details><summary>Example output (local run, representativeness check)</summary>
+
+```text
+Geometry verdict: REPRESENTATIVE_WITH_EXPLICIT_TAIL_COVERAGE
+Final mixed set vs. pure-random baseline: EXPECTED_SHIFT_FROM_EXPLICIT_TAIL_QUOTAS
+Support coverage: PASS
+Markdown report: /workspace/Learn-TensorRT/14_yolov8_int8_quantization_engineering/outputs/data_preparation/representativeness/representativeness_report.md
+JSON report: /workspace/Learn-TensorRT/14_yolov8_int8_quantization_engineering/outputs/data_preparation/representativeness/representativeness_report.json
+Figure: /workspace/Learn-TensorRT/14_yolov8_int8_quantization_engineering/outputs/data_preparation/representativeness/geometry_distributions.png
+```
+</details>
+
 Export the static course ONNX model, establish the four references, then export, build, evaluate,
 and inspect the Q/DQ INT8 candidate:
+
+The following block exports and inspects the ONNX graph, creates the Q/DQ graph, builds TensorRT
+engines, compares outputs, audits layer precision, and validates decoded detections:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
@@ -80,6 +98,8 @@ must pass gates relative to both PyTorch FP32 and TensorRT FP16; a failing candi
 from the performance recommendation.
 
 Collect the canonical matched runtime evidence and generate the concise Lesson 14 execution summary:
+
+Benchmark the accepted candidates with matched settings, then write the concise execution summary:
 
 ```bash
 python3 14_yolov8_int8_quantization_engineering/modelopt/benchmark_engines.py
