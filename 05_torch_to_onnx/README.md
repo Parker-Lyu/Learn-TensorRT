@@ -70,8 +70,7 @@ Export a simplified static-shape ONNX model (writes the canonical static artifac
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 ```
 
-**Example output** (local run; partial output from the longer export log):
-<details><summary>Example output (partial)</summary>
+<details><summary>Example output (local run, partial)</summary>
 
 ```text
 YOLOv8n summary (fused): 72 layers, 3,151,904 parameters, 0 gradients, 8.7 GFLOPs
@@ -138,8 +137,7 @@ Check the simplified static model and write a JSON report:
 python3 05_torch_to_onnx/inspect_onnx.py
 ```
 
-**Example output** (7 lines; shown collapsed):
-<details><summary>Example output</summary>
+<details><summary>Example output (7 lines)</summary>
 
 ```text
 checked: .../05_torch_to_onnx/outputs/yolov8n.onnx
@@ -190,8 +188,7 @@ Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
-**Example output** (7 lines; shown collapsed):
-<details><summary>Example output</summary>
+<details><summary>Example output (7 lines)</summary>
 
 ```text
 input: (1, 3, 640, 640) float32

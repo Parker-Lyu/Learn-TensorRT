@@ -94,9 +94,7 @@ Use the shared sample image (runs the default 640x640 preprocessing path):
 ./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg
 ```
 
-**Example output** (12 lines; shown collapsed):
-
-<details><summary>Example output</summary>
+<details><summary>Example output (12 lines)</summary>
 
 ```text
 Original image: 800 x 1067
