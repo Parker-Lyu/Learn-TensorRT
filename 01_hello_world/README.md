@@ -46,6 +46,8 @@ success message to standard output:
 ./01_hello_world/build/hello_world
 ```
 
+Example output:
+
 ```text
 Hello World
 Congratulations! You have successfully compiled and run your first C++ program.
