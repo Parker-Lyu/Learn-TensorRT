@@ -94,14 +94,15 @@ prerequisites below; Lesson `32` is the final synthesis.
 
 ## General Build Pattern
 
-For each C++ lesson:
+There is no one-size-fits-all command sequence for every lesson. For each C++ lesson, follow that
+lesson's `README.md` as the source of truth for setup, build, execution, and verification. Run the
+steps and checkpoints in the documented order, and inspect the generated outputs rather than
+assuming that a successful process exit proves the implementation is correct.
 
-```bash
-cd <lesson_folder>
-cmake -S . -B build
-cmake --build build
-./build/<executable_name>
-```
+AI can help explain unfamiliar code, suggest experiments, and troubleshoot failures, but it is not
+an authority. Use it critically: question its assumptions, verify claims against the source code,
+TensorRT/CUDA documentation, and test results, and make sure you can explain the design choices
+yourself. The objective is to understand and evaluate the implementation—not merely to make it run.
 
 ## Requirements
 
