@@ -39,19 +39,22 @@ The generated build directory is ignored.
 
 ## Run
 
-
-Run the resulting artifact:
+Run the executable produced by the build. This starts the program and writes its greeting and
+success message to standard output:
 
 ```bash
 ./01_hello_world/build/hello_world
 ```
 
-Expected output:
+<details>
+<summary>Example output from this command</summary>
 
 ```text
 Hello World
 Congratulations! You have successfully compiled and run your first C++ program.
 ```
+
+</details>
 
 ## Outputs
 
