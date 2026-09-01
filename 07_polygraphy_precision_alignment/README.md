@@ -308,6 +308,18 @@ Compare the lesson 05 ONNX model against the lesson 06 FP32 engine:
 python3 07_polygraphy_precision_alignment/align_precision.py
 ```
 
+<details><summary>Example output (local run, partial)</summary>
+
+```text
+== compare_onnxrt_trt ==
+report: /workspace/Learn-TensorRT/07_polygraphy_precision_alignment/outputs/precision_report.json
+note: /workspace/Learn-TensorRT/07_polygraphy_precision_alignment/outputs/precision_alignment_note.md
+allclose(rtol=0.001, atol=0.001): True
+max abs error: 0.00146484375
+likely cause: within tolerance; keep the evidence with the benchmark report
+```
+</details>
+
 The default comparison uses:
 
 ```text

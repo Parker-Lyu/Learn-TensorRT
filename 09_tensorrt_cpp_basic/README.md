@@ -101,6 +101,20 @@ it, and run one smoke inference:
   --engine 09_tensorrt_cpp_basic/outputs/yolov8n_cpp_basic.engine
 ```
 
+<details><summary>Example output (local run, partial)</summary>
+
+```text
+ONNX: 05_torch_to_onnx/outputs/yolov8n.onnx
+Engine source: built from ONNX
+Engine bytes: 18710228
+Strongly typed network: yes
+TF32 allowed: no
+Total device bytes: 7737600
+Average enqueue time: 0.900779 ms
+C++ TensorRT basic flow completed successfully.
+```
+</details>
+
 Allow TF32 kernel math while keeping the ONNX and engine tensor types FP32:
 
 ```bash

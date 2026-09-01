@@ -25,26 +25,67 @@ python3 05_torch_to_onnx/validate_onnx_runtime.py
 
 ## Run
 
-First create both explicit FP16 graphs and their validation reports:
+Prepare validated explicit-FP16 ONNX graphs (default preparation step):
 
 ```bash
 python3 06_trtexec_engine/prepare_fp16_onnx.py
 ```
 
-Then preview or build the complete matrix:
+<details><summary>Example output (local run, partial)</summary>
+
+```text
+static: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/yolov8n_static_autocast_fp16.onnx
+validation: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/static_fp16_onnx_validation.json
+dynamic: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/yolov8n_dynamic_autocast_fp16.onnx
+validation: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/dynamic_fp16_onnx_validation.json
+```
+</details>
+
+Preview the complete five-engine command matrix without executing it:
 
 ```bash
 python3 06_trtexec_engine/build_and_benchmark.py --dry-run
+```
+
+<details><summary>Example output (partial)</summary>
+
+```text
+== static_fp32 ==
+trtexec --onnx=/workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n.onnx ... --noTF32
+== static_fp16_legacy ==
+trtexec ... --fp16
+== dynamic_fp16_legacy ==
+trtexec ... --fp16 --minShapes=images:1x3x320x320 ...
+== static_fp16_strong ==
+trtexec ... --stronglyTyped
+== dynamic_fp16_strong ==
+trtexec ... --stronglyTyped --minShapes=images:1x3x320x320 ...
+```
+</details>
+
+Build and benchmark the full matrix:
+
+```bash
 python3 06_trtexec_engine/build_and_benchmark.py
+```
+
+Example output:
+
+```text
+manifest: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/build_manifest.json
+```
+
+Summarize benchmark artifacts into a Markdown report:
+
+```bash
 python3 06_trtexec_engine/summarize_results.py
 ```
 
-The matrix is `static_fp32`, `static_fp16_legacy`, `dynamic_fp16_legacy`,
-`static_fp16_strong`, and `dynamic_fp16_strong`. Legacy builds consume lesson 05 FP32 ONNX and
-pass `--fp16`; they are retained for older production environments and are not the new default.
-Strong builds consume the validated AutoCast graphs and pass `--stronglyTyped` (never both flags).
-Use `--skip-strongly-typed` only when reproducing an old environment that cannot consume explicit
-FP16 ONNX.
+Example output:
+
+```text
+report: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/benchmark_summary.md
+```
 
 ## Outputs
 

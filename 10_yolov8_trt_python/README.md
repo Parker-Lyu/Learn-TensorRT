@@ -44,30 +44,48 @@ assets/img.jpeg
 
 ## Run
 
+Run the default FP32 engine on the shared sample image (from the lesson directory so relative defaults resolve):
+
 ```bash
-python3 10_yolov8_trt_python/infer_yolov8_trt.py
+cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py
 ```
+
+<details><summary>Example output (local run, partial)</summary>
+
+```text
+Engine: ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Image: ../assets/img.jpeg
+Input: images (1, 3, 640, 640)
+Output: output0 (1, 84, 8400)
+Detections: 6
+        person 0.898 box=[191.9481658935547, 419.8030700683594, 453.68359375, 1065.5908203125]
+          bird 0.811 box=[481.1155700683594, 852.3627319335938, 582.0276489257812, 1067.0]
+Latency ms: preprocess=12.95, inference=33.61, postprocess=1.75, total=48.31
+Output image: outputs/img_yolov8_trt_python.jpg
+Detections JSON: outputs/detections.json
+```
+</details>
 
 Use a specific engine or image:
 
 ```bash
-python3 10_yolov8_trt_python/infer_yolov8_trt.py \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
-  --image assets/img.jpeg
+cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py \
+  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --image ../assets/img.jpeg
 ```
 
 Run a dynamic engine by supplying runtime dimensions:
 
 ```bash
-python3 10_yolov8_trt_python/infer_yolov8_trt.py \
-  --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py \
+  --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
   --input-shape images:1x3x640x640
 ```
 
 Run an optional Ultralytics reference check:
 
 ```bash
-python3 10_yolov8_trt_python/infer_yolov8_trt.py --reference
+cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py --reference
 ```
 
 ## Outputs

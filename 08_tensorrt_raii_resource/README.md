@@ -99,6 +99,19 @@ Run the default static FP32 engine from lesson 06:
   --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Tensor buffers:
+  - images [input, device, float32] shape=1x3x640x640 bytes=4915200
+  - output0 [output, device, float32] shape=1x84x8400 bytes=2822400
+Total device bytes: 7737600
+Average enqueue time: 0.934912 ms
+Smoke inference completed successfully.
+```
+</details>
+
 Use a specific engine:
 
 ```bash
