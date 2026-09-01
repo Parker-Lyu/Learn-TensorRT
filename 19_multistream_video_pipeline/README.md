@@ -50,22 +50,21 @@ The generated build directory is ignored.
 
 ## Run
 
-Run the commands from the repository root:
+Run the default two-stream synthetic workload from the repository root:
 
 ```bash
 ./19_multistream_video_pipeline/build/multistream_video_pipeline
 ```
 
-<details><summary>Example output (local run)</summary>
+Example output (local run):
 
 ```text
-total_fps=604.65
-stream=0 captured=120 processed=120 dropped=0 queue_peak=2 fps=362.79 p50=7.31 p90=9.42 p99=10.50
-stream=1 captured=80 processed=80 dropped=0 queue_peak=1 fps=241.86 p50=6.85 p90=9.18 p99=10.78
+total_fps=606.08
+stream=0 captured=120 processed=120 dropped=0 queue_peak=2 fps=363.65 p50=7.33 p90=9.47 p99=10.53
+stream=1 captured=80 processed=80 dropped=0 queue_peak=1 fps=242.43 p50=6.38 p90=9.24 p99=10.47
 ```
-</details>
 
-The default uses two camera-like synthetic streams with different rates. Real files are repeatable:
+To replace the synthetic streams with two repeatable video files, run:
 
 ```bash
 ./19_multistream_video_pipeline/build/multistream_video_pipeline --input camera-a.mp4 --input camera-b.mp4

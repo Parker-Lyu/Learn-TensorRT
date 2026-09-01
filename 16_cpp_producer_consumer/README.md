@@ -74,7 +74,7 @@ The generated build directory is ignored.
 
 Run the commands from the repository root:
 
-From this lesson directory:
+From this lesson directory, run the default producer/consumer workload:
 
 ```bash
 ./16_cpp_producer_consumer/build/cpp_producer_consumer
@@ -83,18 +83,19 @@ From this lesson directory:
 <details><summary>Example output (local run)</summary>
 
 ```text
+policy: drop-oldest
 frames read: 20
 frames processed: 10
 frames dropped: 10
 queue high watermark: 4/4
-average queue latency: 62.93 ms
-max queue latency: 157.71 ms
+average queue latency: 62.85 ms
+max queue latency: 155.82 ms
 ```
 </details>
 
-The default locates the repository's `assets/img.jpeg` from the executable,
-produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four frames, and retain
-the newest frames:
+To reproduce an overloaded queue with explicit timing and drop policy, run:
+This variant locates the repository's `assets/img.jpeg`, produces a frame every 10 ms, simulates
+40 ms inference, limits the queue to four frames, and retains the newest frames:
 
 ```bash
 ./16_cpp_producer_consumer/build/cpp_producer_consumer \
@@ -105,13 +106,19 @@ the newest frames:
   --policy drop-oldest
 ```
 
-Run with one or more custom images by repeating `--image`:
+To use a custom input image (repeat `--image` to provide more than one), run:
 
 ```bash
 ./16_cpp_producer_consumer/build/cpp_producer_consumer --image assets/img.jpeg
 ```
 
-Use `--help` for every option. `--fail-producer-at` and `--fail-consumer-at` are deliberate failure
+To list all options, including deliberate producer/consumer failure-injection hooks, run:
+
+```bash
+./16_cpp_producer_consumer/build/cpp_producer_consumer --help
+```
+
+`--fail-producer-at` and `--fail-consumer-at` are deliberate failure
 injection hooks for observing exception propagation and clean shutdown.
 
 ### Overload Experiments

@@ -74,7 +74,7 @@ The generated engine, timing cache, and build directory are ignored.
 
 ## Run
 
-Use the pinned TensorRT development container:
+Use the pinned TensorRT development container to benchmark batches 1, 2, and 4:
 
 ```bash
 ./17_dynamic_batching/build/dynamic_batching \
@@ -87,14 +87,21 @@ Use the pinned TensorRT development container:
 
 ```text
 GPU=NVIDIA GeForce RTX 4090 compute_capability=8.9 TensorRT=10.14.1 CUDA_runtime=13000 CUDA_driver=13020
-batch=1 compute=0.931 ms throughput=1073.791 images/s output_offset[1]=0
-batch=2 compute=1.124 ms throughput=1779.920 images/s output_offset[1]=705600
-batch=4 compute=1.491 ms throughput=2682.164 images/s output_offset[1]=705600
-saved batch_benchmark.csv and batch_benchmark_environment.json
+input=images output=output0
+batch=1 compute=0.916 ms throughput=1091.995 images/s output_offset[1]=0
+batch=2 compute=1.116 ms throughput=1791.405 images/s output_offset[1]=705600
+batch=4 compute=1.481 ms throughput=2700.873 images/s output_offset[1]=705600
+saved "/workspace/Learn-TensorRT/./17_dynamic_batching/build/../outputs/batch_benchmark.csv" and "/workspace/Learn-TensorRT/./17_dynamic_batching/build/../outputs/batch_benchmark_environment.json"
 ```
 </details>
 
-The explicit `--engine` argument above matches the program's default engine path and may be omitted.
+To run the same benchmark using the executable's default engine path, omit `--engine`:
+
+```bash
+./17_dynamic_batching/build/dynamic_batching --warmup 5 --iterations 50
+```
+
+The explicit `--engine` argument above matches the program's default engine path.
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
 allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It uses
 deterministic synthetic NCHW tensors to isolate batching and buffer-layout behavior; it is not an

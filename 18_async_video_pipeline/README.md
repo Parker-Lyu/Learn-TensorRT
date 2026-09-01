@@ -65,23 +65,27 @@ The generated build directory is ignored.
 
 ## Run
 
-Run the commands from the repository root:
+Run the default synthetic-source pipeline (120 frames) from the repository root:
 
 ```bash
 ./18_async_video_pipeline/build/async_video_pipeline
 ```
 
-<details><summary>Example output (local run)</summary>
+Example output (local run):
 
 ```text
-captured=120 processed=120 dropped=0 queue_peak=5 fps=753.72 p50_ms=11.32 p90_ms=13.01 p99_ms=15.09
+captured=120 processed=119 dropped=1 queue_peak=8 fps=787.30 p50_ms=11.86 p90_ms=15.00 p99_ms=16.57
 ```
-</details>
 
-The default synthetic source makes the artifact runnable without a camera. Use a video or camera:
+To process frames from a video file instead of the synthetic source, run this command:
 
 ```bash
 ./18_async_video_pipeline/build/async_video_pipeline --input video.mp4
+```
+
+To process frames from camera device 0, run this command:
+
+```bash
 ./18_async_video_pipeline/build/async_video_pipeline --input 0
 ```
 
