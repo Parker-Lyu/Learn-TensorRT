@@ -94,7 +94,7 @@ Use the shared sample image (runs the default 640x640 preprocessing path):
 ./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg
 ```
 
-**Example output** (11 lines; shown collapsed):
+**Example output** (12 lines; shown collapsed):
 
 <details><summary>Example output</summary>
 
@@ -109,6 +109,7 @@ Tensor values:  1228800 float32 values, 4915200 bytes
 Debug image:    outputs/letterbox_debug.jpg
 Tensor binary:  outputs/input_tensor_nchw_float32.bin
 Tensor preview: outputs/input_tensor_preview.txt
+Sample box in network input: x=160, y=160, w=320, h=320
 Mapped back to original:     x=133.375, y=266.75, w=533.5, h=533.5
 ```
 </details>

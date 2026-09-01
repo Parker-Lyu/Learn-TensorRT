@@ -165,7 +165,7 @@ Run with the default tensor size and 20 measured iterations (compares all four m
 ./04_cuda_memory_stream/build/cuda_memory_stream
 ```
 
-**Example output** (captured on an RTX 4090; 11 important lines shown in a collapsed block):
+**Example output** (captured locally on an RTX 4090; partial output, 11 important lines):
 
 <details><summary>Example output (partial)</summary>
 
@@ -177,9 +177,9 @@ Elements:       1228800 float32 values
 Buffer size:    4915200 bytes
 Iterations:     20
 Path                                                     avg time    copy bandwidth     check
-pageable host: H2D + kernel + D2H                        0.610 ms       15.00 GiB/s      pass
-pinned host: async H2D + kernel + D2H                    0.511 ms       17.92 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           0.549 ms       16.67 GiB/s      pass
+pageable host: H2D + kernel + D2H                        0.600 ms       15.27 GiB/s      pass
+pinned host: async H2D + kernel + D2H                    0.503 ms       18.19 GiB/s      pass
+mapped pinned: kernel reads/writes host memory           0.581 ms       15.75 GiB/s      pass
 unified memory: prefetched kernel access                 0.004 ms         n/a      pass
 ```
 </details>
@@ -207,17 +207,6 @@ The program prints:
 - average time per path
 - approximate copy bandwidth for explicit-copy and mapped paths
 - CPU validation result
-
-Example table:
-
-```text
-Path                                                     avg time    copy bandwidth     check
----------------------------------------------------------------------------------------------
-pageable host: H2D + kernel + D2H                        0.637 ms       14.37 GiB/s      pass
-pinned host: async H2D + kernel + D2H                    0.505 ms       18.13 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           0.560 ms       16.35 GiB/s      pass
-unified memory: prefetched kernel access                 0.004 ms         n/a      pass
-```
 
 Exact numbers depend on GPU, PCIe generation, CPU memory speed, current clocks, and whether the
 first run paid extra initialization cost.

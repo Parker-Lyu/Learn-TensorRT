@@ -70,18 +70,19 @@ Export a simplified static-shape ONNX model (writes the canonical static artifac
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 ```
 
-**Example output** (10 important lines from the longer export log; shown collapsed as partial output):
+**Example output** (local run; partial output from the longer export log):
 <details><summary>Example output (partial)</summary>
 
 ```text
 YOLOv8n summary (fused): 72 layers, 3,151,904 parameters, 0 gradients, 8.7 GFLOPs
-PyTorch: starting ... input shape (1, 3, 640, 640) ... output shape (1, 84, 8400)
+PyTorch: starting from '/workspace/Learn-TensorRT/assets/yolov8n.pt' with input shape (1, 3, 640, 640) BCHW and output shape(s) (1, 84, 8400) (6.2 MB)
 ONNX: starting export with onnx 1.19.1 opset 17...
 ONNX: slimming with onnxslim 0.1.94...
-ONNX: export success ... saved as .../assets/yolov8n.onnx (12.3 MB)
-Export complete (1.1s)
-weights: .../assets/yolov8n.pt
-onnx: .../05_torch_to_onnx/outputs/yolov8n.onnx
+ONNX: export success 0.9s, saved as '/workspace/Learn-TensorRT/assets/yolov8n.onnx' (12.3 MB)
+Export complete (1.0s)
+Results saved to /workspace/Learn-TensorRT/assets
+weights: /workspace/Learn-TensorRT/assets/yolov8n.pt
+onnx: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n.onnx
 dynamic: False
 simplify: True
 ```
@@ -147,7 +148,7 @@ inputs:
 outputs:
   output0: FLOAT [1, 84, 8400]
 nodes: 233
-report: .../outputs/onnx_inspection.json
+report: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/onnx_inspection.json
 ```
 </details>
 
@@ -189,7 +190,7 @@ Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
 
-**Example output** (6 lines; shown collapsed):
+**Example output** (7 lines; shown collapsed):
 <details><summary>Example output</summary>
 
 ```text
@@ -199,6 +200,7 @@ onnxruntime: (1, 84, 8400) float32
 max abs error: 0.00155640
 mean abs error: 0.00000143
 allclose(rtol=0.001, atol=0.001): True
+report: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/validation_report.json
 ```
 </details>
 
