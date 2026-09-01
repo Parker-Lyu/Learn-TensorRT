@@ -31,47 +31,116 @@ python3 12_end_to_end_validation_report/generate_report.py
 ## Generate the Report
 
 Run these commands from the repository root **inside the pinned `learn-tensorrt:25.11`
-development environment**. The existing development container is sufficient; this lesson does not
-require rebuilding that image.
+development environment**. Each command includes its purpose and a capture from the local run.
 
-First create the static FP16 engine used by the lesson 11 C++ runner:
+Export the static YOLOv8n ONNX model:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
-python3 05_torch_to_onnx/validate_onnx_runtime.py
-python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
-./32_final_portfolio_case_study/build_delivery_engine.sh
 ```
 
-Build the local checkpoint matrix (generated `build/` directories are ignored):
+Example output:
+```text
+Export complete (1.0s)
+Results saved to /workspace/Learn-TensorRT/assets
+dynamic: False
+```
+
+Validate the exported graph against PyTorch:
+```bash
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+```
+Example output:
+```text
+input: (1, 3, 640, 640) float32
+onnxruntime: (1, 84, 8400) float32
+max abs error: 0.00155640
+allclose(rtol=0.001, atol=0.001): True
+report: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/validation_report.json
+```
+
+Prepare the static strongly typed FP16 ONNX model:
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
+```
+Example output:
+```text
+static: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/yolov8n_static_autocast_fp16.onnx
+validation: /workspace/Learn-TensorRT/06_trtexec_engine/outputs/static_fp16_onnx_validation.json
+```
+
+Build the delivery engine used by the Lesson 11 runner:
+```bash
+./32_final_portfolio_case_study/build_delivery_engine.sh
+```
+```text
+[I] TensorRT version: 10.14.1
+[I] Engine generation completed in 1.32574 seconds.
+[I] Created engine with size: 12.6623 MiB
+&&&& PASSED TensorRT.trtexec [TensorRT v101401]
+```
+
+Build all native artifacts used by the local checkpoint matrix (build directories are ignored):
 
 ```bash
 ./32_final_portfolio_case_study/build_local_checks.sh
 ```
+```text
+-- Build files have been written to: /workspace/Learn-TensorRT/29_cpp_shared_library_python_binding/build
+[1/4] Building CXX object CMakeFiles/trt_inference.dir/.../batch_layout.cpp.o
+[2/4] Building CXX object CMakeFiles/trt_inference.dir/src/trt_c_api.cpp.o
+[3/4] Building CXX object CMakeFiles/trt_inference.dir/.../dynamic_batch_runner.cpp.o
+[4/4] Linking CXX shared library libtrt_inference.so
+```
 
-For the real C ABI inference check in Lesson 29, also build the dynamic engine expected by that
-lesson:
+For the Lesson 29 C ABI check, export the dynamic-batch model (the `--dynamic` parameter variant):
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
-python3 05_torch_to_onnx/validate_onnx_runtime.py
-./17_dynamic_batching/build_dynamic_engine.sh
 ```
 
-Then collect the matrix and render the report:
+Validate the dynamic export:
+```bash
+python3 05_torch_to_onnx/validate_onnx_runtime.py
+```
+Example output:
+```text
+allclose(rtol=0.001, atol=0.001): True
+report: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/validation_report.json
+```
+
+Build the dynamic engine expected by Lesson 29:
+```bash
+./17_dynamic_batching/build_dynamic_engine.sh
+```
+Example output:
+```text
+&&&& PASSED TensorRT.trtexec [TensorRT v101401]
+```
+
+Collect the local verification matrix:
 
 ```bash
 python3 32_final_portfolio_case_study/run_local_checks.py
-python3 32_final_portfolio_case_study/generate_case_study.py
 ```
-
-Example output:
+<details><summary>Example output</summary>
 
 ```text
 {
   "passed": true,
-  "checks": 8
+  "checks": ["lesson11 preprocessing/postprocessing", "lesson16 concurrency", "lesson17 batching",
+    "lesson18 async pipeline", "lesson19 multistream", "lesson20 CUDA preprocess",
+    "lesson29 ctypes inference", "lesson31 Nsight Compute kernel analysis"]
 }
+```
+</details>
+
+Render the evidence-driven case-study report:
+```bash
+python3 32_final_portfolio_case_study/generate_case_study.py
+```
+Example output:
+```text
 wrote /workspace/Learn-TensorRT/reports/32_final_portfolio_case_study.md
 ```
 
@@ -92,11 +161,17 @@ model in lesson 06 before rebuilding the delivery engine; the deprecated weakly 
 route remains available there for compatibility testing. The helper rejects an ONNX file unless
 the matching lesson 06 validation report passed and its SHA256 matches the model.
 
-After the static engine exists, build and record image/platform identity:
+After the static engine exists, run this command on the **host** (it invokes Docker) to build and
+record image/platform identity:
 
 ```bash
 DEVELOPMENT_IMAGE=learn-tensorrt:25.11 \
   ./32_final_portfolio_case_study/measure_images.sh
+```
+```text
+Successfully built fa6cf5964fca
+Successfully tagged learn-tensorrt-runtime:10.14
+["learn-tensorrt-runtime:10.14"] sha256:fa6cf5964fca... 596051869
 ```
 
 The default `DEVELOPMENT_IMAGE` in the Dockerfile is the pinned upstream image, so a third party
@@ -107,6 +182,18 @@ manifest under `32_final_portfolio_case_study/outputs/`. Run the image on an NVI
 docker run --rm --gpus all -v "$PWD/32_final_portfolio_case_study/outputs:/outputs" \
   learn-tensorrt-runtime:10.14
 ```
+<details><summary>Example output</summary>
+
+```text
+Engine: /app/model.engine
+Input tensor: images
+Output tensor: output0
+Detections: 6
+Last latency ms: preprocess=2.85145, h2d=0.26096, enqueue_host=29.0395, gpu_compute=28.7961, d2h=0.146336, postprocess=0.411843, total=33.4404
+Output image: /outputs/input_yolov8_trt_cpp.jpg
+JSON report: /outputs/detections.json
+```
+</details>
 
 The serialized engine is GPU- and TensorRT-build specific. Rebuild it in the target environment
 when the deployment GPU, driver, CUDA, or TensorRT runtime changes.

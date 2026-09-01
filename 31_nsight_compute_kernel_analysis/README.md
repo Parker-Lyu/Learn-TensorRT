@@ -65,8 +65,7 @@ cmake --build 31_nsight_compute_kernel_analysis/build --parallel
 
 ## Run
 
-First collect an unprofiled matched benchmark. Nsight profiler duration is never used as benchmark
-evidence:
+Run the matched CUDA-event benchmark; profiler duration is never used as benchmark evidence.
 
 ```bash
 ./31_nsight_compute_kernel_analysis/build/lesson31_mlp_benchmark \
@@ -74,18 +73,28 @@ evidence:
   --output 31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json
 ```
 
-Example output:
+Example output (values vary slightly with GPU clocks):
 
 ```text
 baseline layernorm_p50_ms=0.006848 network_p50_ms=0.016384 max_error=0.000000 reduction_block=128
-fused layernorm_p50_ms=0.004672 network_p50_ms=0.014336 max_error=0.000000 reduction_block=128
+fused layernorm_p50_ms=0.004384 network_p50_ms=0.014336 max_error=0.000000 reduction_block=128
 wrote "31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json"
 ```
 
-Next capture the complete MLP with Nsight Systems, but do not run Nsight Compute yet:
+Capture the complete MLP with Nsight Systems first, so kernel selection is evidence-driven:
 
 ```bash
 python3 31_nsight_compute_kernel_analysis/profile_kernels.py --skip-ncu
+```
+
+Example output:
+
+```text
+{
+  "benchmark": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json",
+  "manifest": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/profile_manifest.json",
+  "metrics": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/ncu_metrics_summary.json"
+}
 ```
 
 Open `outputs/nsys/mlp_inference.nsys-rep` or inspect
@@ -96,12 +105,21 @@ Open `outputs/nsys/mlp_inference.nsys-rep` or inspect
 2. Is LayerNorm material enough to justify source-level work?
 3. Are the two baseline LayerNorm launches and their boundaries visible?
 
-If LayerNorm is immaterial, stop and record that decision. A course exercise is not permission to
-optimize work that does not matter. If it is material, collect microarchitectural evidence for only
-the source-owned LayerNorm kernels:
+If LayerNorm is immaterial, stop and record that decision. If it is material, collect
+microarchitectural evidence for only the source-owned LayerNorm kernels:
 
 ```bash
 python3 31_nsight_compute_kernel_analysis/profile_kernels.py --skip-nsys
+```
+
+Example output:
+
+```text
+{
+  "benchmark": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json",
+  "manifest": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/profile_manifest.json",
+  "metrics": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/ncu_metrics_summary.json"
+}
 ```
 
 The second command preserves the existing Nsight Systems manifest. It profiles the baseline
@@ -109,17 +127,33 @@ statistics/apply kernels and the fused kernel with the same sections. Read launc
 size first, then registers, achieved occupancy, DRAM/cache behavior, scheduler activity, and warp
 stalls together. Do not optimize an isolated counter.
 
-For a non-interactive reproduction after the investigation is understood, collect both profilers in
-one invocation (this may take a long time; it was not run for this documentation update):
+After the investigation, collect both profilers in one non-interactive invocation (may take several
+minutes):
 
 ```bash
 python3 31_nsight_compute_kernel_analysis/profile_kernels.py
 ```
 
-Generate the local decision report:
+Example output:
+
+```text
+{
+  "benchmark": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/mlp_benchmark.json",
+  "manifest": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/profile_manifest.json",
+  "metrics": "/workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/ncu_metrics_summary.json"
+}
+```
+
+Generate the local decision report from the captured evidence:
 
 ```bash
 python3 31_nsight_compute_kernel_analysis/generate_report.py
+```
+
+Example output:
+
+```text
+wrote /workspace/Learn-TensorRT/31_nsight_compute_kernel_analysis/outputs/optimization_decision.md
 ```
 
 When profiler permission requires container root, run the profiling commands with
