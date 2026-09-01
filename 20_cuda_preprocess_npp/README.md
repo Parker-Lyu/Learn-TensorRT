@@ -60,6 +60,17 @@ Use the pinned TensorRT development container and an NVIDIA GPU:
 ./20_cuda_preprocess_npp/build/cuda_preprocess_npp --iterations 50
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+pageable stage=0.0001 h2d=0.1606 resize=0.0111 conversion=0.0051 gpu=0.0197 d2h=0.3399 max_error=0.2863 mean_error=0.0158
+pinned stage=0.1273 h2d=0.1390 resize=0.0147 conversion=0.0056 gpu=0.0245 d2h=0.2496 max_error=0.2863 mean_error=0.0158
+mapped stage=0.1280 h2d=0.0013 resize=0.1527 conversion=0.3244 gpu=0.4811 d2h=0.0012 max_error=0.2863 mean_error=0.0158
+GPU=NVIDIA GeForce RTX 4090 compute_capability=8.9 CUDA_runtime=13000 CUDA_driver=13020
+cpu=1.0838 ms saved preprocess_benchmark.csv
+```
+</details>
+
 The default input is `../assets/img.jpeg`. Results are written to
 `outputs/preprocess_benchmark.csv`. The adjacent `preprocess_benchmark_environment.json` records
 the GPU, compute capability, and CUDA runtime/driver versions for the measured data. CPU

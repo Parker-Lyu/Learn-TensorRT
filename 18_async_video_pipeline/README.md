@@ -74,7 +74,7 @@ Run the commands from the repository root:
 <details><summary>Example output (local run)</summary>
 
 ```text
-captured=120 processed=117 dropped=3 queue_peak=8 fps=775.29 p50_ms=12.31 p90_ms=15.27 p99_ms=16.52
+captured=120 processed=120 dropped=0 queue_peak=5 fps=753.72 p50_ms=11.32 p90_ms=13.01 p99_ms=15.09
 ```
 </details>
 

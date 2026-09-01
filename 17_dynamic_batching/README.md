@@ -83,6 +83,17 @@ Use the pinned TensorRT development container:
   --iterations 50
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+GPU=NVIDIA GeForce RTX 4090 compute_capability=8.9 TensorRT=10.14.1 CUDA_runtime=13000 CUDA_driver=13020
+batch=1 compute=0.931 ms throughput=1073.791 images/s output_offset[1]=0
+batch=2 compute=1.124 ms throughput=1779.920 images/s output_offset[1]=705600
+batch=4 compute=1.491 ms throughput=2682.164 images/s output_offset[1]=705600
+saved batch_benchmark.csv and batch_benchmark_environment.json
+```
+</details>
+
 The explicit `--engine` argument above matches the program's default engine path and may be omitted.
 The program calls `setInputShape()` before every enqueue, queries the resulting output shape,
 allocates buffers for that concrete shape, and writes `outputs/batch_benchmark.csv`. It uses

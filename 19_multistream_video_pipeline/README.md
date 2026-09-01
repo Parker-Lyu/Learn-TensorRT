@@ -59,9 +59,9 @@ Run the commands from the repository root:
 <details><summary>Example output (local run)</summary>
 
 ```text
-total_fps=610.03
-stream=0 captured=120 processed=120 dropped=0 queue_peak=1 fps=366.02 p50=7.22 p90=9.29 p99=10.21
-stream=1 captured=80 processed=80 dropped=0 queue_peak=1 fps=244.01 p50=6.09 p90=8.54 p99=10.37
+total_fps=604.65
+stream=0 captured=120 processed=120 dropped=0 queue_peak=2 fps=362.79 p50=7.31 p90=9.42 p99=10.50
+stream=1 captured=80 processed=80 dropped=0 queue_peak=1 fps=241.86 p50=6.85 p90=9.18 p99=10.78
 ```
 </details>
 

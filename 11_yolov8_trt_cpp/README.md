@@ -67,7 +67,7 @@ Run with the default lesson 06 static FP32 engine and shared image:
 ```text
 Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
 Detections: 6
-Last latency ms: preprocess=2.75377, h2d=0.265952, enqueue_host=30.7236, gpu_compute=30.4057, d2h=0.138976, postprocess=0.427954, total=35.0845
+Last latency ms: preprocess=3.28376, h2d=0.266304, enqueue_host=30.443, gpu_compute=30.121, d2h=0.140992, postprocess=0.418949, total=35.3077
 JSON report: 11_yolov8_trt_cpp/outputs/detections.json
 ```
 </details>

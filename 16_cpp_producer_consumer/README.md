@@ -84,11 +84,11 @@ From this lesson directory:
 
 ```text
 frames read: 20
-frames processed: 9
-frames dropped: 11
+frames processed: 10
+frames dropped: 10
 queue high watermark: 4/4
-average queue latency: 49.94 ms
-max queue latency: 122.82 ms
+average queue latency: 62.93 ms
+max queue latency: 157.71 ms
 ```
 </details>
 
