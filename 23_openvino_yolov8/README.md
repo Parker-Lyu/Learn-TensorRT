@@ -77,6 +77,13 @@ PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
   python3 23_openvino_yolov8/generate_comparison.py
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+comparison report written to outputs/
+```
+</details>
+
 `run_openvino.py` performs ten warmups per compiled mode and at least 100 measured requests, records
 the CPU model, logical CPU count, and OpenVINO device name, and reports P50/P90/P99,
 compiles a `LATENCY` model for synchronous requests, compiles a separate `THROUGHPUT` model for
@@ -89,15 +96,7 @@ required. INT8 appears only when it passed lesson 14's quality gate and was benc
 
 OpenVINO's `benchmark_app` is installed with the package and provides a runtime-owned reference:
 
-```
-
-<details><summary>Example output (local run)</summary>
-
-```text
-comparison report written to outputs/
-```
-</details>
-bash
+```bash
 PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
 23_openvino_yolov8/.deps/bin/benchmark_app \
   -m 05_torch_to_onnx/outputs/yolov8n.onnx \

@@ -71,17 +71,16 @@ Run the commands from the repository root:
 ./18_async_video_pipeline/build/async_video_pipeline
 ```
 
-The default synthetic source makes the artifact runnable without a camera. Use a video or camera:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
 captured=120 processed=117 dropped=3 queue_peak=8 fps=775.29 p50_ms=12.31 p90_ms=15.27 p99_ms=16.52
 ```
 </details>
-bash
+
+The default synthetic source makes the artifact runnable without a camera. Use a video or camera:
+
+```bash
 ./18_async_video_pipeline/build/async_video_pipeline --input video.mp4
 ./18_async_video_pipeline/build/async_video_pipeline --input 0
 ```

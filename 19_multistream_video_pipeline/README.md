@@ -56,10 +56,6 @@ Run the commands from the repository root:
 ./19_multistream_video_pipeline/build/multistream_video_pipeline
 ```
 
-The default uses two camera-like synthetic streams with different rates. Real files are repeatable:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -68,7 +64,10 @@ stream=0 captured=120 processed=120 dropped=0 queue_peak=1 fps=366.02 p50=7.22 p
 stream=1 captured=80 processed=80 dropped=0 queue_peak=1 fps=244.01 p50=6.09 p90=8.54 p99=10.37
 ```
 </details>
-bash
+
+The default uses two camera-like synthetic streams with different rates. Real files are repeatable:
+
+```bash
 ./19_multistream_video_pipeline/build/multistream_video_pipeline --input camera-a.mp4 --input camera-b.mp4
 ```
 

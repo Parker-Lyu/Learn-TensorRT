@@ -76,6 +76,8 @@ and whether synchronization leaves the GPU idle between requests.
 
 ## Run
 
+```bash
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
 ```
 
 <details><summary>Example output (local run)</summary>
@@ -85,9 +87,6 @@ profile command completed
 report written to outputs/
 ```
 </details>
-bash
-python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py
-```
 
 Defaults:
 

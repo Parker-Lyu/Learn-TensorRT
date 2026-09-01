@@ -80,12 +80,6 @@ From this lesson directory:
 ./16_cpp_producer_consumer/build/cpp_producer_consumer
 ```
 
-The default locates the repository's `assets/img.jpeg` from the executable,
-produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four frames, and retain
-the newest frames:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -97,7 +91,12 @@ average queue latency: 49.94 ms
 max queue latency: 122.82 ms
 ```
 </details>
-bash
+
+The default locates the repository's `assets/img.jpeg` from the executable,
+produce a frame every 10 ms, simulate 40 ms inference, limit the queue to four frames, and retain
+the newest frames:
+
+```bash
 ./16_cpp_producer_consumer/build/cpp_producer_consumer \
   --frames 100 \
   --queue-capacity 4 \

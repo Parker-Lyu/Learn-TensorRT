@@ -68,6 +68,14 @@ python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
 deepstream-app -c 27_deepstream_gstreamer_multistream/outputs/deepstream_app_config.txt
 ```
 
+<details><summary>Example output (local run)</summary>
+
+```text
+config written to outputs/
+status: ready
+```
+</details>
+
 `sample_720p.mp4` and `sample_office.mp4` are real video files shipped in the official DeepStream
 container. The two sources exercise the multi-stream mux and batch-2 inference without requiring a
 camera or external media. To use your own files, replace both `--source` arguments with paths that
@@ -83,16 +91,7 @@ match the mux, using the batch-4 configuration below for the included engine's m
 The engine built by this lesson has a dynamic batch profile up to four images. To exercise four
 concurrent sources with matching `nvstreammux` and `nvinfer` batch sizes, run:
 
-```
-
-<details><summary>Example output (local run)</summary>
-
-```text
-config written to outputs/
-status: ready
-```
-</details>
-bash
+```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov \

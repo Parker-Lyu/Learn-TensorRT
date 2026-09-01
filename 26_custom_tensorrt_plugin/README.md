@@ -66,10 +66,6 @@ validates the serialized engine:
 ./26_custom_tensorrt_plugin/build_and_validate.sh
 ```
 
-The equivalent explicit commands are:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -77,7 +73,10 @@ plugin validation: pass
 engine validation completed successfully
 ```
 </details>
-bash
+
+The equivalent explicit commands are:
+
+```bash
 python3 25_onnx_graph_surgery_plugin/create_demo_model.py
 /opt/tensorrt/bin/trtexec \
   --stronglyTyped \

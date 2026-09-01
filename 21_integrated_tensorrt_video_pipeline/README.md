@@ -47,13 +47,6 @@ CPU ownership and reverse-completion smoke test:
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline
 ```
 
-This smoke path is explicitly not TensorRT or performance evidence. Formal GPU acceptance requires
-the dynamic engine and the pinned GPU container.
-
-Real integrated run with NPP letterbox, two TensorRT contexts/streams, dynamic batches, YOLO decode/NMS, and structured output:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -61,7 +54,13 @@ status: completed
 outputs written to outputs/
 ```
 </details>
-bash
+
+This smoke path is explicitly not TensorRT or performance evidence. Formal GPU acceptance requires
+the dynamic engine and the pinned GPU container.
+
+Real integrated run with NPP letterbox, two TensorRT contexts/streams, dynamic batches, YOLO decode/NMS, and structured output:
+
+```bash
 ./21_integrated_tensorrt_video_pipeline/build/integrated_tensorrt_video_pipeline_gpu \
   17_dynamic_batching/outputs/yolov8n_batch1_4_fp16.engine assets/img.jpeg 16 4 2
 ```

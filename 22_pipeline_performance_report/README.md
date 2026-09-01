@@ -27,8 +27,13 @@ python3 22_pipeline_performance_report/generate_report.py
 
 For the formal checkpoint:
 
+```bash
+python3 22_pipeline_performance_report/collect_pipeline_evidence.py \
+  --soak-minutes 30 \
+  --restart-cycles 100 \
+  --run-sanitizers
+python3 22_pipeline_performance_report/generate_report.py
 ```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -36,13 +41,6 @@ wrote /workspace/Learn-TensorRT/22_pipeline_performance_report/outputs/evidence.
 wrote /workspace/Learn-TensorRT/reports/22_pipeline_performance.md
 ```
 </details>
-bash
-python3 22_pipeline_performance_report/collect_pipeline_evidence.py \
-  --soak-minutes 30 \
-  --restart-cycles 100 \
-  --run-sanitizers
-python3 22_pipeline_performance_report/generate_report.py
-```
 
 The default command is deliberately short: it runs three restart cycles, a three-second
 single-process soak, the real Lesson 21 batch/policy/multi-stream matrix, reference checks, and the

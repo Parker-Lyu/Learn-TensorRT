@@ -53,14 +53,6 @@ Copy the repository and ONNX model to the Jetson, enter the JetPack environment,
 ./28_jetson_orin_xavier_dla_deployment/build_target_engines.sh
 ```
 
-The script refuses non-Jetson systems. It builds one GPU FP16 engine and one DLA-core-0 FP16 engine
-with explicit GPU fallback. YOLOv8 may contain layers that DLA cannot execute; fallback keeps the
-model runnable but means the result is not a DLA-only claim.
-
-Inspect fallback evidence and benchmark both target-local engines:
-
-```
-
 <details><summary>Example output (local run)</summary>
 
 ```text
@@ -68,7 +60,14 @@ target engine build completed
 report written to outputs/
 ```
 </details>
-bash
+
+The script refuses non-Jetson systems. It builds one GPU FP16 engine and one DLA-core-0 FP16 engine
+with explicit GPU fallback. YOLOv8 may contain layers that DLA cannot execute; fallback keeps the
+model runnable but means the result is not a DLA-only claim.
+
+Inspect fallback evidence and benchmark both target-local engines:
+
+```bash
 python3 28_jetson_orin_xavier_dla_deployment/analyze_fallback.py
 python3 28_jetson_orin_xavier_dla_deployment/benchmark_target.py
 ```
