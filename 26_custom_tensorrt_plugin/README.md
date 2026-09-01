@@ -59,23 +59,38 @@ cmake --build 26_custom_tensorrt_plugin/build --parallel
 
 ## Run
 
-The wrapper generates Lesson 25's source model, builds the plugin, converts the original graph, and
-validates the serialized engine:
+Run the wrapper to generate Lesson 25's source model, build the plugin, convert the original graph,
+and validate the serialized engine:
 
 ```bash
 ./26_custom_tensorrt_plugin/build_and_validate.sh
 ```
 
-The equivalent explicit commands are:
+<details><summary>Example output (partial)</summary>
+
+```text
+[100%] Built target validate_plugin
+wrote /workspace/Learn-TensorRT/25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx
+Successfully created plugin: AcmeSwish
+Engine built in 0.282282 sec.
+&&&& PASSED TensorRT.trtexec [TensorRT v101401]
+AcmeSwish IPluginV3 full_graph_max_abs=1.49012e-08
+```
+</details>
+
+To inspect or reproduce the wrapper step-by-step, run these equivalent commands:
 
 ```bash
+# Regenerate the unsupported AcmeSwish ONNX model.
 python3 25_onnx_graph_surgery_plugin/create_demo_model.py
+# Build an engine while loading the custom plugin library.
 /opt/tensorrt/bin/trtexec \
   --stronglyTyped \
   --staticPlugins=26_custom_tensorrt_plugin/build/libacme_swish_plugin.so \
   --onnx=25_onnx_graph_surgery_plugin/outputs/unsupported_swish.onnx \
   --saveEngine=26_custom_tensorrt_plugin/outputs/acme_swish.engine \
   --skipInference
+# Execute the plugin validator against the serialized engine.
 ./26_custom_tensorrt_plugin/build/validate_plugin \
   26_custom_tensorrt_plugin/outputs/acme_swish.engine
 ```
@@ -86,7 +101,7 @@ The validator compares the complete graph against:
 (input + 0.25) * sigmoid(input + 0.25) * 1.5
 ```
 
-Run CUDA memory checking with:
+To check the plugin for CUDA memory errors, run:
 
 ```bash
 compute-sanitizer --tool memcheck \

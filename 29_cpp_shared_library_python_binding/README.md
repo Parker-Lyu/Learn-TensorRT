@@ -29,11 +29,19 @@ The generated build directory is ignored.
 
 ## Run
 
+Export and validate the dynamic ONNX model, build its TensorRT engine, then call the C ABI from Python:
+
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ./17_dynamic_batching/build_dynamic_engine.sh
 python3 29_cpp_shared_library_python_binding/python/trt_ctypes.py --batch 2
+```
+
+Example output (local run):
+
+```text
+batch=2 output_elements=1411200 compute_ms=30.512 checksum=13901846.764
 ```
 
 The ABI uses opaque session ownership, plain pointers, sizes, error codes, and one result struct.

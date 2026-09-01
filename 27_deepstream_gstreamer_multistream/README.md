@@ -60,13 +60,26 @@ script, for example `CUDA_HOME=/usr/local/cuda ./27_deepstream_gstreamer_multist
 
 ## Run
 
+Generate the two-source DeepStream configuration inside the development container:
+
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4 \
   --source /opt/nvidia/deepstream/deepstream/samples/streams/sample_push.mov
 
+# Launch DeepStream with the generated two-stream configuration.
 deepstream-app -c 27_deepstream_gstreamer_multistream/outputs/deepstream_app_config.txt
 ```
+
+Example output (local run):
+
+```text
+FileNotFoundError: missing video source: /opt/nvidia/deepstream/deepstream/samples/streams/sample_720p.mp4
+```
+
+The pinned development container used for this documentation run did not include the official
+DeepStream sample media, so `deepstream-app` could not be started. Run the same commands in a
+DeepStream container with those sample files mounted to obtain runtime output.
 
 `sample_720p.mp4` and `sample_office.mp4` are real video files shipped in the official DeepStream
 container. The two sources exercise the multi-stream mux and batch-2 inference without requiring a
@@ -82,6 +95,8 @@ match the mux, using the batch-4 configuration below for the included engine's m
 
 The engine built by this lesson has a dynamic batch profile up to four images. To exercise four
 concurrent sources with matching `nvstreammux` and `nvinfer` batch sizes, run:
+
+For the optional four-stream batch-4 experiment, generate a matching configuration:
 
 ```bash
 python3 27_deepstream_gstreamer_multistream/generate_app_config.py \
