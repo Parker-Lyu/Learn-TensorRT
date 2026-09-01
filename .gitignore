@@ -25,3 +25,6 @@ __pycache__/
 .DS_Store
 
 todo.txt
+
+# Local Blender assets (not published)
+assets/blender/
