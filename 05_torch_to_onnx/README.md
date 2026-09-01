@@ -64,11 +64,28 @@ project.
 
 ## Run
 
-Export a simplified static-shape ONNX model:
+Export a simplified static-shape ONNX model (writes the canonical static artifact):
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py
 ```
+
+**Example output** (14 important lines; shown collapsed):
+<details><summary>Example output (partial)</summary>
+
+```text
+YOLOv8n summary (fused): 72 layers, 3,151,904 parameters, 0 gradients, 8.7 GFLOPs
+PyTorch: starting ... input shape (1, 3, 640, 640) ... output shape (1, 84, 8400)
+ONNX: starting export with onnx 1.19.1 opset 17...
+ONNX: slimming with onnxslim 0.1.94...
+ONNX: export success ... saved as .../assets/yolov8n.onnx (12.3 MB)
+Export complete (1.1s)
+weights: .../assets/yolov8n.pt
+onnx: .../05_torch_to_onnx/outputs/yolov8n.onnx
+dynamic: False
+simplify: True
+```
+</details>
 
 The default command writes:
 
@@ -80,6 +97,14 @@ Export a simplified dynamic-shape ONNX model for later TensorRT optimization-pro
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --dynamic
+```
+
+**Example output** (captured locally):
+
+```text
+onnx: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n_dynamic.onnx
+dynamic: True
+simplify: True
 ```
 
 The dynamic command writes:
@@ -94,6 +119,14 @@ debug a simplifier issue:
 
 ```bash
 python3 05_torch_to_onnx/export_yolov8_onnx.py --no-simplify --output 05_torch_to_onnx/outputs/yolov8n_raw.onnx
+```
+
+**Example output** (captured locally):
+
+```text
+onnx: /workspace/Learn-TensorRT/05_torch_to_onnx/outputs/yolov8n_raw.onnx
+dynamic: False
+simplify: False
 ```
 
 The default simplified artifacts are the handoff contract to lesson 06:
@@ -119,6 +152,20 @@ Check the simplified static model and write a JSON report:
 ```bash
 python3 05_torch_to_onnx/inspect_onnx.py
 ```
+
+**Example output** (7 lines; shown collapsed):
+<details><summary>Example output</summary>
+
+```text
+checked: .../05_torch_to_onnx/outputs/yolov8n.onnx
+inputs:
+  images: FLOAT [1, 3, 640, 640]
+outputs:
+  output0: FLOAT [1, 84, 8400]
+nodes: 233
+report: .../outputs/onnx_inspection.json
+```
+</details>
 
 The report is written to:
 
@@ -150,6 +197,17 @@ python3 05_torch_to_onnx/inspect_onnx.py \
   --report 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
 ```
 
+**Example output** (captured locally):
+
+```text
+inputs:
+  images: FLOAT ['batch', 3, 'height', 'width']
+outputs:
+  output0: FLOAT ['batch', 84, 'anchors']
+nodes: 323
+report: 05_torch_to_onnx/outputs/onnx_dynamic_inspection.json
+```
+
 ### Validate
 
 Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
@@ -157,6 +215,19 @@ Compare PyTorch raw output with the simplified static ONNX Runtime raw output:
 ```bash
 python3 05_torch_to_onnx/validate_onnx_runtime.py
 ```
+
+**Example output** (6 lines; shown collapsed):
+<details><summary>Example output</summary>
+
+```text
+input: (1, 3, 640, 640) float32
+pytorch: (1, 84, 8400) float32
+onnxruntime: (1, 84, 8400) float32
+max abs error: 0.00155640
+mean abs error: 0.00000143
+allclose(rtol=0.001, atol=0.001): True
+```
+</details>
 
 The script uses the same preprocessing convention as the C++ preprocessing lesson:
 
@@ -183,11 +254,17 @@ Use a different image:
 python3 05_torch_to_onnx/validate_onnx_runtime.py --image /path/to/image.jpg
 ```
 
+**Example output** (run with `assets/img.jpeg`): `allclose(rtol=0.001, atol=0.001): True` and
+`report: .../outputs/validation_report.json`.
+
 Use a different tolerance:
 
 ```bash
 python3 05_torch_to_onnx/validate_onnx_runtime.py --rtol 1e-3 --atol 1e-3
 ```
+
+**Example output:** `max abs error: 0.00155640`, `mean abs error: 0.00000143`, and
+`allclose(rtol=0.001, atol=0.001): True`.
 
 The command exits with status `2` if the outputs are not close enough. That is intentional: a failed
 validation should stop the deployment chain until the mismatch is understood.

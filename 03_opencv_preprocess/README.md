@@ -88,23 +88,75 @@ ctest --test-dir 03_opencv_preprocess/build --output-on-failure
 
 ## Run
 
-Use the shared sample image:
+Use the shared sample image (runs the default 640x640 preprocessing path):
 
 ```bash
 ./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg
 ```
 
-Use your own image:
+**Example output** (11 lines; shown collapsed):
+
+<details><summary>Example output</summary>
+
+```text
+Original image: 800 x 1067
+Network input:  640 x 640
+Resized image:  480 x 640
+Scale:          0.599813
+Padding:        left=80, top=0, right=80, bottom=0
+Tensor shape:   [1, 3, 640, 640]
+Tensor values:  1228800 float32 values, 4915200 bytes
+Debug image:    outputs/letterbox_debug.jpg
+Tensor binary:  outputs/input_tensor_nchw_float32.bin
+Tensor preview: outputs/input_tensor_preview.txt
+Mapped back to original:     x=133.375, y=266.75, w=533.5, h=533.5
+```
+</details>
+
+Use your own image (replace the path; this example was run with `assets/img.jpeg`):
 
 ```bash
 ./03_opencv_preprocess/build/opencv_preprocess /path/to/your/image.jpg
 ```
 
-Choose a different input size and output folder:
+**Example output** (same input as the command above; 8 lines, shown collapsed):
+
+<details><summary>Example output</summary>
+
+```text
+Original image: 800 x 1067
+Network input:  640 x 640
+Resized image:  480 x 640
+Scale:          0.599813
+Padding:        left=80, top=0, right=80, bottom=0
+Tensor shape:   [1, 3, 640, 640]
+Tensor values:  1228800 float32 values, 4915200 bytes
+Mapped back to original:     x=133.375, y=266.75, w=533.5, h=533.5
+```
+</details>
+
+Choose a different input size and output folder (640x384 in this example):
 
 ```bash
 ./03_opencv_preprocess/build/opencv_preprocess assets/img.jpeg 640 384 03_opencv_preprocess/outputs_640x384
 ```
+
+**Example output** (9 lines; shown collapsed):
+
+<details><summary>Example output</summary>
+
+```text
+Original image: 800 x 1067
+Network input:  640 x 384
+Resized image:  288 x 384
+Scale:          0.359888
+Padding:        left=176, top=0, right=176, bottom=0
+Tensor shape:   [1, 3, 384, 640]
+Tensor values:  737280 float32 values, 2949120 bytes
+Debug image:    03_opencv_preprocess/outputs_640x384/letterbox_debug.jpg
+Mapped back to original:     x=0, y=266.75, w=800, h=533.5
+```
+</details>
 
 ## Outputs
 
