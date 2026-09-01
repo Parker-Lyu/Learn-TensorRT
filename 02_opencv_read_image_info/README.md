@@ -48,16 +48,6 @@ provide:
 ./02_opencv_read_image_info/build/opencv_read_image_info /path/to/your/image.jpg
 ```
 
-The exact path and metadata depend on your input. For example, using the shared image through an
-absolute path produces:
-
-```text
-Loaded image: /workspace/Learn-TensorRT/assets/img.jpeg
-Width: 800
-Height: 1067
-Channels: 3
-Data type: CV_8UC3 (uint8 per channel)
-```
 
 The program uses `cv::IMREAD_UNCHANGED` so OpenCV preserves the decoded channel count and element
 depth instead of forcing every input to an 8-bit, three-channel BGR image. For example, an image may
