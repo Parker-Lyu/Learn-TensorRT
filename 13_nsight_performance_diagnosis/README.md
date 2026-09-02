@@ -76,6 +76,13 @@ and whether synchronization leaves the GPU idle between requests.
 
 ## Run
 
+### 1. Fast smoke test (without Nsight)
+
+Run this first to verify that the lesson 11 executable, TensorRT engine, input image, and report
+generation all work. `--skip-nsys` is intentional here: it avoids profiler overhead and makes
+failures in the application workflow easier to diagnose. This command does **not** produce an
+Nsight timeline and is not a performance-analysis result.
+
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --lesson11-dir 11_yolov8_trt_cpp \
@@ -88,13 +95,48 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
 ```text
 Warmup iterations: 2
 Measured iterations: 5
-Steady-state total P50: 2.739 ms
-Heuristic diagnosis: No category dominates strongly; use the Nsight timeline to inspect gaps and synchronization.
+Steady-state total P50: 5.801 ms
+Heuristic diagnosis: CPU preprocessing and postprocessing dominate the typical measured request.
 Summary JSON: outputs/diagnosis_summary.json
 Report Markdown: outputs/diagnosis_report.md
 Nsight capture skipped: skipped by --skip-nsys
 ```
 </details>
+
+After the smoke test succeeds, continue with the Nsight capture below. If it fails, fix the
+reported application/build/input error before attempting to profile.
+
+### 2. Nsight Systems capture
+
+Run the normal workflow without `--skip-nsys` to collect the timeline used for diagnosis. The
+capture is deliberately short; increase the `--nsys-*` iteration counts only when a longer trace
+is needed.
+
+```bash
+python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
+  --lesson11-dir 11_yolov8_trt_cpp \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp32.engine \
+  --image assets/img.jpeg \
+  --nsys-warmup-iterations 2 \
+  --nsys-iterations 5
+```
+
+The Nsight command was attempted in the development container, but capture could not complete
+because this container does not permit Nsight to create its temporary directory. Therefore no
+successful Nsight output is claimed here; rerun on a container/host with Nsight tracing enabled.
+
+<details><summary>Example output (local container limitation)</summary>
+
+```text
+RuntimeError: Nsight Systems capture failed:
+Failed to create directory "/tmp/nvidia/nsight_systems": Permission denied
+Nsight capture: not produced
+```
+</details>
+
+When capture succeeds, the script additionally prints `Nsight report:` followed by the generated
+`.nsys-rep` path. Latency and diagnosis remain machine-dependent; inspect
+`outputs/diagnosis_report.md` and open the trace with `nsys-ui`.
 
 Defaults:
 
@@ -102,7 +144,7 @@ Defaults:
 - 2 warmup iterations and 5 measured iterations in the Nsight capture
 - P99 warning when fewer than 100 measured baseline samples are used
 
-Run a fast smoke diagnosis without Nsight (the command above is the reproducible local smoke run):
+Optional: repeat the smoke diagnosis without Nsight after changing an engine or pipeline:
 
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
