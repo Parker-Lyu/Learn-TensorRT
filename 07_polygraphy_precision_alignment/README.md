@@ -283,6 +283,27 @@ python3 07_polygraphy_precision_alignment/align_precision.py \
 The explicit `--input-npy` makes the source of the comparison input visible in a copied command;
 omitting it is equivalent because this path is the script default.
 
+Example output from the pinned development container (paths are abbreviated here):
+
+```text
+== inspect_onnx ==
+log: .../07_polygraphy_precision_alignment/outputs/inspect_onnx.log
+== run_onnxrt ==
+log: .../07_polygraphy_precision_alignment/outputs/run_onnxrt.log
+== inspect_engine ==
+log: .../07_polygraphy_precision_alignment/outputs/inspect_engine.log
+== compare_onnxrt_trt ==
+log: .../07_polygraphy_precision_alignment/outputs/compare_onnxrt_trt.log
+report: .../07_polygraphy_precision_alignment/outputs/precision_report.json
+note: .../07_polygraphy_precision_alignment/outputs/precision_alignment_note.md
+allclose(rtol=0.001, atol=0.001): True
+max abs error: 0.001007080078125
+likely cause: within tolerance; keep the evidence with the benchmark report
+```
+
+The exact error value can vary with the TensorRT tactics and GPU; use the generated report as the
+authoritative result for your environment.
+
 Use a different input tensor when experimenting with another preprocessed sample:
 
 ```bash
