@@ -283,7 +283,7 @@ python3 07_polygraphy_precision_alignment/align_precision.py \
 The explicit `--input-npy` makes the source of the comparison input visible in a copied command;
 omitting it is equivalent because this path is the script default.
 
-Example output from the pinned development container (paths are abbreviated here):
+<details><summary>Example output (pinned development container; paths abbreviated)</summary>
 
 ```text
 == inspect_onnx ==
@@ -300,6 +300,7 @@ allclose(rtol=0.001, atol=0.001): True
 max abs error: 0.001007080078125
 likely cause: within tolerance; keep the evidence with the benchmark report
 ```
+</details>
 
 The exact error value can vary with the TensorRT tactics and GPU; use the generated report as the
 authoritative result for your environment.
