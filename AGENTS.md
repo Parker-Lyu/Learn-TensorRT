@@ -102,6 +102,21 @@ beginning, not quick demo shortcuts.
 - Put commands in the section that owns them: dependency and cross-lesson preparation under
   `Prerequisites` or `Setup`, compilation under `Build`, the main learner workflow under `Run`, and
   automated checks under `Tests`.
+- In each standalone lesson README's `Run` section, document every required command with a brief
+  explanation of what it does. For parameter-variant commands, explain the purpose of each variant
+  without repeating example output.
+- Under every primary/default command, include the actual result obtained by running that command on
+  the local development container (normally the persistent `learn-tensorrt` container). Do not invent
+  or predict results; if the command could not be run, state the limitation instead of presenting
+  sample output as fact.
+- Label command results as `Example output`. Keep output concise and follow these display rules:
+  - Fewer than 5 lines: show the output directly (not collapsed).
+  - 6–15 lines: place the output in a `<details>` block whose summary includes the needed
+    explanation, for example `<details><summary>Example output</summary>`.
+  - More than 15 lines: show at most 15 important lines and explicitly identify the excerpt as
+    partial, for example `<details><summary>Example output (partial)</summary>`.
+  - Do not add a separate standalone **Example output** label when the same wording already appears
+    in the collapsible summary; avoid redundant labels.
 - When `Tests` is present, provide exact runnable commands, describe what they cover, and state any
   GPU, container, sanitizer, server, or target-hardware limitation. Keep tests optional at the
   README-format level, but add them whenever the lesson contains reusable logic for which focused
