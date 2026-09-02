@@ -272,6 +272,17 @@ This lesson directly reuses the controlled input tensor saved by lesson 05 from 
 `--data-loader-script`. The tensor remains in NumPy's binary format; no intermediate input JSON is
 generated.
 
+Run the standard lesson workflow with this controlled tensor (and the default lesson 06 FP32
+engine) as follows:
+
+```bash
+python3 07_polygraphy_precision_alignment/align_precision.py \
+  --input-npy 05_torch_to_onnx/outputs/input_nchw_float32.npy
+```
+
+The explicit `--input-npy` makes the source of the comparison input visible in a copied command;
+omitting it is equivalent because this path is the script default.
+
 Use a different input tensor when experimenting with another preprocessed sample:
 
 ```bash
