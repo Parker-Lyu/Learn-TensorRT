@@ -178,6 +178,17 @@ docker run -dit \
   learn-tensorrt:25.11
 ```
 
+Nsight Systems needs a writable temporary directory. If `nsys profile` reports
+`Failed to create directory "/tmp/nvidia/nsight_systems"`, repair the directory as root after
+starting the persistent container:
+
+```bash
+docker exec --user root learn-tensorrt bash -lc \
+  'mkdir -p /tmp/nvidia/nsight_systems && chmod 1777 /tmp/nvidia /tmp/nvidia/nsight_systems'
+```
+
+Repeat this after recreating the container (the container's temporary filesystem is not persistent).
+
 Keep the default container unprivileged. Lesson 31 is the exception: when the host NVIDIA driver has
 `RmProfilingAdminOnly=1`, recreate the persistent container with `--cap-add SYS_ADMIN` inserted after
 `--gpus all`, run only the profiler process as container root, and restore bind-mounted output

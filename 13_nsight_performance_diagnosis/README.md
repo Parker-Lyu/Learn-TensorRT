@@ -121,22 +121,24 @@ python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --nsys-iterations 5
 ```
 
-The Nsight command was attempted in the development container, but capture could not complete
-because this container does not permit Nsight to create its temporary directory. Therefore no
-successful Nsight output is claimed here; rerun on a container/host with Nsight tracing enabled.
+The persistent container must have a writable `/tmp/nvidia/nsight_systems` directory; see
+`00_environment_check/agent_env_setup.md` if `nsys profile` reports a permission error.
 
-<details><summary>Example output (local container limitation)</summary>
+<details><summary>Example output (local development container)</summary>
 
 ```text
-RuntimeError: Nsight Systems capture failed:
-Failed to create directory "/tmp/nvidia/nsight_systems": Permission denied
-Nsight capture: not produced
+Warmup iterations: 5
+Measured iterations: 50
+Steady-state total P50: 5.682 ms
+Heuristic diagnosis: CPU preprocessing and postprocessing dominate the typical measured request.
+Summary JSON: outputs/diagnosis_summary.json
+Report Markdown: outputs/diagnosis_report.md
+Nsight report: outputs/nsys/yolov8_trt_cpp.nsys-rep
 ```
 </details>
 
-When capture succeeds, the script additionally prints `Nsight report:` followed by the generated
-`.nsys-rep` path. Latency and diagnosis remain machine-dependent; inspect
-`outputs/diagnosis_report.md` and open the trace with `nsys-ui`.
+Latency and diagnosis are machine-dependent; inspect `outputs/diagnosis_report.md` and open the
+trace with `nsys-ui`.
 
 Defaults:
 
