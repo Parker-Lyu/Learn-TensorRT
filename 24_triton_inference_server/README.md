@@ -113,9 +113,24 @@ Confirm both server health endpoints before sending inference requests:
 
 ```bash
 # Host shell or dev container
-curl -f localhost:8000/v2/health/ready
-curl -f localhost:8000/v2/models/yolov8/ready
+curl -i localhost:8000/v2/health/ready
+curl -i localhost:8000/v2/models/yolov8/ready
 ```
+
+Example output (successful readiness checks):
+
+```text
+HTTP/1.1 200 OK
+Content-Length: 0
+Content-Type: text/plain
+
+HTTP/1.1 200 OK
+Content-Length: 0
+Content-Type: text/plain
+```
+
+The readiness endpoints intentionally return an empty response body. The `HTTP/1.1 200 OK`
+status confirms that the server and the `yolov8` model are ready.
 
 The model configuration declares max batch 4, preferred batches 2 and 4, and a 5 ms maximum queue
 delay. Confirm the model is ready before benchmarking.
