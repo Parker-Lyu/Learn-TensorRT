@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This lesson packages the real lesson 17 TensorRT dynamic-batch runner as `libtrt_inference.so` and
-exposes a narrow C ABI consumed by Python `ctypes`.
+This lesson packages the real lesson 17 TensorRT dynamic-batch runner as `libtrt_inference.so` and a
+pybind11 extension, showing both stable C ABI and idiomatic Python integration.
 
 ## Prerequisites
 

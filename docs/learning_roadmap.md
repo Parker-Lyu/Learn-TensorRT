@@ -1388,6 +1388,7 @@ Deliverables:
 
 - `libtrt_inference.so` with a documented C ABI
 - `python/trt_ctypes.py` Python client
+- `trt_inference_py` pybind11 extension with a NumPy-based Python client
 - ABI, error-boundary, ownership, and integration tests
 
 Acceptance criteria:
@@ -1395,6 +1396,8 @@ Acceptance criteria:
 - The TensorRT C++ inference class is compiled into a shared library.
 - A Python script loads the library and runs inference.
 - The exposed API uses simple inputs and structured outputs.
+- The pybind11 path validates NumPy input conversion, Python exception translation, and GIL release
+  without exposing TensorRT runtime objects directly.
 
 ### `30_llm_inference_intro`
 
