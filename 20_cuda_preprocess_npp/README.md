@@ -63,11 +63,11 @@ Use the pinned TensorRT development container and an NVIDIA GPU to benchmark all
 <details><summary>Example output (local run)</summary>
 
 ```text
-pageable stage=0.0001 h2d=0.1571 resize=0.0126 conversion=0.0052 gpu=0.0213 d2h=0.3280 max_error=0.2863 mean_error=0.0158
-pinned stage=0.1273 h2d=0.1408 resize=0.0138 conversion=0.0051 gpu=0.0223 d2h=0.2449 max_error=0.2863 mean_error=0.0158
-mapped stage=0.1241 h2d=0.0011 resize=0.1558 conversion=0.3429 gpu=0.5026 d2h=0.0012 max_error=0.2863 mean_error=0.0158
+pageable stage=0.0000 h2d=0.1541 resize=0.0067 conversion=0.0056 gpu=0.0157 d2h=0.3467 max_error=0.2863 mean_error=0.0158
+pinned stage=0.1240 h2d=0.1393 resize=0.0149 conversion=0.0053 gpu=0.0238 d2h=0.2477 max_error=0.2863 mean_error=0.0158
+mapped stage=0.1212 h2d=0.0011 resize=0.1578 conversion=0.3210 gpu=0.4828 d2h=0.0013 max_error=0.2863 mean_error=0.0158
 GPU=NVIDIA GeForce RTX 4090 compute_capability=8.9 CUDA_runtime=13000 CUDA_driver=13020
-cpu=1.1061 ms saved "/workspace/Learn-TensorRT/./20_cuda_preprocess_npp/build/../outputs/preprocess_benchmark.csv"
+cpu=3.1824 ms saved "/workspace/Learn-TensorRT/./20_cuda_preprocess_npp/build/../outputs/preprocess_benchmark.csv"
 ```
 </details>
 

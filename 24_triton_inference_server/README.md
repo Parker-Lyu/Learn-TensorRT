@@ -146,17 +146,34 @@ python3 24_triton_inference_server/client.py --concurrency 1 --requests 100
 
 ```
 
-Example output (local run, concurrency 1):
-
-<details><summary>Example output (partial)</summary>
+<details><summary>Example output (local run, concurrency 1):</summary>
 
 ```text
-"server_version": "2.63.0"
-"concurrency": 1,
-"requests": 100,
-"p50": 10.752620999483042,
-"p99": 20.533939999950235,
-"throughput_requests_per_second": 78.74079125066447
+{
+  "url": "localhost:8000",
+  "model": "yolov8",
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4090, 8.9, 595.84, 24564",
+    "server_name": "triton",
+    "server_version": "2.63.0"
+  },
+  "concurrency": 1,
+  "requests": 100,
+  "latency_ms": {
+    "mean": 15.398790019985427,
+    "p50": 14.86861700004738,
+    "p90": 20.364433999930043,
+    "p99": 26.832333999664115
+  },
+  "throughput_requests_per_second": 59.98025890132126,
+  "output_shape": [
+    1,
+    84,
+    8400
+  ],
+  "last_output_checksum": 6451714.0
+}
+ubuntu@parker-ub
 ```
 </details>
 
@@ -166,6 +183,36 @@ Run the higher-concurrency variant to observe dynamic batching under load:
 PYTHONNOUSERSITE=1 PYTHONPATH=24_triton_inference_server/.deps \
 python3 24_triton_inference_server/client.py --concurrency 4 --requests 100
 ```
+
+<details><summary>Example output (local run, concurrency 4):</summary>
+
+```text
+{
+  "url": "localhost:8000",
+  "model": "yolov8",
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4090, 8.9, 595.84, 24564",
+    "server_name": "triton",
+    "server_version": "2.63.0"
+  },
+  "concurrency": 4,
+  "requests": 100,
+  "latency_ms": {
+    "mean": 14.354574220019458,
+    "p50": 11.5897139999106,
+    "p90": 19.312842000090313,
+    "p99": 61.014672000055725
+  },
+  "throughput_requests_per_second": 251.72410242933134,
+  "output_shape": [
+    1,
+    84,
+    8400
+  ],
+  "last_output_checksum": 6451714.0
+}
+```
+</details>
 
 Each client result records the RTX GPU, compute capability, driver, memory, and Triton server
 version. Compare client P50/P90/P99 and throughput with server Prometheus metrics at port 8002,

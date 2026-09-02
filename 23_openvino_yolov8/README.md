@@ -77,8 +77,6 @@ PYTHONNOUSERSITE=1 PYTHONPATH=23_openvino_yolov8/.deps \
   python3 23_openvino_yolov8/run_openvino.py
 ```
 
-Example output (local run, key fields):
-
 <details><summary>Example output (partial)</summary>
 
 ```text
