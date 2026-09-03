@@ -2,6 +2,13 @@
 .gitignore
 .vscode
 .idea
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+.env
+.env.*
 **/build
 **/build/**
 **/build_check
@@ -9,6 +16,8 @@
 **/cmake-build-*
 **/outputs
 **/outputs/**
+**/reports
+**/reports/**
 **/__pycache__
 **/*.pyc
 **/.deps

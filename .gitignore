@@ -24,6 +24,16 @@ __pycache__/
 .idea/
 .DS_Store
 
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
 todo.txt
 
 # Local Blender assets (not published)
