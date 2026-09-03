@@ -110,3 +110,7 @@ simply making the program run.
 [![Career Opportunities](https://img.shields.io/badge/Career-Land_Your_Dream_Role-brightgreen.svg?style=for-the-badge&logo=rocket)](https://github.com/Parker-Lyu/Learn-TensorRT)
 
 Happy coding, and may this repository help you land your ideal role in high-performance AI engineering!🎉
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
