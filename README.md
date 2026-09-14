@@ -20,6 +20,13 @@ asynchronous multi-stream scheduling, sanitizer and soak testing, and Nsight pro
 electives cover plugins, Triton, DeepStream, Jetson DLA, OpenVINO, Python bindings, and LLM
 inference. You finish with runnable, measurable deployment artifacts, not just `trtexec` commands.
 
+## 🎬 Project Overview
+
+[![Watch the Learn TensorRT project overview](assets/project-overview-video-thumbnail.jpg)](https://www.youtube.com/watch?v=K1spF7xL_0o)
+
+Watch the short project overview on [YouTube](https://www.youtube.com/watch?v=K1spF7xL_0o) to see the
+course scope, deployment workflow, and the engineering path from PyTorch to production TensorRT inference.
+
 
 ## Target Audience
 
@@ -110,6 +117,10 @@ simply making the program run.
 [![Career Opportunities](https://img.shields.io/badge/Career-Land_Your_Dream_Role-brightgreen.svg?style=for-the-badge&logo=rocket)](https://github.com/Parker-Lyu/Learn-TensorRT)
 
 Happy coding, and may this repository help you land your ideal role in high-performance AI engineering!🎉
+
+## About the Author
+
+Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-a565733b4/)
 
 ## License
 
