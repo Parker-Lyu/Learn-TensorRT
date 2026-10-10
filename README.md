@@ -122,7 +122,7 @@ Happy coding, and may this repository help you land your ideal role in high-perf
 
 ## About the Author
 
-Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-a565733b4/)
+Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-ai/)
 
 ## License
 

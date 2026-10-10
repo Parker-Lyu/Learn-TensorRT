@@ -115,7 +115,7 @@ cd Learn-TensorRT
 
 ## 저자 소개
 
-Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-a565733b4/)
+Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-ai/)
 
 ## 라이선스
 

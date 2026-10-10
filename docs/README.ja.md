@@ -115,7 +115,7 @@ cd Learn-TensorRT
 
 ## 作者について
 
-Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-a565733b4/)
+Parker Lyu — [LinkedIn](https://www.linkedin.com/in/parker-lyu-ai/)
 
 ## ライセンス
 
