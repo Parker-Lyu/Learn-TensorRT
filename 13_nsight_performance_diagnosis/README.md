@@ -410,3 +410,11 @@ the two directions can be combined: use a small bounded slot pool, batch size on
 strict, FP16 inference, compact GPU postprocessing, and GPU preprocessing only when measurements
 show sufficient GPU headroom. Always report latency and throughput separately because a deeper
 queue can raise throughput while making P99 latency worse.
+
+
+## Statistics implementation note
+
+The 2026-10-22 update sorts samples once per summary and reuses the sorted data for nearest-rank
+percentiles. Direct statistics helpers reject empty/non-finite inputs. Local CPU unittest
+verification passed all 7 tests on macOS; no Nsight capture, TensorRT inference, or new benchmark
+was run. The helper change does not turn a small latency sample into reliable tail evidence.

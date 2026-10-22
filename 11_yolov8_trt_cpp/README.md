@@ -140,6 +140,21 @@ The tests cover:
 - IoU/NMS behavior with overlapping boxes
 - mapping boxes back from padded network space to original-image coordinates
 
+The 2026-10-22 update uses stable score ordering and scans kept boxes instead of erasing the
+candidate list repeatedly. NMS remains class-wise with a strict IoU-greater-than comparison;
+equal scores retain input order within a class. Invalid output dimensions, non-finite outputs or
+thresholds, and non-8-bit BGR images are rejected. Nonpositive candidate widths/heights are skipped.
+Tests use runtime checks that remain active in Release builds, and the test is registered in CTest:
+
+```bash
+ctest --test-dir 11_yolov8_trt_cpp/build --output-on-failure
+```
+
+The runner synchronizes its stream on an exceptional inference return and before resource
+teardown; it still requires one caller at a time. This does not implement device-error recovery.
+This update was reviewed statically on macOS; OpenCV/CUDA/TensorRT compilation, the geometry test,
+and engine execution were not run. Earlier example output is not a result from these changes.
+
 ## Checkpoints
 
 - Compare `outputs/detections.json` with lesson 10's Python JSON.

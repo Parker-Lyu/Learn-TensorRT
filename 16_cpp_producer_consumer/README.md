@@ -50,6 +50,13 @@ The normal producer completion path uses drain. Cancellation and worker failures
 blocked peer can exit promptly. The first worker exception is saved and rethrown by `run()` after
 both threads have joined.
 
+`close(Discard)` can escalate an earlier drain; repeated discard does not double-count removed
+items. DropOldest inserts the replacement before removing the old value, so a failed insertion
+preserves the queue. This may temporarily hold one additional item under the mutex, but externally
+visible queue size stays bounded. Failed blocking insertion wakes another producer that can use
+the free slot. The pipeline also joins the producer if consumer-thread creation fails.
+`run()` is single-use and must not be called concurrently; `stop()` may be called by another thread.
+
 ## Directory Layout
 
 - `include/bounded_queue.hpp`: reusable bounded, thread-safe queue.
@@ -166,6 +173,11 @@ ctest --test-dir 16_cpp_producer_consumer/build-tsan --output-on-failure
 
 ThreadSanitizer is a CPU-only concurrency check. Run it separately from CUDA/TensorRT programs;
 sanitizer and driver runtimes can otherwise produce unrelated diagnostics.
+
+2026-10-22 local verification under the user's local-only instruction: the producer-consumer test
+suite compiled with Apple Clang 21.0.0, ISO C++17, `-Wall -Wextra -Wpedantic -pthread`, and passed on
+macOS. This includes drain-to-discard escalation and a synthetic failed DropOldest insertion.
+CMake/CTest and ThreadSanitizer were not run; thread-creation failure was inspected, not injected.
 
 ## Checkpoints
 

@@ -14,7 +14,7 @@ constexpr float kInv255 = 1.0F / 255.0F;
 const cv::Scalar kLetterboxColor(114, 114, 114);
 
 void write_nchw_rgb_float(const cv::Mat& letterboxed_bgr, std::vector<float>& output) {
-    if (letterboxed_bgr.empty() || letterboxed_bgr.channels() != 3) {
+    if (letterboxed_bgr.empty() || letterboxed_bgr.dims != 2 || letterboxed_bgr.type() != CV_8UC3) {
         throw std::runtime_error("write_nchw_rgb_float expects a non-empty BGR image.");
     }
 
@@ -40,8 +40,8 @@ cv::Mat letterbox_image(const cv::Mat& bgr_image, cv::Size input_size, Letterbox
     if (bgr_image.empty()) {
         throw std::runtime_error("letterbox_image received an empty image.");
     }
-    if (bgr_image.channels() != 3) {
-        throw std::runtime_error("letterbox_image expects a 3-channel BGR image.");
+    if (bgr_image.dims != 2 || bgr_image.type() != CV_8UC3) {
+        throw std::runtime_error("letterbox_image expects a 2D CV_8UC3 BGR image.");
     }
     if (input_size.width <= 0 || input_size.height <= 0) {
         throw std::runtime_error("letterbox_image expects a positive target size.");
@@ -85,6 +85,14 @@ PreprocessResult preprocess_image(const cv::Mat& bgr_image, cv::Size input_size)
 }
 
 Box map_box_to_original(const Box& box_in_letterbox, const LetterboxInfo& info) {
+    if (!std::isfinite(info.scale) || info.scale <= 0.0F ||
+        info.original_width <= 0 || info.original_height <= 0) {
+        throw std::runtime_error("Invalid letterbox scale or original image size.");
+    }
+    if (!std::isfinite(box_in_letterbox.x1) || !std::isfinite(box_in_letterbox.y1) ||
+        !std::isfinite(box_in_letterbox.x2) || !std::isfinite(box_in_letterbox.y2)) {
+        throw std::runtime_error("Box coordinates must be finite.");
+    }
     const float x1 = (box_in_letterbox.x1 - static_cast<float>(info.pad_left)) / info.scale;
     const float y1 = (box_in_letterbox.y1 - static_cast<float>(info.pad_top)) / info.scale;
     const float x2 = (box_in_letterbox.x2 - static_cast<float>(info.pad_left)) / info.scale;

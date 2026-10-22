@@ -209,6 +209,16 @@ The program prints:
 Exact numbers depend on GPU, PCIe generation, CPU memory speed, current clocks, and whether the
 first run paid extra initialization cost.
 
+## Resource and validation notes
+
+Moves transfer ownership with `std::exchange`; the memory wrapper requires a nonthrowing deleter
+and keeps cleanup nonthrowing. Stream destruction waits before dependent resources unwind, with
+cleanup errors reported to stderr. The internal transform treats count zero as a no-op; the demo
+CLI still requires a positive count. Output validation rejects non-finite values.
+
+The 2026-10-22 cleanup update was reviewed statically on macOS. CUDA compilation, GPU execution,
+and timing were not rerun; earlier example output is not validation of the modified implementation.
+
 ## Checkpoints
 
 - Change `iterations` from `5` to `50` and observe whether average time stabilizes.

@@ -20,6 +20,7 @@ public:
     std::string input_name() const;
     std::string output_name() const;
 
+    // One caller at a time: the context and staging buffers are shared by calls.
     InferenceOutput infer(const std::vector<float>& input_tensor);
 
 private:

@@ -70,16 +70,24 @@ public:
             }
 
             // DropOldest keeps the newest camera frame and bounds end-to-end latency.
+            // Insert first: a failed allocation/move must not discard the existing item.
+            queue_.push_back(std::move(value));
             queue_.pop_front();
             ++dropped_;
-            queue_.push_back(std::move(value));
             ++pushed_;
             lock.unlock();
             not_empty_.notify_one();
             return PushResult::DroppedOldest;
         }
 
-        queue_.push_back(std::move(value));
+        try {
+            queue_.push_back(std::move(value));
+        } catch (...) {
+            // This producer may have consumed the wakeup for a free slot.
+            lock.unlock();
+            not_full_.notify_one();
+            throw;
+        }
         ++pushed_;
         if (queue_.size() > high_watermark_) {
             high_watermark_ = queue_.size();
@@ -108,9 +116,7 @@ public:
     void close(CloseMode mode = CloseMode::Drain) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (closed_) {
-                return;
-            }
+            // Cancellation may escalate an earlier normal drain into discard.
             closed_ = true;
             if (mode == CloseMode::Discard) {
                 dropped_ += queue_.size();

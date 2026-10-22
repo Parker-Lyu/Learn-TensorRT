@@ -88,26 +88,33 @@ def runtime_environment() -> dict[str, str]:
     }
 
 
-def percentile(values: list[float], pct: float) -> float:
-    if not values:
-        raise ValueError("percentile requires at least one value")
+def _ordered_finite_values(values: list[float]) -> list[float]:
+    if not values or any(not math.isfinite(value) for value in values):
+        raise ValueError("statistics require at least one value and only finite values")
+    return sorted(values)
+
+
+def _nearest_rank(ordered: list[float], pct: float) -> float:
     if not 0.0 <= pct <= 100.0:
         raise ValueError("percentile must be in [0, 100]")
-    ordered = sorted(values)
-    index = max(0, min(len(ordered) - 1, math.ceil((pct / 100.0) * len(ordered)) - 1))
+    # Nearest rank is 1-based; percentile zero selects the minimum.
+    index = max(0, math.ceil((pct / 100.0) * len(ordered)) - 1)
     return ordered[index]
 
 
+def percentile(values: list[float], pct: float) -> float:
+    return _nearest_rank(_ordered_finite_values(values), pct)
+
+
 def summarize_values(values: list[float]) -> dict[str, float]:
-    if not values:
-        raise ValueError("latency summary requires at least one sample")
+    ordered = _ordered_finite_values(values)
     return {
-        "min": min(values),
-        "mean": sum(values) / len(values),
-        "p50": percentile(values, 50),
-        "p90": percentile(values, 90),
-        "p99": percentile(values, 99),
-        "max": max(values),
+        "min": ordered[0],
+        "mean": math.fsum(value / len(ordered) for value in ordered),
+        "p50": _nearest_rank(ordered, 50),
+        "p90": _nearest_rank(ordered, 90),
+        "p99": _nearest_rank(ordered, 99),
+        "max": ordered[-1],
     }
 
 

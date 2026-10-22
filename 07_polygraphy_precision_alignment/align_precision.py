@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -13,8 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from polygraphy.comparator import RunResults
-from polygraphy.json import load_json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -89,12 +88,16 @@ def validate_args(args: argparse.Namespace) -> None:
         raise FileNotFoundError(
             "Polygraphy is not importable. Complete lesson 00 inside the TensorRT container."
         ) from exc
-    if args.rtol < 0 or args.atol < 0:
-        raise ValueError("--rtol and --atol must be non-negative")
-    if args.polygraphy_rtol is not None and args.polygraphy_rtol < 0:
-        raise ValueError("--polygraphy-rtol must be non-negative")
-    if args.polygraphy_atol is not None and args.polygraphy_atol < 0:
-        raise ValueError("--polygraphy-atol must be non-negative")
+    if not all(math.isfinite(value) and value >= 0 for value in (args.rtol, args.atol)):
+        raise ValueError("--rtol and --atol must be finite and non-negative")
+    if args.polygraphy_rtol is not None and (
+        not math.isfinite(args.polygraphy_rtol) or args.polygraphy_rtol < 0
+    ):
+        raise ValueError("--polygraphy-rtol must be finite and non-negative")
+    if args.polygraphy_atol is not None and (
+        not math.isfinite(args.polygraphy_atol) or args.polygraphy_atol < 0
+    ):
+        raise ValueError("--polygraphy-atol must be finite and non-negative")
     if not args.onnx.exists():
         raise FileNotFoundError(
             f"ONNX model not found: {args.onnx}\n"
@@ -242,6 +245,9 @@ def compare_command(args: argparse.Namespace, output_path: Path, log_path: Path)
 
 
 def load_runner_outputs(path: Path) -> dict[str, list[dict[str, np.ndarray]]]:
+    from polygraphy.comparator import RunResults
+    from polygraphy.json import load_json
+
     raw = load_json(path)
     if isinstance(raw, RunResults):
         results = raw
@@ -277,35 +283,57 @@ def first_output(outputs: dict[str, list[dict[str, np.ndarray]]], preferred_runn
 
 
 def compare_arrays(reference: np.ndarray, candidate: np.ndarray, rtol: float, atol: float) -> dict[str, Any]:
-    if reference.shape != candidate.shape:
-        return {
-            "shape_match": False,
-            "reference_shape": list(reference.shape),
-            "candidate_shape": list(candidate.shape),
-            "allclose": False,
-        }
+    """Compare finite, nonempty real arrays using reference-side relative tolerance.
 
-    diff = np.abs(reference - candidate)
-    max_index = np.unravel_index(int(np.argmax(diff)), diff.shape)
-    close = np.isclose(reference, candidate, rtol=rtol, atol=atol)
-    finite = np.isfinite(diff)
-    return {
-        "shape_match": True,
-        "shape": list(reference.shape),
+    Errors are calculated in float64. Integers outside its exact range are rejected rather
+    than rounded into a false match. Empty/non-finite inputs are invalid diagnostic data.
+    """
+    if not all(math.isfinite(value) and value >= 0 for value in (rtol, atol)):
+        raise ValueError("rtol and atol must be finite and non-negative")
+    metadata = {
+        "reference_shape": list(reference.shape),
+        "candidate_shape": list(candidate.shape),
         "reference_dtype": str(reference.dtype),
         "candidate_dtype": str(candidate.dtype),
-        "max_abs_error": float(diff.max()),
-        "mean_abs_error": float(diff.mean()),
-        "median_abs_error": float(np.median(diff)),
-        "p99_abs_error": float(np.percentile(diff, 99)),
-        "finite_fraction": float(finite.mean()),
-        "close_fraction": float(close.mean()),
-        "max_error_index": [int(value) for value in max_index],
-        "reference_at_max_error": float(reference[max_index]),
-        "candidate_at_max_error": float(candidate[max_index]),
         "rtol": rtol,
         "atol": atol,
-        "allclose": bool(np.allclose(reference, candidate, rtol=rtol, atol=atol)),
+    }
+    if reference.shape != candidate.shape:
+        return {**metadata, "shape_match": False, "allclose": False}
+    if reference.size == 0:
+        raise ValueError("comparison requires nonempty arrays")
+    for array in (reference, candidate):
+        if array.dtype.kind not in "biuf":
+            raise ValueError("comparison requires real numeric arrays")
+        if array.dtype.kind in "iu" and (np.any(array > 2**53) or np.any(array < -(2**53))):
+            raise ValueError("integer values exceed the exact float64 comparison range")
+        if not np.all(np.isfinite(array)):
+            raise ValueError("comparison requires finite values")
+
+    reference64 = reference.astype(np.float64)
+    candidate64 = candidate.astype(np.float64)
+    with np.errstate(over="ignore", invalid="ignore"):
+        diff = np.abs(reference64 - candidate64)
+        tolerance = atol + rtol * np.abs(reference64)
+    if not np.all(np.isfinite(diff)) or not np.all(np.isfinite(tolerance)):
+        raise ValueError("comparison error or tolerance exceeds the finite float64 range")
+    max_index = np.unravel_index(int(np.argmax(diff)), diff.shape)
+    close = diff <= tolerance
+    return {
+        **metadata,
+        "shape_match": True,
+        "shape": list(reference.shape),
+        "max_abs_error": float(diff.max()),
+        # Divide before summing to avoid overflow in the reduction of finite errors.
+        "mean_abs_error": float(np.sum(diff / diff.size)),
+        "median_abs_error": float(np.percentile(diff, 50)),
+        "p99_abs_error": float(np.percentile(diff, 99)),
+        "finite_fraction": 1.0,
+        "close_fraction": float(close.mean()),
+        "max_error_index": [int(value) for value in max_index],
+        "reference_at_max_error": float(reference64[max_index]),
+        "candidate_at_max_error": float(candidate64[max_index]),
+        "allclose": bool(close.all()),
     }
 
 

@@ -5,12 +5,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -88,22 +90,32 @@ DeviceInfo get_device_info() {
     return info;
 }
 
+// Destructors preserve active exceptions; CUDA cleanup failures remain observable.
+void report_cuda_cleanup(cudaError_t status, const char* operation) noexcept {
+    if (status != cudaSuccess) {
+        std::fprintf(stderr, "%s failed during cleanup: %s\n", operation,
+                     cudaGetErrorString(status));
+    }
+}
+
 class CudaStream {
 public:
     CudaStream() {
         check_cuda(cudaStreamCreate(&stream_), "cudaStreamCreate");
     }
 
-    ~CudaStream() {
+    ~CudaStream() noexcept {
         if (stream_ != nullptr) {
-            (void)cudaStreamDestroy(stream_);
+            // Destroy alone does not wait: finish work before dependent resources unwind.
+            report_cuda_cleanup(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
+            report_cuda_cleanup(cudaStreamDestroy(stream_), "cudaStreamDestroy");
         }
     }
 
     CudaStream(const CudaStream&) = delete;
     CudaStream& operator=(const CudaStream&) = delete;
 
-    cudaStream_t get() const {
+    cudaStream_t get() const noexcept {
         return stream_;
     }
 
@@ -121,16 +133,16 @@ public:
         check_cuda(cudaEventCreateWithFlags(&event_, flags), "cudaEventCreateWithFlags");
     }
 
-    ~CudaEvent() {
+    ~CudaEvent() noexcept {
         if (event_ != nullptr) {
-            (void)cudaEventDestroy(event_);
+            report_cuda_cleanup(cudaEventDestroy(event_), "cudaEventDestroy");
         }
     }
 
     CudaEvent(const CudaEvent&) = delete;
     CudaEvent& operator=(const CudaEvent&) = delete;
 
-    cudaEvent_t get() const {
+    cudaEvent_t get() const noexcept {
         return event_;
     }
 
@@ -140,49 +152,52 @@ private:
 
 template <typename FreeFn>
 class UniqueCudaMemory {
+    static_assert(std::is_nothrow_move_constructible_v<FreeFn>);
+    static_assert(std::is_nothrow_move_assignable_v<FreeFn>);
+    static_assert(std::is_nothrow_invocable_r_v<cudaError_t, FreeFn&, float*>);
+
 public:
     UniqueCudaMemory() = default;
 
     UniqueCudaMemory(float* ptr, std::size_t element_count, FreeFn free_fn)
         : ptr_(ptr), element_count_(element_count), free_fn_(std::move(free_fn)) {}
 
-    ~UniqueCudaMemory() {
+    ~UniqueCudaMemory() noexcept {
         reset();
     }
 
     UniqueCudaMemory(const UniqueCudaMemory&) = delete;
     UniqueCudaMemory& operator=(const UniqueCudaMemory&) = delete;
 
-    UniqueCudaMemory(UniqueCudaMemory&& other) noexcept {
-        *this = std::move(other);
-    }
+    UniqueCudaMemory(UniqueCudaMemory&& other) noexcept
+        : ptr_(std::exchange(other.ptr_, nullptr)),
+          element_count_(std::exchange(other.element_count_, 0)),
+          free_fn_(std::move(other.free_fn_)) {}
 
     UniqueCudaMemory& operator=(UniqueCudaMemory&& other) noexcept {
         if (this != &other) {
             reset();
-            ptr_ = other.ptr_;
-            element_count_ = other.element_count_;
             free_fn_ = std::move(other.free_fn_);
-            other.ptr_ = nullptr;
-            other.element_count_ = 0;
+            ptr_ = std::exchange(other.ptr_, nullptr);
+            element_count_ = std::exchange(other.element_count_, 0);
         }
         return *this;
     }
 
-    float* get() const {
+    float* get() const noexcept {
         return ptr_;
     }
 
-    std::size_t element_count() const {
+    std::size_t element_count() const noexcept {
         return element_count_;
     }
 
-    void reset() {
+    void reset() noexcept {
         if (ptr_ != nullptr) {
-            (void)free_fn_(ptr_);
+            report_cuda_cleanup(free_fn_(ptr_), "CUDA memory release");
             ptr_ = nullptr;
-            element_count_ = 0;
         }
+        element_count_ = 0;
     }
 
 private:
@@ -192,13 +207,13 @@ private:
 };
 
 struct CudaFreeDevice {
-    cudaError_t operator()(float* ptr) const {
+    cudaError_t operator()(float* ptr) const noexcept {
         return cudaFree(ptr);
     }
 };
 
 struct CudaFreeHost {
-    cudaError_t operator()(float* ptr) const {
+    cudaError_t operator()(float* ptr) const noexcept {
         return cudaFreeHost(ptr);
     }
 };
@@ -250,6 +265,9 @@ void launch_transform(const float* input,
                       float* output,
                       std::size_t element_count,
                       cudaStream_t stream) {
+    if (element_count == 0) {
+        return;  // A zero-block launch is invalid; an empty transform is a no-op.
+    }
     const std::size_t max_elements =
         static_cast<std::size_t>(std::numeric_limits<int>::max()) * kThreadsPerBlock;
     if (element_count > max_elements) {
@@ -276,7 +294,7 @@ bool validate_output(const float* input,
                      std::size_t* bad_index) {
     for (std::size_t i = 0; i < element_count; ++i) {
         const float expected = input[i] * kScale + kBias;
-        if (std::abs(output[i] - expected) > kTolerance) {
+        if (!std::isfinite(output[i]) || std::abs(output[i] - expected) > kTolerance) {
             if (bad_index != nullptr) {
                 *bad_index = i;
             }

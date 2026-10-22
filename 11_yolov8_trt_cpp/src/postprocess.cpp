@@ -4,7 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
+#include <limits>
 #include <stdexcept>
 
 namespace lesson11 {
@@ -23,20 +23,19 @@ std::vector<int> nms(const std::vector<Box>& boxes,
                      const std::vector<int>& indices,
                      float iou_threshold) {
     std::vector<int> order = indices;
-    std::sort(order.begin(), order.end(), [&](int lhs, int rhs) {
+    std::stable_sort(order.begin(), order.end(), [&](int lhs, int rhs) {
         return scores[lhs] > scores[rhs];
     });
 
     std::vector<int> keep;
-    while (!order.empty()) {
-        const int current = order.front();
-        keep.push_back(current);
-        order.erase(order.begin());
-        order.erase(std::remove_if(order.begin(), order.end(), [&](int candidate) {
-                        return intersection_over_union(boxes[current], boxes[candidate]) >
-                               iou_threshold;
-                    }),
-                    order.end());
+    keep.reserve(order.size());
+    for (int candidate : order) {
+        const bool suppressed = std::any_of(keep.begin(), keep.end(), [&](int selected) {
+            return intersection_over_union(boxes[selected], boxes[candidate]) > iou_threshold;
+        });
+        if (!suppressed) {
+            keep.push_back(candidate);
+        }
     }
     return keep;
 }
@@ -73,20 +72,31 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
                                             const std::vector<int64_t>& output_shape,
                                             const LetterboxInfo& letterbox,
                                             const PostprocessConfig& config) {
-    if (config.confidence_threshold < 0.0F || config.confidence_threshold > 1.0F ||
+    if (!std::isfinite(config.confidence_threshold) || !std::isfinite(config.iou_threshold) ||
+        config.confidence_threshold < 0.0F || config.confidence_threshold > 1.0F ||
         config.iou_threshold < 0.0F || config.iou_threshold > 1.0F ||
         config.max_detections <= 0) {
         throw std::runtime_error("Invalid postprocess thresholds.");
     }
-    if (output_shape.size() != 3 || output_shape[0] != 1 || output_shape[1] < 5) {
+    if (output_shape.size() != 3 || output_shape[0] != 1 || output_shape[1] < 5 ||
+        output_shape[1] > std::numeric_limits<int>::max() || output_shape[2] < 0 ||
+        output_shape[2] > std::numeric_limits<int>::max()) {
         throw std::runtime_error("Expected YOLO output shape [1, attributes, boxes].");
     }
 
     const int attributes = static_cast<int>(output_shape[1]);
-    const int box_count = static_cast<int>(output_shape[2]);
+    const std::size_t box_count = static_cast<std::size_t>(output_shape[2]);
     const int class_count = attributes - 4;
-    if (output.size() != static_cast<std::size_t>(attributes) * box_count) {
+    if (box_count > std::numeric_limits<std::size_t>::max() /
+                        static_cast<std::size_t>(attributes) ||
+        output.size() != static_cast<std::size_t>(attributes) * box_count) {
         throw std::runtime_error("YOLO output size does not match output shape.");
+    }
+
+    if (!std::all_of(output.begin(), output.end(), [](float value) {
+            return std::isfinite(value);
+        })) {
+        throw std::runtime_error("YOLO output must contain only finite values.");
     }
 
     std::vector<Box> boxes;
@@ -96,7 +106,7 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
     scores.reserve(box_count);
     class_ids.reserve(box_count);
 
-    for (int i = 0; i < box_count; ++i) {
+    for (std::size_t i = 0; i < box_count; ++i) {
         int best_class = 0;
         float best_score = output[(4 * box_count) + i];
         for (int cls = 1; cls < class_count; ++cls) {
@@ -114,6 +124,9 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
         const float cy = output[(1 * box_count) + i];
         const float w = output[(2 * box_count) + i];
         const float h = output[(3 * box_count) + i];
+        if (w <= 0.0F || h <= 0.0F) {
+            continue;
+        }
         boxes.push_back(map_box_to_original(xywh_to_xyxy(cx, cy, w, h), letterbox));
         scores.push_back(best_score);
         class_ids.push_back(best_class);
@@ -131,7 +144,7 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
         kept.insert(kept.end(), class_kept.begin(), class_kept.end());
     }
 
-    std::sort(kept.begin(), kept.end(), [&](int lhs, int rhs) { return scores[lhs] > scores[rhs]; });
+    std::stable_sort(kept.begin(), kept.end(), [&](int lhs, int rhs) { return scores[lhs] > scores[rhs]; });
     if (static_cast<int>(kept.size()) > config.max_detections) {
         kept.resize(static_cast<std::size_t>(config.max_detections));
     }

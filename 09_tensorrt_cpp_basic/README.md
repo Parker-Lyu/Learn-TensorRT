@@ -196,6 +196,16 @@ C++ TensorRT basic flow completed successfully.
 Exact engine size, timing, and checksum can change with TensorRT version, GPU, tactic selection,
 precision mode, and ONNX export settings.
 
+## Resource cleanup
+
+Buffer moves use `std::exchange` and share one nonthrowing reset path. An owned stream waits before
+its destruction so an exceptional return does not leave work using buffers or context that are
+about to unwind. Cleanup errors go to stderr; normal synchronization still throws useful errors.
+Invalid tensor ranks are rejected before reading dimension storage.
+
+The 2026-10-22 cleanup update received static source review only on macOS; no TensorRT build,
+engine inference, or new performance measurement was run.
+
 ## Checkpoints
 
 - Run the default FP32 build, then run `--load-engine` and compare startup time.

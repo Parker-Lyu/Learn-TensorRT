@@ -63,6 +63,41 @@ void test_drop_policies() {
     require(oldest.stats().dropped == 1, "drop count mismatch");
 }
 
+void test_discard_escalates_drain() {
+    lesson16::BoundedQueue<int> queue(2);
+    queue.push(1);
+    queue.push(2);
+    queue.close(lesson16::CloseMode::Drain);
+    queue.close(lesson16::CloseMode::Discard);
+    queue.close(lesson16::CloseMode::Discard);
+    require(!queue.pop().has_value(), "discard did not replace an earlier drain");
+    require(queue.stats().dropped == 2, "repeated discard double-counted drops");
+}
+
+struct ThrowingMove {
+    inline static bool fail{false};
+    int value;
+    explicit ThrowingMove(int input) : value(input) {}
+    ThrowingMove(ThrowingMove&& other) : value(other.value) {
+        if (fail) {
+            throw std::runtime_error("synthetic move failure");
+        }
+    }
+};
+
+void test_failed_drop_oldest_preserves_queued_item() {
+    lesson16::BoundedQueue<ThrowingMove> queue(1, lesson16::OverloadPolicy::DropOldest);
+    queue.push(ThrowingMove(1));
+    ThrowingMove::fail = true;
+    require_throws([&] { queue.push(ThrowingMove(2)); }, "synthetic move failure");
+    ThrowingMove::fail = false;
+    const auto stats = queue.stats();
+    require(stats.size == 1 && stats.pushed == 1 && stats.dropped == 0,
+            "failed replacement changed queue accounting");
+    queue.close();
+    require(queue.pop()->value == 1, "failed replacement lost the original item");
+}
+
 void test_close_wakes_blocked_threads() {
     using namespace std::chrono_literals;
     lesson16::BoundedQueue<int> full_queue(1, lesson16::OverloadPolicy::Block);
@@ -179,6 +214,8 @@ int main() {
         test_invalid_capacity();
         test_fifo_and_drain_close();
         test_drop_policies();
+        test_discard_escalates_drain();
+        test_failed_drop_oldest_preserves_queued_item();
         test_close_wakes_blocked_threads();
         test_pipeline_overload_and_repeated_start_stop();
         test_pipeline_failure_propagation();

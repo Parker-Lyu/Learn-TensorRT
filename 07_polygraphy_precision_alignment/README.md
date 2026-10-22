@@ -399,6 +399,24 @@ artifact that later C++ lessons will load.
 - The runnable commands above produce the files and console evidence described in `Deliverables`.
 - Generated build and runtime artifacts remain in the lesson's ignored build or output directory.
 
+## Tests
+
+Test the pure-array comparator without loading Polygraphy or model backends:
+
+```bash
+python3 -m unittest discover -s 07_polygraphy_precision_alignment/tests -v
+```
+
+The comparator requires nonempty finite real arrays and finite nonnegative tolerances. It promotes
+subtraction to float64, rejects integers outside the exact float64 range, and uses
+`abs(candidate - reference) <= atol + rtol * abs(reference)`. Shape mismatch returns a failed
+comparison that can still be written to a report. Tests cover unsigned integer wraparound, FP16
+subtraction overflow, asymmetric relative tolerance, invalid data, scalar/worst-index handling,
+and shape-mismatch report generation. This does not run either inference backend.
+
+2026-10-22 local verification: 7 tests passed on macOS with Python 3.9.6 / NumPy 2.0.2, under the
+user's local-only instruction. The pinned CUDA/TensorRT container and inference were not exercised.
+
 ## Checkpoints
 
 - Run `--skip-trt` and confirm Polygraphy can execute the ONNX model with the saved input tensor.

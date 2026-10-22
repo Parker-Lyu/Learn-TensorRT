@@ -61,13 +61,20 @@ PipelineStats ImagePipeline::run(const std::vector<std::filesystem::path>& image
             record_failure(std::current_exception());
         }
     });
-    std::thread consumer([this] {
-        try {
-            consumer_loop();
-        } catch (...) {
-            record_failure(std::current_exception());
-        }
-    });
+    std::thread consumer;
+    try {
+        consumer = std::thread([this] {
+            try {
+                consumer_loop();
+            } catch (...) {
+                record_failure(std::current_exception());
+            }
+        });
+    } catch (...) {
+        stop();
+        producer.join();
+        throw;
+    }
 
     producer.join();
     consumer.join();
@@ -99,7 +106,8 @@ void ImagePipeline::stop() noexcept {
 }
 
 void ImagePipeline::producer_loop(const std::vector<std::filesystem::path>& image_paths) {
-    for (std::size_t sequence = 1; sequence <= config_.frame_count; ++sequence) {
+    for (std::size_t index = 0; index < config_.frame_count; ++index) {
+        const std::size_t sequence = index + 1;
         if (stop_requested_.load()) {
             return;
         }

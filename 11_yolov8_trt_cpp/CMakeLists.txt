@@ -4,6 +4,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(yolov8_trt_cpp LANGUAGES CXX)
 
+include(CTest)
+
 find_package(CUDAToolkit REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 
@@ -83,3 +85,7 @@ target_link_libraries(yolov8_cpp_tests
         opencv_core
         opencv_imgproc
 )
+
+if(BUILD_TESTING)
+    add_test(NAME yolov8_cpp_tests COMMAND yolov8_cpp_tests)
+endif()

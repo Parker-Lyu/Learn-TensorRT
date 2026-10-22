@@ -35,6 +35,13 @@ class PercentileTests(unittest.TestCase):
         self.assertEqual(PROFILE.percentile(values, 50), 2.0)
         self.assertEqual(PROFILE.percentile(values, 99), 4.0)
 
+    def test_endpoints_and_nonfinite_values(self) -> None:
+        self.assertEqual(PROFILE.percentile([4.0, 1.0], 0), 1.0)
+        self.assertEqual(PROFILE.percentile([4.0, 1.0], 100), 4.0)
+        for invalid in (math.nan, math.inf, -math.inf):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                PROFILE.summarize_values([1.0, invalid])
+
     def test_rejects_invalid_input(self) -> None:
         with self.assertRaises(ValueError):
             PROFILE.percentile([], 50)

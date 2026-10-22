@@ -3,13 +3,31 @@
 
 #include <opencv2/core.hpp>
 
-#include <cassert>
+#include <limits>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 
 namespace {
+
+void require(bool condition) {
+    if (!condition) {
+        throw std::runtime_error("preprocess/postprocess check failed");
+    }
+}
+
+template <typename Function>
+void require_throws(Function function) {
+    bool threw = false;
+    try {
+        function();
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    require(threw);
+}
+
 
 bool near(float a, float b, float tolerance = 1.0e-4F) {
     return std::abs(a - b) <= tolerance;
@@ -19,13 +37,13 @@ void test_letterbox_wide_image() {
     const cv::Mat image(100, 200, CV_8UC3, cv::Scalar(10, 20, 30));
     lesson11::LetterboxInfo info;
     const cv::Mat letterboxed = lesson11::letterbox_image(image, cv::Size(640, 640), info);
-    assert(letterboxed.cols == 640);
-    assert(letterboxed.rows == 640);
-    assert(info.resized_width == 640);
-    assert(info.resized_height == 320);
-    assert(info.pad_top == 160);
-    assert(info.pad_bottom == 160);
-    assert(near(info.scale, 3.2F));
+    require(letterboxed.cols == 640);
+    require(letterboxed.rows == 640);
+    require(info.resized_width == 640);
+    require(info.resized_height == 320);
+    require(info.pad_top == 160);
+    require(info.pad_bottom == 160);
+    require(near(info.scale, 3.2F));
 }
 
 void test_invalid_preprocess_inputs() {
@@ -36,7 +54,7 @@ void test_invalid_preprocess_inputs() {
     } catch (const std::exception&) {
         threw = true;
     }
-    assert(threw);
+    require(threw);
 }
 
 void test_iou_and_nms_decode() {
@@ -66,9 +84,9 @@ void test_iou_and_nms_decode() {
     config.iou_threshold = 0.45F;
     const std::vector<lesson11::Detection> detections =
         lesson11::decode_yolov8_output(output, {1, attributes, boxes}, info, config);
-    assert(detections.size() == 2);
-    assert(detections[0].class_id == 16);
-    assert(detections[1].class_id == 0);
+    require(detections.size() == 2);
+    require(detections[0].class_id == 16);
+    require(detections[1].class_id == 0);
 }
 
 void test_map_box_clamps_padding() {
@@ -83,10 +101,37 @@ void test_map_box_clamps_padding() {
 
     const lesson11::Box mapped =
         lesson11::map_box_to_original(lesson11::Box{0.0F, -5.0F, 700.0F, 700.0F}, info);
-    assert(near(mapped.x1, 0.0F));
-    assert(near(mapped.y1, 0.0F));
-    assert(near(mapped.x2, 500.0F));
-    assert(near(mapped.y2, 544.0F));
+    require(near(mapped.x1, 0.0F));
+    require(near(mapped.y1, 0.0F));
+    require(near(mapped.x2, 500.0F));
+    require(near(mapped.y2, 544.0F));
+}
+
+void test_defensive_geometry_and_decode() {
+    lesson11::LetterboxInfo info;
+    info.original_width = info.original_height = 640;
+    require_throws([&] {
+        lesson11::letterbox_image(cv::Mat(2, 2, CV_32FC3), cv::Size(640, 640), info);
+    });
+    info.scale = 0.0F;
+    require_throws([&] { lesson11::map_box_to_original({}, info); });
+    info.scale = 1.0F;
+    const lesson11::PostprocessConfig config;
+    require_throws([&] { lesson11::decode_yolov8_output({}, {1, 5, -1}, info, config); });
+    require_throws([&] {
+        lesson11::decode_yolov8_output({}, {1, 5, std::numeric_limits<int64_t>::max()}, info, config);
+    });
+    auto invalid_config = config;
+    invalid_config.iou_threshold = std::numeric_limits<float>::quiet_NaN();
+    require_throws([&] { lesson11::decode_yolov8_output({}, {1, 5, 0}, info, invalid_config); });
+    require(lesson11::decode_yolov8_output({}, {1, 5, 0}, info, config).empty());
+
+    // Two overlapping, equal-score boxes retain the first input deterministically.
+    std::vector<float> output = {100, 101, 100, 100, 50, 50, 50, 50, 0.9F, 0.9F};
+    auto detections = lesson11::decode_yolov8_output(output, {1, 5, 2}, info, config);
+    require(detections.size() == 1 && near(detections[0].box.x1, 75.0F));
+    output[8] = std::numeric_limits<float>::quiet_NaN();
+    require_throws([&] { lesson11::decode_yolov8_output(output, {1, 5, 2}, info, config); });
 }
 
 }  // namespace
@@ -96,6 +141,7 @@ int main() {
     test_invalid_preprocess_inputs();
     test_iou_and_nms_decode();
     test_map_box_clamps_padding();
+    test_defensive_geometry_and_decode();
     std::cout << "preprocess/postprocess tests passed\n";
     return 0;
 }
