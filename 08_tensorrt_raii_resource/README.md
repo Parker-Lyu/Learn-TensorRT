@@ -46,6 +46,7 @@ and on the target GPU/software stack.
 - `tensorrt_raii_lib` reusable C++ library
 - `tensorrt_raii_resource` executable
 - `tensorrt_raii_config_tests` focused configuration and failure-path tests
+- `tensorrt_raii_resource_tests` focused CUDA ownership and stream-cleanup tests
 
 ## Directory Layout
 
@@ -67,6 +68,16 @@ the runtime, because local variables unwind in reverse construction order.
 
 `DeviceBuffer`, `PinnedHostBuffer`, `CudaStream`, and `CudaEvent` are move-only classes. They can be
 stored in vectors or returned from helper functions, but they cannot be accidentally copied.
+Moves transfer handles with `std::exchange` and leave the source empty. Query methods and cleanup
+are `noexcept`; cleanup errors are reported to stderr without replacing an active exception.
+
+`CudaStream` deliberately synchronizes before destroying or replacing its owned stream. CUDA's
+`cudaStreamDestroy` alone can return while work is still running. The stream is declared after the
+buffers and execution context so exception unwinding drains it before those dependencies are
+released. This cleanup can block; normal execution still uses checked, explicit synchronization.
+A moved-from stream cannot be synchronized through this wrapper. Raw handles remain borrowed:
+callers must not release their resources or outlive their owners. A CUDA failure during cleanup is
+reported, but recovery from a failed device/context is outside this lesson's scope.
 
 Tensor addresses are bound by name through `setTensorAddress`. This avoids the fragile mental
 mapping between binding index, optimization profile, and tensor name that older TensorRT examples
@@ -168,7 +179,7 @@ The program prints:
 Example shape report:
 
 ```text
-Engine: ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine
+Engine: 06_trtexec_engine/outputs/yolov8n_static_fp32.engine
 Tensor buffers:
   - images [input, device, float32] shape=1x3x640x640 bytes=4915200
   - output0 [output, device, float32] shape=1x84x8400 bytes=2822400
@@ -187,6 +198,20 @@ Run the configured CTest suite:
 ```bash
 ctest --test-dir 08_tensorrt_raii_resource/build --output-on-failure
 ```
+
+The resource test compiles the actual private implementation into a separate executable; it does
+not link a second copy of the library. It checks disabled copying, nonthrowing moves, ownership
+transfer, self-move, reuse of moved-from buffers, zero-byte rejection, invalid tensor ranks, use of
+a moved device allocation, and completion at stream destruction, move replacement, and exception
+unwinding. It needs CUDA/TensorRT headers and libraries to build, and a CUDA device for runtime
+checks; CTest marks it skipped (exit 77) when no device is available. These checks do not measure
+leak counts or replace Compute Sanitizer, and callback completion checks do not exhaustively test
+all asynchronous schedules or device-error recovery.
+
+Verification for the 2026-10-22 resource update: source/static review only. The new tests and
+inference were not compiled or run in this update; earlier example output above is not a result
+from the modified code. Run the build and CTest commands above in the course environment before
+using the update as runtime evidence.
 
 ## Checkpoints
 

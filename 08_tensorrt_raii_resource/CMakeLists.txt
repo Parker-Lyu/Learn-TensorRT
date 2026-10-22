@@ -60,5 +60,16 @@ if(BUILD_TESTING)
     add_executable(tensorrt_raii_config_tests tests/config_tests.cpp)
     target_compile_features(tensorrt_raii_config_tests PRIVATE cxx_std_17)
     target_link_libraries(tensorrt_raii_config_tests PRIVATE tensorrt_raii_lib)
+    set_target_properties(tensorrt_raii_config_tests PROPERTIES CXX_EXTENSIONS OFF)
     add_test(NAME tensorrt_raii_config_tests COMMAND tensorrt_raii_config_tests)
+
+    # Compile the implementation into this white-box test to keep wrappers internal.
+    # Do not also link tensorrt_raii_lib: that would duplicate its public definitions.
+    add_executable(tensorrt_raii_resource_tests tests/resource_tests.cpp)
+    target_compile_features(tensorrt_raii_resource_tests PRIVATE cxx_std_17)
+    set_target_properties(tensorrt_raii_resource_tests PROPERTIES CXX_EXTENSIONS OFF)
+    target_include_directories(tensorrt_raii_resource_tests PRIVATE include ${TENSORRT_INCLUDE_DIR})
+    target_link_libraries(tensorrt_raii_resource_tests PRIVATE CUDA::cudart ${TENSORRT_LIBRARY})
+    add_test(NAME tensorrt_raii_resource_tests COMMAND tensorrt_raii_resource_tests)
+    set_tests_properties(tensorrt_raii_resource_tests PROPERTIES SKIP_RETURN_CODE 77)
 endif()

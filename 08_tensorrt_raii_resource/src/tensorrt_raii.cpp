@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -38,6 +39,14 @@ void check_cuda(cudaError_t status, const char* operation) {
     if (status != cudaSuccess) {
         throw std::runtime_error(std::string(operation) + " failed: " +
                                  cudaGetErrorString(status));
+    }
+}
+
+// Cleanup must preserve an active exception while still making CUDA errors visible.
+void report_cuda_cleanup(cudaError_t status, const char* operation) noexcept {
+    if (status != cudaSuccess) {
+        std::fprintf(stderr, "%s failed during cleanup: %s\n", operation,
+                     cudaGetErrorString(status));
     }
 }
 
@@ -78,39 +87,46 @@ public:
         check_cuda(cudaStreamCreate(&stream_), "cudaStreamCreate");
     }
 
-    ~CudaStream() {
-        if (stream_ != nullptr) {
-            (void)cudaStreamDestroy(stream_);
-        }
+    ~CudaStream() noexcept {
+        reset();
     }
 
     CudaStream(const CudaStream&) = delete;
     CudaStream& operator=(const CudaStream&) = delete;
 
-    CudaStream(CudaStream&& other) noexcept {
-        *this = std::move(other);
-    }
+    CudaStream(CudaStream&& other) noexcept
+        : stream_(std::exchange(other.stream_, nullptr)) {}
 
     CudaStream& operator=(CudaStream&& other) noexcept {
         if (this != &other) {
-            if (stream_ != nullptr) {
-                (void)cudaStreamDestroy(stream_);
-            }
-            stream_ = other.stream_;
-            other.stream_ = nullptr;
+            reset();
+            stream_ = std::exchange(other.stream_, nullptr);
         }
         return *this;
     }
 
-    cudaStream_t get() const {
+    cudaStream_t get() const noexcept {
         return stream_;
     }
 
     void synchronize() const {
+        if (stream_ == nullptr) {
+            throw std::runtime_error("Cannot synchronize a moved-from CudaStream.");
+        }
         check_cuda(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
     }
 
 private:
+    void reset() noexcept {
+        if (stream_ != nullptr) {
+            // Stream destruction alone does not wait. Drain before dependent buffers/context
+            // unwind, including exception paths and replacement by move assignment.
+            report_cuda_cleanup(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
+            report_cuda_cleanup(cudaStreamDestroy(stream_), "cudaStreamDestroy");
+            stream_ = nullptr;
+        }
+    }
+
     cudaStream_t stream_ = nullptr;
 };
 
@@ -120,20 +136,36 @@ public:
         check_cuda(cudaEventCreateWithFlags(&event_, flags), "cudaEventCreateWithFlags");
     }
 
-    ~CudaEvent() {
-        if (event_ != nullptr) {
-            (void)cudaEventDestroy(event_);
-        }
+    ~CudaEvent() noexcept {
+        reset();
     }
 
     CudaEvent(const CudaEvent&) = delete;
     CudaEvent& operator=(const CudaEvent&) = delete;
 
-    cudaEvent_t get() const {
+    CudaEvent(CudaEvent&& other) noexcept
+        : event_(std::exchange(other.event_, nullptr)) {}
+
+    CudaEvent& operator=(CudaEvent&& other) noexcept {
+        if (this != &other) {
+            reset();
+            event_ = std::exchange(other.event_, nullptr);
+        }
+        return *this;
+    }
+
+    cudaEvent_t get() const noexcept {
         return event_;
     }
 
 private:
+    void reset() noexcept {
+        if (event_ != nullptr) {
+            report_cuda_cleanup(cudaEventDestroy(event_), "cudaEventDestroy");
+            event_ = nullptr;
+        }
+    }
+
     cudaEvent_t event_ = nullptr;
 };
 
@@ -146,43 +178,41 @@ public:
         check_cuda(cudaMalloc(&ptr_, byte_count_), "cudaMalloc");
     }
 
-    ~DeviceBuffer() {
+    ~DeviceBuffer() noexcept {
         reset();
     }
 
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
-    DeviceBuffer(DeviceBuffer&& other) noexcept {
-        *this = std::move(other);
-    }
+    DeviceBuffer(DeviceBuffer&& other) noexcept
+        : ptr_(std::exchange(other.ptr_, nullptr)),
+          byte_count_(std::exchange(other.byte_count_, 0)) {}
 
     DeviceBuffer& operator=(DeviceBuffer&& other) noexcept {
         if (this != &other) {
             reset();
-            ptr_ = other.ptr_;
-            byte_count_ = other.byte_count_;
-            other.ptr_ = nullptr;
-            other.byte_count_ = 0;
+            ptr_ = std::exchange(other.ptr_, nullptr);
+            byte_count_ = std::exchange(other.byte_count_, 0);
         }
         return *this;
     }
 
-    void* get() const {
+    void* get() const noexcept {
         return ptr_;
     }
 
-    std::size_t byte_count() const {
+    std::size_t byte_count() const noexcept {
         return byte_count_;
     }
 
 private:
     void reset() noexcept {
         if (ptr_ != nullptr) {
-            (void)cudaFree(ptr_);
+            report_cuda_cleanup(cudaFree(ptr_), "cudaFree");
             ptr_ = nullptr;
-            byte_count_ = 0;
         }
+        byte_count_ = 0;
     }
 
     void* ptr_ = nullptr;
@@ -199,39 +229,37 @@ public:
         std::fill_n(static_cast<std::uint8_t*>(ptr_), byte_count_, std::uint8_t{0});
     }
 
-    ~PinnedHostBuffer() {
+    ~PinnedHostBuffer() noexcept {
         reset();
     }
 
     PinnedHostBuffer(const PinnedHostBuffer&) = delete;
     PinnedHostBuffer& operator=(const PinnedHostBuffer&) = delete;
 
-    PinnedHostBuffer(PinnedHostBuffer&& other) noexcept {
-        *this = std::move(other);
-    }
+    PinnedHostBuffer(PinnedHostBuffer&& other) noexcept
+        : ptr_(std::exchange(other.ptr_, nullptr)),
+          byte_count_(std::exchange(other.byte_count_, 0)) {}
 
     PinnedHostBuffer& operator=(PinnedHostBuffer&& other) noexcept {
         if (this != &other) {
             reset();
-            ptr_ = other.ptr_;
-            byte_count_ = other.byte_count_;
-            other.ptr_ = nullptr;
-            other.byte_count_ = 0;
+            ptr_ = std::exchange(other.ptr_, nullptr);
+            byte_count_ = std::exchange(other.byte_count_, 0);
         }
         return *this;
     }
 
-    void* get() const {
+    void* get() const noexcept {
         return ptr_;
     }
 
 private:
     void reset() noexcept {
         if (ptr_ != nullptr) {
-            (void)cudaFreeHost(ptr_);
+            report_cuda_cleanup(cudaFreeHost(ptr_), "cudaFreeHost");
             ptr_ = nullptr;
-            byte_count_ = 0;
         }
+        byte_count_ = 0;
     }
 
     void* ptr_ = nullptr;
@@ -358,6 +386,9 @@ nvinfer1::Dims to_dims(const std::vector<int32_t>& dimensions) {
 }
 
 bool has_dynamic_dimension(const nvinfer1::Dims& dims) {
+    if (dims.nbDims < 0 || dims.nbDims > nvinfer1::Dims::MAX_DIMS) {
+        throw std::runtime_error("TensorRT returned an invalid tensor shape.");
+    }
     return std::any_of(dims.d, dims.d + dims.nbDims, [](int64_t value) { return value < 0; });
 }
 
@@ -574,6 +605,7 @@ InferenceReport run_smoke_inference(const RunConfig& config) {
         }
     }
 
+    // Declared after buffers/context so the stream drains before they are destroyed.
     CudaStream stream;
     inject_failure(config.injected_failure, FailureStage::kAfterStreamCreation);
     for (const TensorBuffer& buffer : buffers) {

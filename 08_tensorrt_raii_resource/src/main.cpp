@@ -17,11 +17,11 @@ void print_usage(const char* executable_name) {
         << "       [--warmup N] [--iterations N]\n\n"
         << "       [--repeat N] [--inject-failure STAGE] [--memory-tolerance-mib N]\n\n"
         << "Default engine:\n"
-        << "  ../06_trtexec_engine/outputs/yolov8n_static_fp32.engine\n\n"
+        << "  06_trtexec_engine/outputs/yolov8n_static_fp32.engine\n\n"
         << "Examples:\n"
         << "  " << executable_name << '\n'
         << "  " << executable_name
-        << " --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \\\n"
+        << " --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \\\n"
         << "      --input-shape images:1x3x640x640\n";
 }
 

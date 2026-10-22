@@ -27,7 +27,7 @@ struct InputShape {
 };
 
 struct RunConfig {
-    std::string engine_path = "../06_trtexec_engine/outputs/yolov8n_static_fp32.engine";
+    std::string engine_path = "06_trtexec_engine/outputs/yolov8n_static_fp32.engine";
     std::vector<InputShape> input_shapes;
     int warmup_iterations = 1;
     int measured_iterations = 3;
