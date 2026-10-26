@@ -38,7 +38,13 @@ image files -> producer thread -> BoundedQueue<ImageFrame> -> consumer thread
 ```
 
 `BoundedQueue<T>` is independent of image and TensorRT types, so later lessons can reuse it for
-decoded frames, preprocessed tensors, or inference results. Its public behavior is:
+decoded frames, preprocessed tensors, or inference results. Payloads must be nothrow move
+constructible and nothrow destructible (checked at compile time). This keeps `pop()` safe even
+when returning its `std::optional<T>`; a throwing move could otherwise damage the queued value or
+lose it after removal. Use an owning handle such as `std::unique_ptr<T>` for other payload types.
+`push(T value)` consumes an rvalue even if closed or dropped; it does not return rejected ownership.
+A copy made by the caller or a deque allocation can still throw before successful insertion.
+Its public behavior is:
 
 - `push()` returns whether an item was accepted, dropped, or rejected after close.
 - `pop()` blocks until an item is available or the closed queue is empty.
@@ -56,6 +62,30 @@ preserves the queue. This may temporarily hold one additional item under the mut
 visible queue size stays bounded. Failed blocking insertion wakes another producer that can use
 the free slot. The pipeline also joins the producer if consumer-thread creation fails.
 `run()` is single-use and must not be called concurrently; `stop()` may be called by another thread.
+The owner must wait for `run()` to finish before destroying the pipeline or its input paths.
+Simulated delays use interruptible condition-variable waits. Stopping wakes them as well as queue
+waiters, but cannot interrupt a file read or an actual CUDA kernel. Discard removes pending work;
+an already-popped frame may be cancelled and is not counted as processed or as a queue drop.
+
+Latency mean and maximum use constant-space online statistics. The timestamp is taken after file
+reading, so this metric includes blocking in `push()` but excludes file I/O and consumer work; it
+is not sensor-to-result latency. Queue capacity bounds item count, not encoded-byte size or all
+pipeline memory. DropOldest can hold one extra item temporarily, and producer/consumer frames live
+outside the queue.
+
+### TensorRT 10 integration boundary
+
+A later inference consumer should own an execution context, a non-default CUDA stream, and its
+I/O buffers. Concurrent workers need separate contexts; a queue mutex does not protect subsequent
+context calls. This follows NVIDIA's [TensorRT 10.x threading model](https://docs.nvidia.com/deeplearning/tensorrt/10.x.x/architecture/how-trt-works.html#threading).
+
+Use name-based `setTensorAddress()` and `enqueueV3(stream)` and check their return values.
+Keep buffers alive until their GPU uses finish; an input-consumed event permits input reuse, while
+outputs require stream completion and any later copy must also finish. See the
+[TensorRT 10.14 runtime contract](https://github.com/NVIDIA/TensorRT/blob/release/10.14/include/NvInferRuntime.h).
+Limit in-flight GPU slots separately from queued items. On failure or stop, reject new jobs, drain
+GPU work, join workers, then release resources. Queue discard cannot cancel kernels. This lesson
+implements none of those GPU operations and reports no TensorRT performance result.
 
 ## Directory Layout
 
@@ -161,7 +191,11 @@ ctest --test-dir 16_cpp_producer_consumer/build --output-on-failure
 
 The tests cover zero capacity, FIFO drain behavior, both dropping policies, wakeup of blocked
 producers and consumers, bounded overload accounting, repeated pipeline construction/run/destruction,
-explicit stop, and producer/consumer exception propagation.
+explicit stop, and producer/consumer exception propagation. They also exercise move-only ownership,
+4 producers / 3 consumers transferring 1,200 unique items, constant-space latency summary invariants,
+stop-before-run, single-use rejection, and cancellation with 30-second simulated delays on either
+worker or both. CTest limits the suite to 30 seconds. Timing-based wakeup checks remain smoke checks;
+they do not deterministically establish every wait interleaving.
 
 For ThreadSanitizer, use a separate build directory:
 
@@ -176,8 +210,18 @@ sanitizer and driver runtimes can otherwise produce unrelated diagnostics.
 
 2026-10-22 local verification under the user's local-only instruction: the producer-consumer test
 suite compiled with Apple Clang 21.0.0, ISO C++17, `-Wall -Wextra -Wpedantic -pthread`, and passed on
-macOS. This includes drain-to-discard escalation and a synthetic failed DropOldest insertion.
+macOS. At that revision this included drain-to-discard escalation and a synthetic failed DropOldest insertion.
 CMake/CTest and ThreadSanitizer were not run; thread-creation failure was inspected, not injected.
+
+2026-10-26 local-only review: Apple Clang 21.0.0 compiled both the tests and executable as ISO
+C++17 with `-Wall -Wextra -Wpedantic -Werror -pthread`; the suite passed, including the new cases
+above. A separate `-fsanitize=thread -g -fno-omit-frame-pointer` build passed without sanitizer
+reports. A compile-negative check rejected a throwing-move payload with the expected static
+assertion. The former throwing-move runtime test is superseded by that stricter type contract.
+The executable also ran with the existing image, 20 frames, blocking policy, and zero delays:
+20 read, 20 processed, 0 dropped. Latency and peak depth vary by scheduling.
+Docker and CMake are unavailable on this Mac, so no container, CMake/CTest, GPU, or TensorRT run
+was performed. Thread startup/allocation failure was not injected. No speedup is claimed.
 
 ## Checkpoints
 

@@ -28,6 +28,7 @@ if(BUILD_TESTING)
     target_link_libraries(producer_consumer_tests PRIVATE producer_consumer_pipeline)
     set_target_properties(producer_consumer_tests PROPERTIES CXX_EXTENSIONS OFF)
     add_test(NAME producer_consumer_tests COMMAND producer_consumer_tests)
+    set_tests_properties(producer_consumer_tests PROPERTIES TIMEOUT 30)
 endif()
 
 if(ENABLE_TSAN)

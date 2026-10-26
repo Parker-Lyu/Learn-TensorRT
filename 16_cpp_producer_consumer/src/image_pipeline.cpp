@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
-#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -90,19 +89,27 @@ PipelineStats ImagePipeline::run(const std::vector<std::filesystem::path>& image
     stats.frames_read = frames_read_.load();
     stats.frames_processed = frames_processed_.load();
     stats.queue = queue_.stats();
-    if (!queue_latency_ms_.empty()) {
-        stats.average_queue_latency_ms =
-            std::accumulate(queue_latency_ms_.begin(), queue_latency_ms_.end(), 0.0) /
-            static_cast<double>(queue_latency_ms_.size());
-        stats.max_queue_latency_ms =
-            *std::max_element(queue_latency_ms_.begin(), queue_latency_ms_.end());
-    }
+    stats.average_queue_latency_ms = average_queue_latency_ms_;
+    stats.max_queue_latency_ms = max_queue_latency_ms_;
     return stats;
 }
 
 void ImagePipeline::stop() noexcept {
-    stop_requested_.store(true);
+    {
+        // Use the waiter's mutex when changing its predicate to avoid a lost wakeup.
+        std::lock_guard<std::mutex> lock(delay_mutex_);
+        stop_requested_.store(true);
+    }
+    delay_cv_.notify_all();
     queue_.close(CloseMode::Discard);
+}
+
+bool ImagePipeline::wait_or_stopped(std::chrono::milliseconds delay) {
+    if (delay.count() == 0) {
+        return stop_requested_.load();
+    }
+    std::unique_lock<std::mutex> lock(delay_mutex_);
+    return delay_cv_.wait_for(lock, delay, [this] { return stop_requested_.load(); });
 }
 
 void ImagePipeline::producer_loop(const std::vector<std::filesystem::path>& image_paths) {
@@ -124,8 +131,8 @@ void ImagePipeline::producer_loop(const std::vector<std::filesystem::path>& imag
         if (result == PushResult::Closed) {
             return;
         }
-        if (config_.producer_delay.count() > 0) {
-            std::this_thread::sleep_for(config_.producer_delay);
+        if (wait_or_stopped(config_.producer_delay)) {
+            return;
         }
     }
 }
@@ -141,11 +148,14 @@ void ImagePipeline::consumer_loop() {
         const auto now = std::chrono::steady_clock::now();
         const auto queued =
             std::chrono::duration<double, std::milli>(now - frame->captured_at).count();
-        queue_latency_ms_.push_back(queued);
+        ++latency_samples_;
+        average_queue_latency_ms_ +=
+            (queued - average_queue_latency_ms_) / static_cast<double>(latency_samples_);
+        max_queue_latency_ms_ = std::max(max_queue_latency_ms_, queued);
 
-        // This sleep is the lesson's replaceable inference stage.
-        if (config_.consumer_delay.count() > 0) {
-            std::this_thread::sleep_for(config_.consumer_delay);
+        // Interruptible simulated work, not cancellation of an actual GPU operation.
+        if (wait_or_stopped(config_.consumer_delay)) {
+            return;
         }
         ++frames_processed_;
     }
@@ -158,8 +168,7 @@ void ImagePipeline::record_failure(std::exception_ptr failure) noexcept {
             failure_ = std::move(failure);
         }
     }
-    stop_requested_.store(true);
-    queue_.close(CloseMode::Discard);
+    stop();
 }
 
 }  // namespace lesson16

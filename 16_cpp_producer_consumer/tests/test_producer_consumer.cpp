@@ -1,12 +1,16 @@
 #include "bounded_queue.hpp"
 #include "image_pipeline.hpp"
 
+#include <array>
+#include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -74,28 +78,66 @@ void test_discard_escalates_drain() {
     require(queue.stats().dropped == 2, "repeated discard double-counted drops");
 }
 
-struct ThrowingMove {
-    inline static bool fail{false};
-    int value;
-    explicit ThrowingMove(int input) : value(input) {}
-    ThrowingMove(ThrowingMove&& other) : value(other.value) {
-        if (fail) {
-            throw std::runtime_error("synthetic move failure");
-        }
-    }
-};
-
-void test_failed_drop_oldest_preserves_queued_item() {
-    lesson16::BoundedQueue<ThrowingMove> queue(1, lesson16::OverloadPolicy::DropOldest);
-    queue.push(ThrowingMove(1));
-    ThrowingMove::fail = true;
-    require_throws([&] { queue.push(ThrowingMove(2)); }, "synthetic move failure");
-    ThrowingMove::fail = false;
-    const auto stats = queue.stats();
-    require(stats.size == 1 && stats.pushed == 1 && stats.dropped == 0,
-            "failed replacement changed queue accounting");
+void test_move_only_payload() {
+    lesson16::BoundedQueue<std::unique_ptr<int>> queue(1, lesson16::OverloadPolicy::DropOldest);
+    queue.push(std::make_unique<int>(1));
+    require(queue.push(std::make_unique<int>(2)) == lesson16::PushResult::DroppedOldest,
+            "move-only replacement failed");
     queue.close();
-    require(queue.pop()->value == 1, "failed replacement lost the original item");
+    auto item = queue.pop();
+    require(item && **item == 2, "move-only ownership transfer failed");
+    require(!queue.pop(), "move-only queue did not drain");
+    require(queue.stats().pushed == 2 && queue.stats().popped == 1 &&
+                queue.stats().dropped == 1, "move-only accounting mismatch");
+}
+
+void test_multiple_producers_and_consumers() {
+    constexpr int producer_count = 4;
+    constexpr int consumer_count = 3;
+    constexpr int per_producer = 300;
+    constexpr int total = producer_count * per_producer;
+    lesson16::BoundedQueue<int> queue(3);
+    std::array<std::atomic<int>, total> seen{};
+    for (auto& count : seen) {
+        count.store(0);
+    }
+    std::atomic<bool> invalid{false};
+    std::array<std::thread, consumer_count> consumers;
+    std::array<std::thread, producer_count> producers;
+    for (auto& consumer : consumers) {
+        consumer = std::thread([&] {
+            while (auto value = queue.pop()) {
+                if (*value < 0 || *value >= total) {
+                    invalid.store(true);
+                } else {
+                    ++seen[*value];
+                }
+            }
+        });
+    }
+    for (int id = 0; id < producer_count; ++id) {
+        producers[id] = std::thread([&, id] {
+            for (int index = 0; index < per_producer; ++index) {
+                if (queue.push(id * per_producer + index) != lesson16::PushResult::Pushed) {
+                    invalid.store(true);
+                }
+            }
+        });
+    }
+    for (auto& producer : producers) {
+        producer.join();
+    }
+    queue.close();
+    for (auto& consumer : consumers) {
+        consumer.join();
+    }
+    require(!invalid.load(), "invalid MPMC transfer");
+    for (const auto& count : seen) {
+        require(count.load() == 1, "MPMC transfer lost or duplicated an item");
+    }
+    const auto stats = queue.stats();
+    require(stats.pushed == total && stats.popped == total && stats.dropped == 0 &&
+                stats.size == 0 && stats.high_watermark <= 3, "MPMC accounting mismatch");
 }
 
 void test_close_wakes_blocked_threads() {
@@ -148,6 +190,10 @@ void test_pipeline_overload_and_repeated_start_stop() {
             lesson16::ImagePipeline pipeline(config);
             const auto stats = pipeline.run({fixture});
             require(stats.frames_read == config.frame_count, "pipeline did not read every frame");
+            require(std::isfinite(stats.average_queue_latency_ms) &&
+                        stats.average_queue_latency_ms >= 0.0 &&
+                        stats.average_queue_latency_ms <= stats.max_queue_latency_ms,
+                    "online latency summary is invalid");
             require(stats.queue.high_watermark <= config.queue_capacity,
                     "queue exceeded configured capacity");
             require(stats.frames_processed + stats.queue.dropped == stats.frames_read,
@@ -186,20 +232,30 @@ void test_explicit_stop() {
     using namespace std::chrono_literals;
     const auto fixture = make_fixture();
     try {
-        lesson16::PipelineConfig config;
-        config.frame_count = 10000;
-        config.queue_capacity = 2;
-        config.overload_policy = lesson16::OverloadPolicy::Block;
-        config.producer_delay = 0ms;
-        config.consumer_delay = 2ms;
-        lesson16::ImagePipeline pipeline(config);
-        auto run = std::async(std::launch::async, [&] { return pipeline.run({fixture}); });
-        std::this_thread::sleep_for(10ms);
-        pipeline.stop();
-        require(run.wait_for(1s) == std::future_status::ready,
-                "explicit stop did not terminate the pipeline");
-        require(run.get().queue.high_watermark <= config.queue_capacity,
-                "stopped pipeline exceeded queue capacity");
+        // Exercise long waits independently on each worker and on both workers.
+        for (int scenario = 0; scenario < 3; ++scenario) {
+            lesson16::PipelineConfig config;
+            config.frame_count = 10000;
+            config.queue_capacity = 2;
+            config.overload_policy = lesson16::OverloadPolicy::Block;
+            config.producer_delay = scenario == 1 ? 0ms : 30s;
+            config.consumer_delay = scenario == 0 ? 0ms : 30s;
+            lesson16::ImagePipeline pipeline(config);
+            auto run = std::async(std::launch::async, [&] { return pipeline.run({fixture}); });
+            std::this_thread::sleep_for(10ms);
+            pipeline.stop();
+            require(run.wait_for(1s) == std::future_status::ready,
+                    "explicit stop did not terminate the pipeline");
+            require(run.get().queue.high_watermark <= config.queue_capacity,
+                    "stopped pipeline exceeded queue capacity");
+        }
+        lesson16::ImagePipeline stopped({});
+        stopped.stop();
+        const auto stats = stopped.run({fixture});
+        require(stats.frames_read == 0 && stats.frames_processed == 0 &&
+                    stats.average_queue_latency_ms == 0.0 && stats.max_queue_latency_ms == 0.0,
+                "stop-before-run should do no work");
+        require_throws([&] { stopped.run({fixture}); }, "only be run once");
     } catch (...) {
         std::filesystem::remove(fixture);
         throw;
@@ -215,7 +271,8 @@ int main() {
         test_fifo_and_drain_close();
         test_drop_policies();
         test_discard_escalates_drain();
-        test_failed_drop_oldest_preserves_queued_item();
+        test_move_only_payload();
+        test_multiple_producers_and_consumers();
         test_close_wakes_blocked_threads();
         test_pipeline_overload_and_repeated_start_stop();
         test_pipeline_failure_propagation();

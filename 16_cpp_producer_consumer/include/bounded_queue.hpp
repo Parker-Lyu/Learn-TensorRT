@@ -6,6 +6,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace lesson16 {
@@ -41,6 +42,13 @@ struct QueueStats {
 // All state, including statistics, is guarded by the same mutex as the payload queue.
 template <typename T>
 class BoundedQueue {
+    // pop() transfers ownership before returning an optional. A throwing move could
+    // corrupt the front item or lose a dequeued value during return-value transfer.
+    static_assert(std::is_nothrow_move_constructible_v<T>,
+                  "BoundedQueue requires a nothrow move-constructible payload");
+    static_assert(std::is_nothrow_destructible_v<T>,
+                  "BoundedQueue requires a nothrow destructible payload");
+
 public:
     explicit BoundedQueue(std::size_t capacity, OverloadPolicy policy = OverloadPolicy::Block)
         : capacity_(capacity), policy_(policy) {
@@ -69,7 +77,7 @@ public:
                 return PushResult::DroppedNewest;
             }
 
-            // DropOldest keeps the newest camera frame and bounds end-to-end latency.
+            // DropOldest favors fresh queued frames; it cannot bound in-flight latency.
             // Insert first: a failed allocation/move must not discard the existing item.
             queue_.push_back(std::move(value));
             queue_.pop_front();

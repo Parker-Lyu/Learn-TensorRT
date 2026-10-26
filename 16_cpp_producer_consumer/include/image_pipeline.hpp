@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -54,6 +55,7 @@ private:
     void producer_loop(const std::vector<std::filesystem::path>& image_paths);
     void consumer_loop();
     void record_failure(std::exception_ptr failure) noexcept;
+    bool wait_or_stopped(std::chrono::milliseconds delay);
 
     PipelineConfig config_;
     BoundedQueue<ImageFrame> queue_;
@@ -62,7 +64,12 @@ private:
     std::atomic<std::size_t> frames_processed_{0};
     std::mutex failure_mutex_;
     std::exception_ptr failure_;
-    std::vector<double> queue_latency_ms_;
+    // Only the consumer writes these; run() reads them after joining it.
+    std::size_t latency_samples_{0};
+    double average_queue_latency_ms_{0.0};
+    double max_queue_latency_ms_{0.0};
+    std::mutex delay_mutex_;
+    std::condition_variable delay_cv_;
     bool run_called_{false};
 };
 
