@@ -35,6 +35,21 @@ class PercentileTests(unittest.TestCase):
         self.assertEqual(PROFILE.percentile(values, 50), 2.0)
         self.assertEqual(PROFILE.percentile(values, 99), 4.0)
 
+    def test_integer_rank_boundaries_and_p95(self) -> None:
+        values = list(range(1, 101))
+        for pct in range(101):
+            self.assertEqual(PROFILE.percentile(values, pct), max(1, pct))
+        self.assertEqual(PROFILE.summarize_values(values)["p95"], 95)
+        self.assertEqual(PROFILE.percentile([1.0, 2.0, 3.0, 4.0], 62.5), 3.0)
+
+    def test_extreme_means_and_markdown_columns(self) -> None:
+        for value in (math.ulp(0.0), 1.0e308):
+            self.assertEqual(PROFILE.summarize_values([value] * 4)["mean"], value)
+        self.assertEqual(PROFILE.summarize_values([-1.0e308, 1.0e308])["mean"], 0.0)
+        table = PROFILE.markdown_latency_table({"total": PROFILE.summarize_values([1, 2])}, ["total"])
+        self.assertIn("P95", table[0])
+        self.assertEqual(len(table[0].split("|")), len(table[2].split("|")))
+
     def test_endpoints_and_nonfinite_values(self) -> None:
         self.assertEqual(PROFILE.percentile([4.0, 1.0], 0), 1.0)
         self.assertEqual(PROFILE.percentile([4.0, 1.0], 100), 4.0)

@@ -418,3 +418,10 @@ The 2026-10-22 update sorts samples once per summary and reuses the sorted data 
 percentiles. Direct statistics helpers reject empty/non-finite inputs. Local CPU unittest
 verification passed all 7 tests on macOS; no Nsight capture, TensorRT inference, or new benchmark
 was run. The helper change does not turn a small latency sample into reliable tail evidence.
+
+
+The 2026-10-26 review adds P95 to summary/report tables and computes nearest-rank indices with
+integer arithmetic from the supplied percentile's exact float ratio. This prevents a rounded-up
+rank, such as P7 of 100 samples selecting item 8. Means normalize by the largest magnitude to avoid
+both overflow and uniform-subnormal underflow. Nine local CPU tests passed, including all integer
+percentiles on 100 samples and Markdown column alignment. No profiler or inference run was made.

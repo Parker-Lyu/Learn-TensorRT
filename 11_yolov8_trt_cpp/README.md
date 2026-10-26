@@ -155,6 +155,38 @@ teardown; it still requires one caller at a time. This does not implement device
 This update was reviewed statically on macOS; OpenCV/CUDA/TensorRT compilation, the geometry test,
 and engine execution were not run. Earlier example output is not a result from these changes.
 
+### Focused CPU review (2026-10-26)
+
+`geometry.cpp` contains inverse mapping without OpenCV; `postprocess.cpp` now also compiles without
+OpenCV. The normal application links the same implementations. Build the pure geometry/decoder
+suite alone, without discovering CUDA, TensorRT, or OpenCV:
+
+```bash
+cmake -S 11_yolov8_trt_cpp -B 11_yolov8_trt_cpp/build-cpu -DCPU_ONLY_TESTS=ON
+cmake --build 11_yolov8_trt_cpp/build-cpu --target yolov8_geometry_tests
+ctest --test-dir 11_yolov8_trt_cpp/build-cpu --output-on-failure
+```
+
+IoU rejects non-finite coordinates and calculates areas in double to avoid overflow for finite
+float boxes; reversed/zero-area boxes produce zero IoU. Inverse mapping also promotes arithmetic.
+Decoder metadata is checked even for empty output, and boxes with no positive area after clipping
+are skipped. Per-class NMS stops after the final detection limit: discarded lower-ranked items
+cannot enter the globally capped result. Stable score ties and strict IoU comparison are preserved.
+
+The pure suite covers extreme/degenerate IoU, mapping/clipping, invalid/empty metadata and outputs,
+class-wise suppression, threshold equality, and equivalence of a capped result to the full prefix.
+It passed locally with Apple Clang 21.0.0, C++17, and warnings treated as errors; an additional
+AddressSanitizer/UndefinedBehaviorSanitizer build passed without reports. The OpenCV suite now adds
+tall odd padding and non-contiguous BGR-to-RGB input, but was not compiled/run on this Mac. Docker,
+CMake, OpenCV development files, CUDA and TensorRT are unavailable here; no CMake/CTest or engine
+run was performed. No task accuracy or latency improvement is claimed.
+
+The runner now explicitly requires `TensorFormat::kLINEAR` and allocates its returned host vector
+before GPU submission. Context calls remain serialized, with no device-error recovery. These
+TensorRT-facing edits are static-review only; see the
+[10.14 runtime header](https://github.com/NVIDIA/TensorRT/blob/release/10.14/include/NvInferRuntime.h)
+for named tensor format/address and enqueue APIs.
+
 ## Checkpoints
 
 - Compare `outputs/detections.json` with lesson 10's Python JSON.

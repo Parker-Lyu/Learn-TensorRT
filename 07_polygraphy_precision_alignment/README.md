@@ -417,6 +417,12 @@ and shape-mismatch report generation. This does not run either inference backend
 2026-10-22 local verification: 7 tests passed on macOS with Python 3.9.6 / NumPy 2.0.2, under the
 user's local-only instruction. The pinned CUDA/TensorRT container and inference were not exercised.
 
+2026-10-26 update: float64 inputs avoid redundant conversion copies; median/P99 errors share one
+percentile call. The mean normalizes by the maximum error before averaging, preserving a uniform
+subnormal error population while avoiding finite-error summation overflow. Nine local CPU tests
+passed with Python 3.9.6 / NumPy 2.0.2, including extreme finite error summaries and read-only inputs.
+No Polygraphy backend, GPU execution, or model accuracy comparison was run in this review.
+
 ## Checkpoints
 
 - Run `--skip-trt` and confirm Polygraphy can execute the ONNX model with the saved input tensor.

@@ -98,7 +98,12 @@ def _nearest_rank(ordered: list[float], pct: float) -> float:
     if not 0.0 <= pct <= 100.0:
         raise ValueError("percentile must be in [0, 100]")
     # Nearest rank is 1-based; percentile zero selects the minimum.
-    index = max(0, math.ceil((pct / 100.0) * len(ordered)) - 1)
+    # Calculate ceil(pct * n / 100) exactly for the supplied float. Dividing
+    # first can round an integer rank upward (for example P7 of 100 samples).
+    numerator, denominator = float(pct).as_integer_ratio()
+    divisor = 100 * denominator
+    rank = (numerator * len(ordered) + divisor - 1) // divisor
+    index = max(0, rank - 1)
     return ordered[index]
 
 
@@ -108,11 +113,14 @@ def percentile(values: list[float], pct: float) -> float:
 
 def summarize_values(values: list[float]) -> dict[str, float]:
     ordered = _ordered_finite_values(values)
+    scale = max(abs(ordered[0]), abs(ordered[-1]))
+    mean = math.fsum(value / scale for value in ordered) / len(ordered) * scale if scale else 0.0
     return {
         "min": ordered[0],
-        "mean": math.fsum(value / len(ordered) for value in ordered),
+        "mean": mean,
         "p50": _nearest_rank(ordered, 50),
         "p90": _nearest_rank(ordered, 90),
+        "p95": _nearest_rank(ordered, 95),
         "p99": _nearest_rank(ordered, 99),
         "max": ordered[-1],
     }
@@ -385,14 +393,14 @@ def command_result_dict(result: CommandResult) -> dict[str, Any]:
 
 def markdown_latency_table(summary: dict[str, dict[str, float]], keys: list[str]) -> list[str]:
     lines = [
-        "| Stage | min | mean | P50 | P90 | P99 | max |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Stage | min | mean | P50 | P90 | P95 | P99 | max |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for key in keys:
         stats = summary[key]
         lines.append(
             f"| {key} | {stats['min']:.3f} | {stats['mean']:.3f} | {stats['p50']:.3f} | "
-            f"{stats['p90']:.3f} | {stats['p99']:.3f} | {stats['max']:.3f} |"
+            f"{stats['p90']:.3f} | {stats['p95']:.3f} | {stats['p99']:.3f} | {stats['max']:.3f} |"
         )
     return lines
 

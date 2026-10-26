@@ -50,6 +50,23 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(self.compare(1.0, 2.0)["max_error_index"], [])
         self.assertEqual(self.compare([[1, 2], [3, 4]], [[1, 2], [3, 9]])["max_error_index"], [1, 1])
 
+    def test_extreme_finite_error_summaries(self):
+        for magnitude in (np.nextafter(0.0, 1.0), 1.0e308):
+            with self.subTest(magnitude=magnitude):
+                result = self.compare(np.zeros(4), np.full(4, magnitude))
+                self.assertEqual(result["mean_abs_error"], magnitude)
+                self.assertEqual(result["median_abs_error"], magnitude)
+                json.dumps(result, allow_nan=False)
+
+    def test_float64_inputs_remain_unchanged(self):
+        reference = np.array([1.0, 2.0])
+        candidate = np.array([1.5, 2.0])
+        reference.setflags(write=False)
+        candidate.setflags(write=False)
+        self.compare(reference, candidate)
+        np.testing.assert_array_equal(reference, [1.0, 2.0])
+        np.testing.assert_array_equal(candidate, [1.5, 2.0])
+
     def test_shape_mismatch_can_be_written_as_a_report(self):
         result = self.compare([1], [[1]])
         self.assertFalse(result["shape_match"])

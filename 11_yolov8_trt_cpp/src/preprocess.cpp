@@ -84,26 +84,5 @@ PreprocessResult preprocess_image(const cv::Mat& bgr_image, cv::Size input_size)
     return result;
 }
 
-Box map_box_to_original(const Box& box_in_letterbox, const LetterboxInfo& info) {
-    if (!std::isfinite(info.scale) || info.scale <= 0.0F ||
-        info.original_width <= 0 || info.original_height <= 0) {
-        throw std::runtime_error("Invalid letterbox scale or original image size.");
-    }
-    if (!std::isfinite(box_in_letterbox.x1) || !std::isfinite(box_in_letterbox.y1) ||
-        !std::isfinite(box_in_letterbox.x2) || !std::isfinite(box_in_letterbox.y2)) {
-        throw std::runtime_error("Box coordinates must be finite.");
-    }
-    const float x1 = (box_in_letterbox.x1 - static_cast<float>(info.pad_left)) / info.scale;
-    const float y1 = (box_in_letterbox.y1 - static_cast<float>(info.pad_top)) / info.scale;
-    const float x2 = (box_in_letterbox.x2 - static_cast<float>(info.pad_left)) / info.scale;
-    const float y2 = (box_in_letterbox.y2 - static_cast<float>(info.pad_top)) / info.scale;
-
-    Box mapped;
-    mapped.x1 = std::clamp(x1, 0.0F, static_cast<float>(info.original_width));
-    mapped.y1 = std::clamp(y1, 0.0F, static_cast<float>(info.original_height));
-    mapped.x2 = std::clamp(x2, 0.0F, static_cast<float>(info.original_width));
-    mapped.y2 = std::clamp(y2, 0.0F, static_cast<float>(info.original_height));
-    return mapped;
-}
 
 }  // namespace lesson11

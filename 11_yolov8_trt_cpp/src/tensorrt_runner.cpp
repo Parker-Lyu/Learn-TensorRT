@@ -232,6 +232,7 @@ struct TensorRtRunner::Impl {
                 throw std::runtime_error("TensorRT returned a null IO tensor name.");
             }
             if (engine->getTensorLocation(tensor_name) != nvinfer1::TensorLocation::kDEVICE ||
+                engine->getTensorFormat(tensor_name) != nvinfer1::TensorFormat::kLINEAR ||
                 engine->getTensorVectorizedDim(tensor_name) != -1) {
                 throw std::runtime_error(
                     "Lesson 11 supports only linear device IO tensors: " +
@@ -320,6 +321,12 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         throw std::runtime_error("Input tensor size does not match TensorRT engine input.");
     }
 
+    // Complete potentially throwing host allocations before submitting device work.
+    InferenceOutput output;
+    output.output_name = impl_->output.name;
+    output.output_shape = impl_->output.shape;
+    output.values.resize(impl_->output.byte_count / sizeof(float));
+
     try {
         std::copy(input_tensor.begin(), input_tensor.end(), impl_->input_host->data());
         {
@@ -347,10 +354,6 @@ InferenceOutput TensorRtRunner::infer(const std::vector<float>& input_tensor) {
         check_cuda(cudaEventRecord(impl_->infer_stop.get(), impl_->stream.get()),
                    "cudaEventRecord(infer_stop)");
 
-        InferenceOutput output;
-        output.output_name = impl_->output.name;
-        output.output_shape = impl_->output.shape;
-        output.values.resize(impl_->output.byte_count / sizeof(float));
         {
             NvtxRange range("d2h_submit_and_wait");
             check_cuda(cudaEventRecord(impl_->d2h_start.get(), impl_->stream.get()),

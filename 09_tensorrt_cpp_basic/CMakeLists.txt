@@ -4,6 +4,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(tensorrt_cpp_basic LANGUAGES CXX)
 
+include(CTest)
+option(CPU_ONLY_TESTS "Build tensor storage tests without CUDA or TensorRT" OFF)
+if(BUILD_TESTING)
+    add_executable(tensor_size_tests tests/test_tensor_size.cpp)
+    target_compile_features(tensor_size_tests PRIVATE cxx_std_17)
+    set_target_properties(tensor_size_tests PROPERTIES CXX_EXTENSIONS OFF)
+    target_include_directories(tensor_size_tests PRIVATE include)
+    add_test(NAME tensor_size_tests COMMAND tensor_size_tests)
+endif()
+if(CPU_ONLY_TESTS)
+    return()
+endif()
+
 find_package(CUDAToolkit REQUIRED)
 
 find_path(TENSORRT_INCLUDE_DIR

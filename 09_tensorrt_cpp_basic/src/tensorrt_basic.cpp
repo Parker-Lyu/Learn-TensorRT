@@ -1,4 +1,5 @@
 #include "tensorrt_basic.hpp"
+#include "tensor_size.hpp"
 
 #include <NvInfer.h>
 #include <NvInferRuntime.h>
@@ -431,39 +432,17 @@ const InputShape* find_input_shape(const std::vector<InputShape>& input_shapes,
     return found == input_shapes.end() ? nullptr : &(*found);
 }
 
-std::size_t checked_volume(const nvinfer1::Dims& dims, const std::string& tensor_name) {
-    if (dims.nbDims <= 0) {
-        throw std::runtime_error("Tensor " + tensor_name + " has invalid rank.");
-    }
-
-    std::size_t volume = 1;
-    for (int32_t i = 0; i < dims.nbDims; ++i) {
-        if (dims.d[i] <= 0) {
-            throw std::runtime_error("Tensor " + tensor_name +
-                                     " still has a dynamic or invalid dimension.");
-        }
-        const auto dim = static_cast<std::size_t>(dims.d[i]);
-        if (volume > std::numeric_limits<std::size_t>::max() / dim) {
-            throw std::runtime_error("Tensor " + tensor_name + " has too many elements.");
-        }
-        volume *= dim;
-    }
-    return volume;
-}
-
 std::size_t checked_byte_count(const nvinfer1::ICudaEngine& engine,
                                const std::string& tensor_name,
                                const nvinfer1::Dims& dims) {
-    const std::size_t volume = checked_volume(dims, tensor_name);
-    if (engine.getTensorVectorizedDim(tensor_name.c_str()) != -1) {
+    if (engine.getTensorFormat(tensor_name.c_str()) != nvinfer1::TensorFormat::kLINEAR ||
+        engine.getTensorVectorizedDim(tensor_name.c_str()) != -1) {
         throw std::runtime_error("Tensor " + tensor_name +
-                                 " uses a vectorized IO format that this lesson does not support.");
+                                 " uses a non-linear or vectorized IO format that this lesson "
+                                 "does not support.");
     }
-    const std::size_t bits = bit_size(engine.getTensorDataType(tensor_name.c_str()));
-    if (volume > (std::numeric_limits<std::size_t>::max() - 7U) / bits) {
-        throw std::runtime_error("Tensor " + tensor_name + " byte count overflowed.");
-    }
-    return (volume * bits + 7U) / 8U;
+    return checked_tensor_bytes(to_vector(dims),
+                                bit_size(engine.getTensorDataType(tensor_name.c_str())));
 }
 
 void print_parser_errors(const nvonnxparser::IParser& parser) {

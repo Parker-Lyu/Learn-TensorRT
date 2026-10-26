@@ -14,6 +14,7 @@ struct PostprocessConfig {
 
 const std::vector<std::string>& coco_class_names();
 
+// Continuous xyxy coordinates: reversed/zero-area boxes have IoU zero; non-finite boxes throw.
 float intersection_over_union(const Box& a, const Box& b);
 
 std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,

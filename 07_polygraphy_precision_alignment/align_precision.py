@@ -310,8 +310,8 @@ def compare_arrays(reference: np.ndarray, candidate: np.ndarray, rtol: float, at
         if not np.all(np.isfinite(array)):
             raise ValueError("comparison requires finite values")
 
-    reference64 = reference.astype(np.float64)
-    candidate64 = candidate.astype(np.float64)
+    reference64 = reference.astype(np.float64, copy=False)
+    candidate64 = candidate.astype(np.float64, copy=False)
     with np.errstate(over="ignore", invalid="ignore"):
         diff = np.abs(reference64 - candidate64)
         tolerance = atol + rtol * np.abs(reference64)
@@ -319,15 +319,19 @@ def compare_arrays(reference: np.ndarray, candidate: np.ndarray, rtol: float, at
         raise ValueError("comparison error or tolerance exceeds the finite float64 range")
     max_index = np.unravel_index(int(np.argmax(diff)), diff.shape)
     close = diff <= tolerance
+    max_error = float(diff[max_index])
+    # Normalize before averaging: this avoids both reduction overflow and losing
+    # an entire subnormal population by dividing each tiny error by its size.
+    mean_error = float(np.mean(diff / max_error)) * max_error if max_error else 0.0
+    median_error, p99_error = np.percentile(diff, [50, 99])
     return {
         **metadata,
         "shape_match": True,
         "shape": list(reference.shape),
-        "max_abs_error": float(diff.max()),
-        # Divide before summing to avoid overflow in the reduction of finite errors.
-        "mean_abs_error": float(np.sum(diff / diff.size)),
-        "median_abs_error": float(np.percentile(diff, 50)),
-        "p99_abs_error": float(np.percentile(diff, 99)),
+        "max_abs_error": max_error,
+        "mean_abs_error": mean_error,
+        "median_abs_error": float(median_error),
+        "p99_abs_error": float(p99_error),
         "finite_fraction": 1.0,
         "close_fraction": float(close.mean()),
         "max_error_index": [int(value) for value in max_index],

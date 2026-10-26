@@ -6,6 +6,30 @@ project(yolov8_trt_cpp LANGUAGES CXX)
 
 include(CTest)
 
+option(CPU_ONLY_TESTS "Build geometry/decoder tests without CUDA, TensorRT, or OpenCV" OFF)
+
+add_library(yolov8_geometry src/geometry.cpp)
+target_compile_features(yolov8_geometry PUBLIC cxx_std_17)
+set_target_properties(yolov8_geometry PROPERTIES CXX_EXTENSIONS OFF)
+target_include_directories(yolov8_geometry PUBLIC include)
+
+add_library(yolov8_postprocess src/postprocess.cpp)
+target_compile_features(yolov8_postprocess PUBLIC cxx_std_17)
+set_target_properties(yolov8_postprocess PROPERTIES CXX_EXTENSIONS OFF)
+target_link_libraries(yolov8_postprocess PUBLIC yolov8_geometry)
+
+if(BUILD_TESTING)
+    add_executable(yolov8_geometry_tests tests/test_geometry_postprocess.cpp)
+    target_compile_features(yolov8_geometry_tests PRIVATE cxx_std_17)
+    set_target_properties(yolov8_geometry_tests PROPERTIES CXX_EXTENSIONS OFF)
+    target_link_libraries(yolov8_geometry_tests PRIVATE yolov8_postprocess)
+    add_test(NAME yolov8_geometry_tests COMMAND yolov8_geometry_tests)
+endif()
+
+if(CPU_ONLY_TESTS)
+    return()
+endif()
+
 find_package(CUDAToolkit REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 
@@ -27,15 +51,7 @@ add_library(yolov8_preprocess
 target_compile_features(yolov8_preprocess PUBLIC cxx_std_17)
 set_target_properties(yolov8_preprocess PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(yolov8_preprocess PUBLIC include)
-target_link_libraries(yolov8_preprocess PUBLIC opencv_core opencv_imgproc)
-
-add_library(yolov8_postprocess
-    src/postprocess.cpp
-)
-target_compile_features(yolov8_postprocess PUBLIC cxx_std_17)
-set_target_properties(yolov8_postprocess PROPERTIES CXX_EXTENSIONS OFF)
-target_include_directories(yolov8_postprocess PUBLIC include)
-target_link_libraries(yolov8_postprocess PUBLIC opencv_core)
+target_link_libraries(yolov8_preprocess PUBLIC yolov8_geometry opencv_core opencv_imgproc)
 
 add_library(yolov8_trt_runtime
     src/tensorrt_runner.cpp

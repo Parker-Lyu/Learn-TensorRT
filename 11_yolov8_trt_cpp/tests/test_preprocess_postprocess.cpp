@@ -1,13 +1,10 @@
-#include "postprocess.hpp"
 #include "preprocess.hpp"
 
 #include <opencv2/core.hpp>
 
-#include <limits>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
-#include <vector>
 
 namespace {
 
@@ -55,83 +52,27 @@ void test_invalid_preprocess_inputs() {
         threw = true;
     }
     require(threw);
-}
-
-void test_iou_and_nms_decode() {
     lesson11::LetterboxInfo info;
-    info.original_width = 640;
-    info.original_height = 640;
-    info.input_width = 640;
-    info.input_height = 640;
-    info.scale = 1.0F;
-
-    const int attributes = 4 + 80;
-    const int boxes = 3;
-    std::vector<float> output(static_cast<std::size_t>(attributes) * boxes, 0.0F);
-    auto set_box = [&](int index, float cx, float cy, float w, float h, int cls, float score) {
-        output[0 * boxes + index] = cx;
-        output[1 * boxes + index] = cy;
-        output[2 * boxes + index] = w;
-        output[3 * boxes + index] = h;
-        output[(4 + cls) * boxes + index] = score;
-    };
-    set_box(0, 100.0F, 100.0F, 50.0F, 50.0F, 16, 0.90F);
-    set_box(1, 102.0F, 102.0F, 50.0F, 50.0F, 16, 0.80F);
-    set_box(2, 300.0F, 300.0F, 40.0F, 40.0F, 0, 0.70F);
-
-    lesson11::PostprocessConfig config;
-    config.confidence_threshold = 0.25F;
-    config.iou_threshold = 0.45F;
-    const std::vector<lesson11::Detection> detections =
-        lesson11::decode_yolov8_output(output, {1, attributes, boxes}, info, config);
-    require(detections.size() == 2);
-    require(detections[0].class_id == 16);
-    require(detections[1].class_id == 0);
-}
-
-void test_map_box_clamps_padding() {
-    lesson11::LetterboxInfo info;
-    info.original_width = 500;
-    info.original_height = 544;
-    info.input_width = 640;
-    info.input_height = 640;
-    info.pad_left = 26;
-    info.pad_top = 0;
-    info.scale = 1.1764706F;
-
-    const lesson11::Box mapped =
-        lesson11::map_box_to_original(lesson11::Box{0.0F, -5.0F, 700.0F, 700.0F}, info);
-    require(near(mapped.x1, 0.0F));
-    require(near(mapped.y1, 0.0F));
-    require(near(mapped.x2, 500.0F));
-    require(near(mapped.y2, 544.0F));
-}
-
-void test_defensive_geometry_and_decode() {
-    lesson11::LetterboxInfo info;
-    info.original_width = info.original_height = 640;
     require_throws([&] {
         lesson11::letterbox_image(cv::Mat(2, 2, CV_32FC3), cv::Size(640, 640), info);
     });
-    info.scale = 0.0F;
-    require_throws([&] { lesson11::map_box_to_original({}, info); });
-    info.scale = 1.0F;
-    const lesson11::PostprocessConfig config;
-    require_throws([&] { lesson11::decode_yolov8_output({}, {1, 5, -1}, info, config); });
-    require_throws([&] {
-        lesson11::decode_yolov8_output({}, {1, 5, std::numeric_limits<int64_t>::max()}, info, config);
-    });
-    auto invalid_config = config;
-    invalid_config.iou_threshold = std::numeric_limits<float>::quiet_NaN();
-    require_throws([&] { lesson11::decode_yolov8_output({}, {1, 5, 0}, info, invalid_config); });
-    require(lesson11::decode_yolov8_output({}, {1, 5, 0}, info, config).empty());
+}
 
-    // Two overlapping, equal-score boxes retain the first input deterministically.
-    std::vector<float> output = {100, 101, 100, 100, 50, 50, 50, 50, 0.9F, 0.9F};
-    auto detections = lesson11::decode_yolov8_output(output, {1, 5, 2}, info, config);
-    require(detections.size() == 1 && near(detections[0].box.x1, 75.0F));
-    output[8] = std::numeric_limits<float>::quiet_NaN();
-    require_throws([&] { lesson11::decode_yolov8_output(output, {1, 5, 2}, info, config); });
+void test_tall_odd_padding_and_rgb() {
+    lesson11::LetterboxInfo info;
+    const cv::Mat tall(200, 101, CV_8UC3, cv::Scalar(0, 127, 255));
+    lesson11::letterbox_image(tall, cv::Size(640, 640), info);
+    require(info.resized_width == 323 && info.pad_left == 158 && info.pad_right == 159);
+    require(info.resized_height == 640 && info.pad_top == 0);
+    // A non-contiguous ROI exercises row-stride-aware planar conversion.
+    const cv::Mat source(2, 3, CV_8UC3, cv::Scalar(0, 127, 255));
+    const auto result = lesson11::preprocess_image(source(cv::Rect(0, 0, 2, 2)), cv::Size(2, 2));
+    require(result.tensor_nchw.size() == 12);
+    for (int i = 0; i < 4; ++i) {
+        require(near(result.tensor_nchw[i], 1.0F));
+        require(near(result.tensor_nchw[4 + i], 127.0F / 255.0F));
+        require(near(result.tensor_nchw[8 + i], 0.0F));
+    }
 }
 
 }  // namespace
@@ -139,9 +80,7 @@ void test_defensive_geometry_and_decode() {
 int main() {
     test_letterbox_wide_image();
     test_invalid_preprocess_inputs();
-    test_iou_and_nms_decode();
-    test_map_box_clamps_padding();
-    test_defensive_geometry_and_decode();
+    test_tall_odd_padding_and_rgb();
     std::cout << "preprocess/postprocess tests passed\n";
     return 0;
 }

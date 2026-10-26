@@ -219,6 +219,33 @@ CLI still requires a positive count. Output validation rejects non-finite values
 The 2026-10-22 cleanup update was reviewed statically on macOS. CUDA compilation, GPU execution,
 and timing were not rerun; earlier example output is not validation of the modified implementation.
 
+### Measurement and validation update (2026-10-26)
+
+Each path now completes one untimed warmup before its event interval. Managed prefetch remains
+outside the timed kernel interval. Reported effective rate divides logical read/write bytes by
+the whole measured interval; it is not isolated copy bandwidth. Earlier example timings predate
+this change and require a GPU rerun before any before/after comparison.
+`include/transform_checks.hpp` holds the host helpers also used by the demo: safe ceil division
+for block count, checked float byte sizing, and rejection of non-finite expected/output values.
+The empty internal launch remains a no-op; the CLI rejects zero elements. Host boundary checks do
+not execute GPU threads or prove device bounds correctness. CUDA source changes are static-review
+only in this local pass.
+
+## Tests
+
+Host-only block-count, byte-overflow, and transform-validation tests need no GPU. To build only these checks in the usual development environment:
+
+```bash
+cmake -S 04_cuda_memory_stream -B 04_cuda_memory_stream/build-cpu -DCPU_ONLY_TESTS=ON
+cmake --build 04_cuda_memory_stream/build-cpu --target transform_checks_tests
+ctest --test-dir 04_cuda_memory_stream/build-cpu --output-on-failure
+```
+
+2026-10-26 local-only verification: Apple Clang 21.0.0 compiled the CPU test directly as ISO C++17
+with `-Wall -Wextra -Wpedantic -Werror`; it passed. A separate AddressSanitizer/UndefinedBehaviorSanitizer
+build also passed without reports. Docker/CMake and CUDA/TensorRT were unavailable on the Mac;
+these CMake commands and GPU execution were not run during this review.
+
 ## Checkpoints
 
 - Change `iterations` from `5` to `50` and observe whether average time stabilizes.

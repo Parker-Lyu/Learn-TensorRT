@@ -1,6 +1,6 @@
 #include "postprocess.hpp"
 
-#include "preprocess.hpp"
+#include "geometry.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,14 +14,23 @@ Box xywh_to_xyxy(float cx, float cy, float w, float h) {
     return Box{cx - 0.5F * w, cy - 0.5F * h, cx + 0.5F * w, cy + 0.5F * h};
 }
 
-float area(const Box& box) {
-    return std::max(0.0F, box.x2 - box.x1) * std::max(0.0F, box.y2 - box.y1);
+double area(const Box& box) {
+    return std::max(0.0, static_cast<double>(box.x2) - box.x1) *
+           std::max(0.0, static_cast<double>(box.y2) - box.y1);
+}
+
+void validate_box(const Box& box) {
+    if (!std::isfinite(box.x1) || !std::isfinite(box.y1) ||
+        !std::isfinite(box.x2) || !std::isfinite(box.y2)) {
+        throw std::runtime_error("Box coordinates must be finite.");
+    }
 }
 
 std::vector<int> nms(const std::vector<Box>& boxes,
                      const std::vector<float>& scores,
                      const std::vector<int>& indices,
-                     float iou_threshold) {
+                     float iou_threshold,
+                     int max_detections) {
     std::vector<int> order = indices;
     std::stable_sort(order.begin(), order.end(), [&](int lhs, int rhs) {
         return scores[lhs] > scores[rhs];
@@ -35,6 +44,10 @@ std::vector<int> nms(const std::vector<Box>& boxes,
         });
         if (!suppressed) {
             keep.push_back(candidate);
+            // No class can contribute more than the final global limit.
+            if (keep.size() == static_cast<std::size_t>(max_detections)) {
+                break;
+            }
         }
     }
     return keep;
@@ -59,19 +72,22 @@ const std::vector<std::string>& coco_class_names() {
 }
 
 float intersection_over_union(const Box& a, const Box& b) {
+    validate_box(a);
+    validate_box(b);
     const float x1 = std::max(a.x1, b.x1);
     const float y1 = std::max(a.y1, b.y1);
     const float x2 = std::min(a.x2, b.x2);
     const float y2 = std::min(a.y2, b.y2);
-    const float intersection = area(Box{x1, y1, x2, y2});
-    const float union_area = area(a) + area(b) - intersection;
-    return union_area <= 0.0F ? 0.0F : intersection / union_area;
+    const double intersection = area(Box{x1, y1, x2, y2});
+    const double union_area = area(a) + area(b) - intersection;
+    return union_area <= 0.0 ? 0.0F : static_cast<float>(intersection / union_area);
 }
 
 std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
                                             const std::vector<int64_t>& output_shape,
                                             const LetterboxInfo& letterbox,
                                             const PostprocessConfig& config) {
+    validate_letterbox_info(letterbox);
     if (!std::isfinite(config.confidence_threshold) || !std::isfinite(config.iou_threshold) ||
         config.confidence_threshold < 0.0F || config.confidence_threshold > 1.0F ||
         config.iou_threshold < 0.0F || config.iou_threshold > 1.0F ||
@@ -127,7 +143,11 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
         if (w <= 0.0F || h <= 0.0F) {
             continue;
         }
-        boxes.push_back(map_box_to_original(xywh_to_xyxy(cx, cy, w, h), letterbox));
+        const Box mapped = map_box_to_original(xywh_to_xyxy(cx, cy, w, h), letterbox);
+        if (mapped.x2 <= mapped.x1 || mapped.y2 <= mapped.y1) {
+            continue;  // A box wholly in padding is not a detection in the source image.
+        }
+        boxes.push_back(mapped);
         scores.push_back(best_score);
         class_ids.push_back(best_class);
     }
@@ -140,7 +160,8 @@ std::vector<Detection> decode_yolov8_output(const std::vector<float>& output,
                 class_indices.push_back(i);
             }
         }
-        const std::vector<int> class_kept = nms(boxes, scores, class_indices, config.iou_threshold);
+        const std::vector<int> class_kept = nms(boxes, scores, class_indices, config.iou_threshold,
+                                                  config.max_detections);
         kept.insert(kept.end(), class_kept.begin(), class_kept.end());
     }
 

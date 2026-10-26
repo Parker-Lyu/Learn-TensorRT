@@ -206,6 +206,31 @@ Invalid tensor ranks are rejected before reading dimension storage.
 The 2026-10-22 cleanup update received static source review only on macOS; no TensorRT build,
 engine inference, or new performance measurement was run.
 
+### Storage contract update (2026-10-26)
+
+`include/tensor_size.hpp` provides the same checked dense storage calculation used by the runtime.
+It supports scalar shape `{}`, positive resolved extents, and the lesson's 4/8/16/32/64-bit element
+sizes; packed 4-bit storage rounds up without an overflowing addition. Zero/dynamic extents and
+size overflow are rejected. Runtime allocation explicitly rejects non-linear and vectorized I/O
+formats. This is a supported-storage contract, not a claim that every listed dtype is legal for
+all TensorRT engine I/O. Shape-inference I/O and data-dependent output allocation are not added.
+The TensorRT-facing edits were reviewed statically; GPU integration is unverified in this pass.
+
+## Tests
+
+Dense-linear tensor storage size and overflow tests need no GPU. To build only these checks in the usual development environment:
+
+```bash
+cmake -S 09_tensorrt_cpp_basic -B 09_tensorrt_cpp_basic/build-cpu -DCPU_ONLY_TESTS=ON
+cmake --build 09_tensorrt_cpp_basic/build-cpu --target tensor_size_tests
+ctest --test-dir 09_tensorrt_cpp_basic/build-cpu --output-on-failure
+```
+
+2026-10-26 local-only verification: Apple Clang 21.0.0 compiled the CPU test directly as ISO C++17
+with `-Wall -Wextra -Wpedantic -Werror`; it passed. A separate AddressSanitizer/UndefinedBehaviorSanitizer
+build also passed without reports. Docker/CMake and CUDA/TensorRT were unavailable on the Mac;
+these CMake commands and GPU execution were not run during this review.
+
 ## Checkpoints
 
 - Run the default FP32 build, then run `--load-engine` and compare startup time.
