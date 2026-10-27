@@ -1,37 +1,35 @@
 #include "cuda_memory_demo.hpp"
+#include "cuda_resources.hpp"
 #include "transform_checks.hpp"
 
 #include <cuda_runtime.h>
 
 #include <algorithm>
-#include <cmath>
+#include <chrono>
 #include <cstddef>
-#include <cstdio>
-#include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 namespace {
 
+using lesson04::check_cuda;
+using lesson04::CudaStream;
+using lesson04::CudaEvent;
+using lesson04::DeviceBuffer;
+using lesson04::PinnedHostBuffer;
+using lesson04::ManagedBuffer;
+using lesson04::CudaFreeDevice;
+using lesson04::CudaFreeHost;
 using lesson04::kThreadsPerBlock;
 using lesson04::kScale;
 using lesson04::kBias;
 using lesson04::validate_transform;
 using lesson04::float_buffer_bytes;
-constexpr int kPathColumnWidth = 50;
-
-void check_cuda(cudaError_t status, const char* operation) {
-    if (status != cudaSuccess) {
-        throw std::runtime_error(std::string(operation) + " failed: " +
-                                 cudaGetErrorString(status));
-    }
-}
+constexpr int kPathColumnWidth = 18;
+constexpr int kScopeColumnWidth = 26;
 
 cudaError_t prefetch_to_device_async(const void* pointer,
                                      std::size_t byte_count,
@@ -84,138 +82,6 @@ DeviceInfo get_device_info() {
     info.integrated_gpu = prop.integrated != 0;
     return info;
 }
-
-// Destructors preserve active exceptions; CUDA cleanup failures remain observable.
-void report_cuda_cleanup(cudaError_t status, const char* operation) noexcept {
-    if (status != cudaSuccess) {
-        std::fprintf(stderr, "%s failed during cleanup: %s\n", operation,
-                     cudaGetErrorString(status));
-    }
-}
-
-class CudaStream {
-public:
-    CudaStream() {
-        check_cuda(cudaStreamCreate(&stream_), "cudaStreamCreate");
-    }
-
-    ~CudaStream() noexcept {
-        if (stream_ != nullptr) {
-            // Destroy alone does not wait: finish work before dependent resources unwind.
-            report_cuda_cleanup(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
-            report_cuda_cleanup(cudaStreamDestroy(stream_), "cudaStreamDestroy");
-        }
-    }
-
-    CudaStream(const CudaStream&) = delete;
-    CudaStream& operator=(const CudaStream&) = delete;
-
-    cudaStream_t get() const noexcept {
-        return stream_;
-    }
-
-    void synchronize() const {
-        check_cuda(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
-    }
-
-private:
-    cudaStream_t stream_ = nullptr;
-};
-
-class CudaEvent {
-public:
-    explicit CudaEvent(unsigned int flags = cudaEventDefault) {
-        check_cuda(cudaEventCreateWithFlags(&event_, flags), "cudaEventCreateWithFlags");
-    }
-
-    ~CudaEvent() noexcept {
-        if (event_ != nullptr) {
-            report_cuda_cleanup(cudaEventDestroy(event_), "cudaEventDestroy");
-        }
-    }
-
-    CudaEvent(const CudaEvent&) = delete;
-    CudaEvent& operator=(const CudaEvent&) = delete;
-
-    cudaEvent_t get() const noexcept {
-        return event_;
-    }
-
-private:
-    cudaEvent_t event_ = nullptr;
-};
-
-template <typename FreeFn>
-class UniqueCudaMemory {
-    static_assert(std::is_nothrow_move_constructible_v<FreeFn>);
-    static_assert(std::is_nothrow_move_assignable_v<FreeFn>);
-    static_assert(std::is_nothrow_invocable_r_v<cudaError_t, FreeFn&, float*>);
-
-public:
-    UniqueCudaMemory() = default;
-
-    UniqueCudaMemory(float* ptr, std::size_t element_count, FreeFn free_fn)
-        : ptr_(ptr), element_count_(element_count), free_fn_(std::move(free_fn)) {}
-
-    ~UniqueCudaMemory() noexcept {
-        reset();
-    }
-
-    UniqueCudaMemory(const UniqueCudaMemory&) = delete;
-    UniqueCudaMemory& operator=(const UniqueCudaMemory&) = delete;
-
-    UniqueCudaMemory(UniqueCudaMemory&& other) noexcept
-        : ptr_(std::exchange(other.ptr_, nullptr)),
-          element_count_(std::exchange(other.element_count_, 0)),
-          free_fn_(std::move(other.free_fn_)) {}
-
-    UniqueCudaMemory& operator=(UniqueCudaMemory&& other) noexcept {
-        if (this != &other) {
-            reset();
-            free_fn_ = std::move(other.free_fn_);
-            ptr_ = std::exchange(other.ptr_, nullptr);
-            element_count_ = std::exchange(other.element_count_, 0);
-        }
-        return *this;
-    }
-
-    float* get() const noexcept {
-        return ptr_;
-    }
-
-    std::size_t element_count() const noexcept {
-        return element_count_;
-    }
-
-    void reset() noexcept {
-        if (ptr_ != nullptr) {
-            report_cuda_cleanup(free_fn_(ptr_), "CUDA memory release");
-            ptr_ = nullptr;
-        }
-        element_count_ = 0;
-    }
-
-private:
-    float* ptr_ = nullptr;
-    std::size_t element_count_ = 0;
-    FreeFn free_fn_{};
-};
-
-struct CudaFreeDevice {
-    cudaError_t operator()(float* ptr) const noexcept {
-        return cudaFree(ptr);
-    }
-};
-
-struct CudaFreeHost {
-    cudaError_t operator()(float* ptr) const noexcept {
-        return cudaFreeHost(ptr);
-    }
-};
-
-using DeviceBuffer = UniqueCudaMemory<CudaFreeDevice>;
-using PinnedHostBuffer = UniqueCudaMemory<CudaFreeHost>;
-using ManagedBuffer = UniqueCudaMemory<CudaFreeDevice>;
 
 DeviceBuffer make_device_buffer(std::size_t element_count) {
     float* ptr = nullptr;
@@ -280,10 +146,18 @@ void fill_input(float* data, std::size_t element_count) {
 
 struct Measurement {
     std::string name;
+    std::string scope;
     float average_ms = 0.0F;
-    float bandwidth_gib_per_s = 0.0F;
+    double host_average_ms = 0.0;
+    float effective_gib_per_s = 0.0F;
     bool passed = false;
 };
+
+using HostClock = std::chrono::steady_clock;
+
+double host_elapsed_ms(HostClock::time_point start) {
+    return std::chrono::duration<double, std::milli>(HostClock::now() - start).count();
+}
 
 float elapsed_ms(const CudaEvent& start, const CudaEvent& stop) {
     float milliseconds = 0.0F;
@@ -292,7 +166,7 @@ float elapsed_ms(const CudaEvent& start, const CudaEvent& stop) {
     return milliseconds;
 }
 
-float compute_bandwidth_gib_per_s(double bytes_moved, float average_ms) {
+float compute_effective_gib_per_s(double bytes_moved, float average_ms) {
     if (average_ms <= 0.0F) {
         return 0.0F;
     }
@@ -306,8 +180,7 @@ Measurement measure_explicit_copy_flow(const std::string& name,
                                        const float* host_input,
                                        float* host_output,
                                        std::size_t element_count,
-                                       int iterations,
-                                       cudaMemcpyKind host_to_device_kind) {
+                                       int iterations) {
     const std::size_t byte_count = float_buffer_bytes(element_count);
     DeviceBuffer device_input = make_device_buffer(element_count);
     DeviceBuffer device_output = make_device_buffer(element_count);
@@ -317,7 +190,7 @@ Measurement measure_explicit_copy_flow(const std::string& name,
 
     const auto submit_iteration = [&] {
         check_cuda(cudaMemcpyAsync(device_input.get(), host_input, byte_count,
-                                   host_to_device_kind, stream.get()),
+                                   cudaMemcpyHostToDevice, stream.get()),
                    "cudaMemcpyAsync(host-to-device)");
         launch_transform(device_input.get(), device_output.get(), element_count, stream.get());
         check_cuda(cudaMemcpyAsync(host_output, device_output.get(), byte_count,
@@ -326,12 +199,14 @@ Measurement measure_explicit_copy_flow(const std::string& name,
     };
     submit_iteration();  // Warm up this memory path outside the measured interval.
     stream.synchronize();
+    const auto host_start = HostClock::now();
     check_cuda(cudaEventRecord(start.get(), stream.get()), "cudaEventRecord(start)");
     for (int i = 0; i < iterations; ++i) {
         submit_iteration();
     }
     check_cuda(cudaEventRecord(stop.get(), stream.get()), "cudaEventRecord(stop)");
     check_cuda(cudaEventSynchronize(stop.get()), "cudaEventSynchronize(stop)");
+    const double host_average_ms = host_elapsed_ms(host_start) / iterations;
 
     const float total_ms = elapsed_ms(start, stop);
     std::size_t bad_index = 0;
@@ -341,8 +216,10 @@ Measurement measure_explicit_copy_flow(const std::string& name,
     }
 
     return Measurement{name,
+                       "H2D + kernel + D2H",
                        total_ms / static_cast<float>(iterations),
-                       compute_bandwidth_gib_per_s(static_cast<double>(byte_count) * 2.0,
+                       host_average_ms,
+                       compute_effective_gib_per_s(static_cast<double>(byte_count) * 2.0,
                                                   total_ms / iterations),
                        passed};
 }
@@ -368,12 +245,14 @@ Measurement measure_mapped_host_flow(float* mapped_input,
 
     launch_transform(device_mapped_input, device_mapped_output, element_count, stream.get());
     stream.synchronize();  // Untimed warmup also completes mapped-host writes.
+    const auto host_start = HostClock::now();
     check_cuda(cudaEventRecord(start.get(), stream.get()), "cudaEventRecord(start)");
     for (int i = 0; i < iterations; ++i) {
         launch_transform(device_mapped_input, device_mapped_output, element_count, stream.get());
     }
     check_cuda(cudaEventRecord(stop.get(), stream.get()), "cudaEventRecord(stop)");
     check_cuda(cudaEventSynchronize(stop.get()), "cudaEventSynchronize(stop)");
+    const double host_average_ms = host_elapsed_ms(host_start) / iterations;
 
     const float total_ms = elapsed_ms(start, stop);
     std::size_t bad_index = 0;
@@ -383,9 +262,11 @@ Measurement measure_mapped_host_flow(float* mapped_input,
     }
 
     const std::size_t byte_count = float_buffer_bytes(element_count);
-    return Measurement{"mapped pinned: kernel reads/writes host memory",
+    return Measurement{"mapped pinned",
+                       "kernel (host access)",
                        total_ms / static_cast<float>(iterations),
-                       compute_bandwidth_gib_per_s(static_cast<double>(byte_count) * 2.0,
+                       host_average_ms,
+                       compute_effective_gib_per_s(static_cast<double>(byte_count) * 2.0,
                                                   total_ms / iterations),
                        passed};
 }
@@ -417,12 +298,17 @@ Measurement measure_managed_flow(float* managed_input,
 
     launch_transform(managed_input, managed_output, element_count, stream.get());
     stream.synchronize();  // Complete prefetch and one warmup kernel before timing.
+    const auto host_start = HostClock::now();
     check_cuda(cudaEventRecord(start.get(), stream.get()), "cudaEventRecord(start)");
     for (int i = 0; i < iterations; ++i) {
         launch_transform(managed_input, managed_output, element_count, stream.get());
     }
     check_cuda(cudaEventRecord(stop.get(), stream.get()), "cudaEventRecord(stop)");
 
+    check_cuda(cudaEventSynchronize(stop.get()), "cudaEventSynchronize(stop)");
+    const double host_average_ms = host_elapsed_ms(host_start) / iterations;
+
+    // CPU validation needs migration/completion, but this is outside both timers.
     check_cuda(prefetch_to_host_async(managed_output,
                                       float_buffer_bytes(element_count),
                                       stream.get()),
@@ -436,18 +322,22 @@ Measurement measure_managed_flow(float* managed_input,
         std::cerr << "Unified Memory validation failed at index " << bad_index << '\n';
     }
 
-    return Measurement{"unified memory: prefetched kernel access",
+    return Measurement{"managed",
+                       "kernel (prefetched)",
                        total_ms / static_cast<float>(iterations),
+                       host_average_ms,
                        0.0F,
                        passed};
 }
 
 void print_measurement(const Measurement& measurement) {
-    std::cout << std::left << std::setw(kPathColumnWidth) << measurement.name << std::right << std::setw(12)
+    std::cout << std::left << std::setw(kPathColumnWidth) << measurement.name
+              << std::setw(kScopeColumnWidth) << measurement.scope << std::right << std::setw(12)
               << std::fixed << std::setprecision(3) << measurement.average_ms << " ms"
+              << std::setw(12) << measurement.host_average_ms << " ms"
               << std::setw(12);
-    if (measurement.bandwidth_gib_per_s > 0.0F) {
-        std::cout << std::setprecision(2) << measurement.bandwidth_gib_per_s << " GiB/s";
+    if (measurement.effective_gib_per_s > 0.0F) {
+        std::cout << std::setprecision(2) << measurement.effective_gib_per_s << " GiB/s";
     } else {
         std::cout << "n/a";
     }
@@ -456,6 +346,10 @@ void print_measurement(const Measurement& measurement) {
 
 void print_transfer_note() {
     std::cout << "\nNotes:\n"
+              << "- Event and host columns are per-iteration averages over the displayed scope. "
+                 "Host time includes submission and waiting; the difference is not pure CPU overhead.\n"
+              << "- Managed prefetch to/from the GPU is outside both timers. Rows are not "
+                 "comparable end-to-end memory-strategy benchmarks.\n"
               << "- Each path has one untimed warmup. The rate is logical read/write bytes over "
                  "the whole measured interval, not isolated PCIe copy bandwidth.\n"
               << "- cudaMemcpyAsync from pageable host memory can force staging work and may not "
@@ -502,19 +396,17 @@ int run_cuda_memory_demo(const DemoConfig& config) {
     std::fill(pinned_output.get(), pinned_output.get() + pinned_output.element_count(), 0.0F);
 
     std::vector<Measurement> measurements;
-    measurements.push_back(measure_explicit_copy_flow("pageable host: H2D + kernel + D2H",
+    measurements.push_back(measure_explicit_copy_flow("pageable host",
                                                       pageable_input.data(),
                                                       pageable_output.data(),
                                                       config.element_count,
-                                                      config.iterations,
-                                                      cudaMemcpyHostToDevice));
+                                                      config.iterations));
 
-    measurements.push_back(measure_explicit_copy_flow("pinned host: async H2D + kernel + D2H",
+    measurements.push_back(measure_explicit_copy_flow("pinned host",
                                                       pinned_input.get(),
                                                       pinned_output.get(),
                                                       config.element_count,
-                                                      config.iterations,
-                                                      cudaMemcpyHostToDevice));
+                                                      config.iterations));
 
     if (device_info.can_map_host_memory) {
         PinnedHostBuffer mapped_input = make_mapped_host_buffer(config.element_count);
@@ -535,10 +427,12 @@ int run_cuda_memory_demo(const DemoConfig& config) {
                                                 config.iterations,
                                                 device_info.device_id));
 
-    std::cout << std::left << std::setw(kPathColumnWidth) << "Path" << std::right
-              << std::setw(15) << "avg time" << std::setw(18) << "effective rate"
+    std::cout << std::left << std::setw(kPathColumnWidth) << "Path"
+              << std::setw(kScopeColumnWidth) << "Timed scope" << std::right
+              << std::setw(15) << "event avg"
+              << std::setw(15) << "host avg" << std::setw(18) << "effective rate"
               << std::setw(10) << "check" << '\n';
-    std::cout << std::string(kPathColumnWidth + 43, '-') << '\n';
+    std::cout << std::string(kPathColumnWidth + kScopeColumnWidth + 58, '-') << '\n';
     for (const Measurement& measurement : measurements) {
         print_measurement(measurement);
     }

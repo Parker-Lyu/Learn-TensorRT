@@ -62,8 +62,8 @@ The output is validated on the CPU so this lesson checks correctness, not just t
 - `CMakeLists.txt`: target-based CUDA/C++17 build file for this runnable lesson.
 - `include/cuda_memory_demo.hpp`: small public config and lesson entry point.
 - `src/main.cpp`: command-line parsing and error reporting.
-- `src/cuda_memory_demo.cu`: RAII CUDA wrappers, memory allocation paths, kernel launch, timing, and
-  validation.
+- `include/cuda_resources.hpp`: RAII owners for CUDA memory, streams, and events.
+- `src/cuda_memory_demo.cu`: memory allocation paths, kernel launch, timing, and validation.
 
 The code keeps CUDA resources behind small RAII classes so later lessons can extend the same habit
 toward TensorRT engines, execution contexts, streams, and buffers.
@@ -165,22 +165,10 @@ Run with the default tensor size and 20 measured iterations (compares all four m
 ./04_cuda_memory_stream/build/cuda_memory_stream
 ```
 
-<details><summary>Example output (RTX 4090, partial)</summary>
-
-```text
-CUDA device:    0 - NVIDIA GeForce RTX 4090
-Mapped host:    supported
-GPU type:       discrete
-Elements:       1228800 float32 values
-Buffer size:    4915200 bytes
-Iterations:     20
-Path                                                     avg time    copy bandwidth     check
-pageable host: H2D + kernel + D2H                        0.600 ms       15.27 GiB/s      pass
-pinned host: async H2D + kernel + D2H                    0.503 ms       18.19 GiB/s      pass
-mapped pinned: kernel reads/writes host memory           0.581 ms       15.75 GiB/s      pass
-unified memory: prefetched kernel access                 0.004 ms         n/a      pass
-```
-</details>
+Current GPU output is not available for the 2026-10-27 revision: the Ubuntu SSH connection
+timed out and Docker is unavailable on the Mac. CUDA compilation and execution were not performed.
+Earlier numeric examples used different measurement code and are omitted to avoid treating them as
+current results.
 
 Run a faster smoke test (262,144 elements and five iterations):
 
@@ -202,12 +190,35 @@ The program prints:
 - CUDA device name
 - whether mapped host memory is supported
 - buffer size
-- average time per path
-- approximate copy bandwidth for explicit-copy and mapped paths
+- the timed scope for each path
+- average CUDA-event time and host wall time per iteration
+- effective logical read/write rate for explicit-copy and mapped paths
 - CPU validation result
 
 Exact numbers depend on GPU, PCIe generation, CPU memory speed, current clocks, and whether the
 first run paid extra initialization cost.
+
+## Timing boundaries
+
+| Path | Event interval | Host interval |
+| --- | --- | --- |
+| Pageable / pinned | H2D + kernel + D2H | Before recording start through waiting for stop |
+| Mapped pinned | Kernel accessing mapped host memory | Before recording start through waiting for stop |
+| Managed | Kernel after prefetch and warmup | Before recording start through waiting for stop |
+
+All paths complete one untimed warmup. The host clock is `std::chrono::steady_clock`; each
+column divides the complete repeated interval by the iteration count, so it is a batch average,
+not a per-request latency distribution. Host time includes submission and waiting overhead.
+Subtracting event time from host time does not isolate pure CPU overhead.
+
+Managed prefetch in both directions, allocation, initialization, CPU validation, and cleanup are
+outside both timers. A small managed time is not evidence that Unified Memory is the fastest
+end-to-end strategy. A fair end-to-end comparison needs the same initial data location and final
+CPU-result boundary for every path; this lesson intentionally shows distinct memory-access scopes.
+
+The effective rate is two logical buffer sizes divided by event time. It is not isolated PCIe
+bandwidth or a measurement of actual device-memory traffic. Single-stream H2D, kernel, and D2H
+remain ordered; this demo does not demonstrate copy/compute overlap.
 
 ## Resource and validation notes
 
@@ -231,6 +242,14 @@ The empty internal launch remains a no-op; the CLI rejects zero elements. Host b
 not execute GPU threads or prove device bounds correctness. CUDA source changes are static-review
 only in this local pass.
 
+### Timing and readability update (2026-10-27)
+
+CUDA resource owners moved unchanged into `include/cuda_resources.hpp`. The explicit-copy helper
+now fixes its H2D direction internally. Output names each timed scope and reports event and host
+averages. Managed result migration remains outside both timers. These changes received static
+review only: the Ubuntu SSH connection timed out, and local Docker is unavailable. No new CUDA
+compilation, GPU correctness, sanitizer, timing, or speedup result is claimed.
+
 ## Tests
 
 Host-only block-count, byte-overflow, and transform-validation tests need no GPU. To build only these checks in the usual development environment:
@@ -248,6 +267,8 @@ these CMake commands and GPU execution were not run during this review.
 
 ## Checkpoints
 
+- Explain why the event/host difference is not pure CPU overhead, and why managed time cannot
+  be ranked against the full explicit-copy flow as an end-to-end result.
 - Change `iterations` from `5` to `50` and observe whether average time stabilizes.
 - Compare default input size with `4194304` elements and explain which path becomes bandwidth-bound.
 - Remove pinned memory from the explicit-copy path mentally: explain why overlap with inference would
