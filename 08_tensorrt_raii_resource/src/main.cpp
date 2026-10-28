@@ -21,7 +21,7 @@ void print_usage(const char* executable_name) {
         << "Examples:\n"
         << "  " << executable_name << '\n'
         << "  " << executable_name
-        << " --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \\\n"
+        << " --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16_strong.engine \\\n"
         << "      --input-shape images:1x3x640x640\n";
 }
 

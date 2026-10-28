@@ -53,6 +53,14 @@ Build at least one TensorRT engine with lesson 06:
 python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp32
 ```
 
+The optional FP16 comparisons below use lesson 06's strongly typed engine. After completing
+lesson 06's ONNX prerequisites, prepare and build it from the repository root:
+
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16_strong
+```
+
 ## Deliverables
 
 - `align_precision.py` controlled comparison workflow
@@ -85,7 +93,7 @@ For FP16, expect larger drift:
 
 ```bash
 python3 07_polygraphy_precision_alignment/align_precision.py \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine \
   --rtol 1e-2 \
   --atol 1e-2 \
   --keep-going
@@ -376,7 +384,7 @@ Use a different engine, for example the FP16 engine from lesson 06:
 
 ```bash
 python3 07_polygraphy_precision_alignment/align_precision.py \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine \
   --rtol 1e-2 \
   --atol 1e-2 \
   --keep-going

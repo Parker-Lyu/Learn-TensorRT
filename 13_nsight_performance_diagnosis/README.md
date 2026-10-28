@@ -35,6 +35,14 @@ cmake --build 11_yolov8_trt_cpp/build                                  # compile
 nsys --version                                                           # verify Nsight Systems
 ```
 
+The optional FP16 profile below uses lesson 06's strongly typed engine. After completing
+lesson 06's ONNX prerequisites, prepare it from the repository root:
+
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16_strong
+```
+
 ## Deliverables
 
 - `profile_yolov8_cpp.py` strict Nsight Systems capture workflow
@@ -171,7 +179,7 @@ Profile the FP16 engine while keeping the Nsight capture short:
 ```bash
 python3 13_nsight_performance_diagnosis/profile_yolov8_cpp.py \
   --lesson11-dir 11_yolov8_trt_cpp \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine \
   --image assets/img.jpeg \
   --nsys-warmup-iterations 1 \
   --nsys-iterations 3

@@ -24,6 +24,14 @@ pipelines, and service-style reporting.
 - Build a compatible lesson 06 TensorRT engine.
 - Use `assets/img.jpeg` as the default input image and the pinned development container for building.
 
+The optional FP16 example below uses lesson 06's strongly typed engine. After completing
+lesson 06's ONNX prerequisites, prepare it from the repository root:
+
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py --models static
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16_strong
+```
+
 ## Deliverables
 
 - Reusable preprocessing, TensorRT runner, postprocessing, and visualization libraries
@@ -83,7 +91,7 @@ Use a different engine or image:
 
 ```bash
 ./11_yolov8_trt_cpp/build/yolov8_trt_cpp \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine \
   --image assets/img.jpeg \
   --output-dir 11_yolov8_trt_cpp/outputs
 ```

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import math
 import re
 import subprocess
 import sys
@@ -144,14 +145,18 @@ def compare_outputs(
     rtol: float,
     atol: float,
 ) -> dict[str, Any]:
-    if rtol < 0 or atol < 0:
-        raise ValueError("rtol and atol must be non-negative")
+    if not all(math.isfinite(value) and value >= 0 for value in (rtol, atol)):
+        raise ValueError("rtol and atol must be finite and non-negative")
+    if not reference_outputs:
+        raise ValueError("expected at least one output")
     if len(reference_outputs) != len(candidate_outputs):
         raise ValueError("reference and candidate output counts differ")
 
     reports: list[dict[str, Any]] = []
     passed = True
     for index, (reference, candidate) in enumerate(zip(reference_outputs, candidate_outputs)):
+        if reference.size == 0 or candidate.size == 0:
+            raise ValueError(f"output {index} is empty")
         if reference.shape != candidate.shape:
             raise ValueError(
                 f"output {index} shape mismatch: {reference.shape} versus {candidate.shape}"
@@ -209,12 +214,12 @@ def compare_yolov8_raw_outputs(
     and use a stricter tolerance. This is a conversion smoke gate, not mAP validation.
     """
     for values in (coordinate_rtol, coordinate_atol, score_rtol, score_atol):
-        if values < 0:
-            raise ValueError("validation tolerances must be non-negative")
+        if not math.isfinite(values) or values < 0:
+            raise ValueError("validation tolerances must be finite and non-negative")
     if len(reference_outputs) != 1 or len(candidate_outputs) != 1:
         raise ValueError("YOLOv8 conversion expects exactly one raw-output tensor")
     reference, candidate = reference_outputs[0], candidate_outputs[0]
-    if reference.ndim != 3 or reference.shape[1] < 5:
+    if reference.ndim != 3 or reference.shape[1] != 84:
         raise ValueError(f"expected YOLOv8 raw output [N,84,anchors], got {reference.shape}")
     coordinate = compare_outputs(
         [reference[:, :4, :]], [candidate[:, :4, :]], coordinate_rtol, coordinate_atol
@@ -380,8 +385,9 @@ def convert_and_validate(
 def main() -> int:
     args = parse_args()
     try:
-        if min(args.coordinate_rtol, args.coordinate_atol, args.score_rtol, args.score_atol) < 0:
-            raise ValueError("validation tolerances must be non-negative")
+        tolerances = (args.coordinate_rtol, args.coordinate_atol, args.score_rtol, args.score_atol)
+        if not all(math.isfinite(value) and value >= 0 for value in tolerances):
+            raise ValueError("validation tolerances must be finite and non-negative")
         output_dir = args.output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
         reference_input = load_reference_input(args.reference_input.resolve())

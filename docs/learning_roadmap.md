@@ -377,8 +377,10 @@ Topics:
 
 Deliverables:
 
-- `build_and_benchmark.py` engine-build and benchmark driver
+- `prepare_fp16_onnx.py` explicit mixed-precision conversion and numerical gate
+- `build_and_benchmark.py` engine-build and benchmark driver with timing-cache and guarded engine reuse
 - `summarize_results.py` evidence summarizer
+- CPU regression tests for conversion gates, cache reuse, and evidence parsing
 - Ignored engines, timing cache, logs, profiles, timing samples, manifest, and benchmark summary
 
 Acceptance criteria:
@@ -387,6 +389,8 @@ Acceptance criteria:
 - Saved benchmark evidence includes latency, throughput, memory, layer profiles, timing samples,
   and environment identity.
 - The generated summary compares FP32 and FP16 under the documented matched conditions.
+- Strongly typed builds reject failed or stale conversion evidence; repeat runs reuse only
+  verified compatible engines and collect fresh measurements.
 
 ### `07_polygraphy_precision_alignment`
 

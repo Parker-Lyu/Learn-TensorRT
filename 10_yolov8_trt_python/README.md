@@ -36,6 +36,14 @@ The default command expects:
 assets/img.jpeg
 ```
 
+The optional FP16 examples below use lesson 06's strongly typed engines. After completing
+lesson 06's static and dynamic ONNX prerequisites, prepare them from the repository root:
+
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16_strong dynamic_fp16_strong
+```
+
 ## Deliverables
 
 - `infer_yolov8_trt.py` inference CLI
@@ -70,7 +78,7 @@ Use a specific engine or image:
 
 ```bash
 cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py \
-  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16.engine \
+  --engine ../06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine \
   --image ../assets/img.jpeg
 ```
 
@@ -78,7 +86,7 @@ Run a dynamic engine by supplying runtime dimensions:
 
 ```bash
 cd 10_yolov8_trt_python && python3 infer_yolov8_trt.py \
-  --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+  --engine ../06_trtexec_engine/outputs/yolov8n_dynamic_fp16_strong.engine \
   --input-shape images:1x3x640x640
 ```
 

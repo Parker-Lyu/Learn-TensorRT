@@ -41,6 +41,14 @@ The default executable path expects:
 Serialized TensorRT engines are machine-local artifacts. Rebuild them inside the target container
 and on the target GPU/software stack.
 
+The optional FP16 examples below use lesson 06's strongly typed engines. After completing
+lesson 06's static and dynamic ONNX prerequisites, prepare them from the repository root:
+
+```bash
+python3 06_trtexec_engine/prepare_fp16_onnx.py
+python3 06_trtexec_engine/build_and_benchmark.py --builds static_fp16_strong dynamic_fp16_strong
+```
+
 ## Deliverables
 
 - `tensorrt_raii_lib` reusable C++ library
@@ -127,14 +135,14 @@ Use a specific engine:
 
 ```bash
 ./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
-  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16.engine
+  --engine 06_trtexec_engine/outputs/yolov8n_static_fp16_strong.engine
 ```
 
 Run a dynamic engine by supplying runtime input dimensions:
 
 ```bash
 ./08_tensorrt_raii_resource/build/tensorrt_raii_resource \
-  --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16.engine \
+  --engine 06_trtexec_engine/outputs/yolov8n_dynamic_fp16_strong.engine \
   --input-shape images:1x3x640x640
 ```
 
