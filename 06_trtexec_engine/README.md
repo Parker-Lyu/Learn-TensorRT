@@ -6,6 +6,9 @@ Build TensorRT engines with `trtexec` before writing a C++ runtime. Compare a st
 the deprecated weakly typed `--fp16` compatibility route, and explicit ModelOpt AutoCast ONNX with
 `--stronglyTyped`. Learn to interpret dynamic profiles, timing caches, memory, and benchmark evidence.
 
+For a Chinese explanation of the tools, precision routes, validation, and caching, see
+[ModelOpt 与 trtexec：TensorRT 精度转换和 Engine 构建](modelopt_and_trtexec.md).
+
 ## Prerequisites
 
 Complete lesson 00 and run the following from the repository root **inside the persistent
