@@ -1,0 +1,5 @@
+# GDAL 3.8.4's master-mutex initialization produces a known lock-order warning when
+# OpenCV initializes image codecs. Upstream fix and explanation:
+# https://github.com/OSGeo/gdal/issues/1108
+# Suppress only this external deadlock stack, never data races or lesson locks.
+deadlock:CPLCreateOrAcquireMutexEx

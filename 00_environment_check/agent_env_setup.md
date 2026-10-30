@@ -280,6 +280,11 @@ Preserve complete failure output. Do not work around failures by arbitrarily upg
 
 ## Known Compatibility Constraints
 
+- Lesson 21's optional CPU TSAN verification uses the development Dockerfile's pinned Clang 18
+  and compiler runtime. Keep it in a separate CPU-only CMake build. Its launcher removes HPC-X
+  preloads only from the instrumented child, retries only recognized pre-main layout errors,
+  and uses one documented GDAL deadlock suppression. Do not lower host ASLR, recreate the container,
+  or disable race reporting to make this gate pass. See lesson 21's README for commands and scope.
 - The upstream image already has a UID 1000 user. The Dockerfile reuses an existing target UID
   instead of creating a duplicate.
 - Ubuntu's full OpenCV development package introduces another UCX runtime through VTK/OpenMPI. The

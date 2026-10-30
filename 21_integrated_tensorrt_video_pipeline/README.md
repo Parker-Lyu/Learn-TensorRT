@@ -46,6 +46,23 @@ completion, in-flight failure, and abort discard. CUDA events measure GPU stages
 clock measures waiting and capture-to-dispatch latency. See the English
 [code walkthrough](CODE_WALKTHROUGH.md) or [中文代码导读](CODE_WALKTHROUGH_ZH.md) for the reading order.
 
+## Setup
+
+The optional CPU ThreadSanitizer run uses Clang 18.1.3 and its matching compiler runtime. New
+images built from `docker/Dockerfile.dev` include both. For an existing persistent container,
+install the pinned tools with this container-management command **on the host**:
+
+```bash
+docker exec --user root learn-tensorrt bash -lc \
+  'apt-get update && apt-get install -y --no-install-recommends \
+    clang-18=1:18.1.3-1ubuntu1 libclang-rt-18-dev=1:18.1.3-1ubuntu1'
+```
+
+This adds a CPU test toolchain; ordinary lessons continue to use their existing compiler and
+CUDA/TensorRT/PyTorch stack. Apt may update distribution compiler/runtime dependencies; the local
+verification used glibc `2.39-0ubuntu8.9`, GCC `13.3.0-6ubuntu2~24.04.1`, and Clang
+`1:18.1.3-1ubuntu1`. The course environment check and normal GPU suite were rerun afterward.
+
 ## Build
 
 ```bash
@@ -233,23 +250,64 @@ Lesson 22 can keep one Lesson 21 process alive instead of repeatedly launching s
 The duration stops new capture, discards and accounts for queued work, and quiesces submitted work.
 Lesson 22 samples the process RSS and process-specific device memory while this command remains alive.
 
-For CPU ThreadSanitizer checks, build separately from CUDA/TensorRT:
+For CPU ThreadSanitizer checks, use a separate Clang 18 build directory inside the container:
 
 ```bash
 cmake -S 21_integrated_tensorrt_video_pipeline \
-      -B 21_integrated_tensorrt_video_pipeline/build-tsan \
-      -DLESSON21_ENABLE_CUDA=OFF -DLESSON21_ENABLE_TSAN=ON
-cmake --build 21_integrated_tensorrt_video_pipeline/build-tsan --parallel
-ctest --test-dir 21_integrated_tensorrt_video_pipeline/build-tsan --output-on-failure
+      -B 21_integrated_tensorrt_video_pipeline/build-tsan-clang18 \
+      -DLESSON21_ENABLE_CUDA=OFF -DLESSON21_ENABLE_TSAN=ON \
+      -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_BUILD_TYPE=Debug
+cmake --build 21_integrated_tensorrt_video_pipeline/build-tsan-clang18 --parallel
+ctest --test-dir 21_integrated_tensorrt_video_pipeline/build-tsan-clang18 --output-on-failure
+```
+
+Example output (partial):
+
+```text
+100% tests passed, 0 tests failed out of 6
+```
+
+The six CTest cases comprise three instrumented CPU tests, two positive controls, and one launcher
+suite containing eight Python cases. The positive controls deliberately create a data race and a
+lock-order inversion: each must produce its intended TSAN report and exit code 66 to pass. Thus a
+missing or disabled detector cannot satisfy the acceptance check. This covers executed CPU paths;
+CUDA device accesses and uninstrumented dependency internals need separate tools.
+
+On this host, GCC TSAN failed before `main()` with incompatible randomized addresses (and sometimes
+an empty startup SIGSEGV). Clang 18 reports a denied `personality(ADDR_NO_RANDOMIZE)` call explicitly.
+The CTest launcher clears HPC-X `LD_PRELOAD` only for the CPU child and retries only exact known
+pre-main layout diagnostics, with a 64-attempt/45-second limit. It never retries a race report,
+lock report, test failure, timeout, unrecognized crash, or a diagnostic mixed with program output.
+Attempts remain visible with `ctest --verbose`. Host ASLR and persistent container settings are not
+changed. Startup exhaustion remains a failed test.
+
+The pinned GDAL 3.8.4 library emits a known lock-initialization warning when OpenCV initializes its
+codecs. The narrow `deadlock:CPLCreateOrAcquireMutexEx` rule in
+[`tests/tsan.supp`](tests/tsan.supp) matches the
+[upstream fixed issue](https://github.com/OSGeo/gdal/issues/1108). It does not suppress data races or
+lesson lock reports; the lock-order positive control verifies the latter. To inspect the original
+external warning with that rule disabled, run the reporting test explicitly (expected nonzero):
+
+```bash
+python3 21_integrated_tensorrt_video_pipeline/tests/run_tsan.py --no-gdal-suppression -- \
+  ./21_integrated_tensorrt_video_pipeline/build-tsan-clang18/integrated_reporting_tests \
+  21_integrated_tensorrt_video_pipeline/build-tsan-clang18/reporting-test-output
+```
+
+Save verbose evidence under ignored `reports/` when needed:
+
+```bash
+mkdir -p reports
+ctest --test-dir 21_integrated_tensorrt_video_pipeline/build-tsan-clang18 \
+  --verbose --output-log reports/21_tsan.log
 ```
 
 Local verification used `learn-tensorrt:25.11`, an NVIDIA GeForce RTX 4090, TensorRT 10.14.1,
 CUDA runtime 13000, and CUDA driver API 13020. The full GPU suite (24 tests), CPU-only suite
 (3 tests), default CPU/GPU commands, and a two-second duration stop were run successfully.
-The duration check also observed live snapshots with `submitted > completed`.
-ThreadSanitizer targets compiled, but all three tests stopped at runtime initialization with
-`FATAL: ThreadSanitizer: unexpected memory mapping`; no TSAN race-check result is available in
-this container/host environment. The 1800-second example above was not run as part of this verification.
+The duration check also observed live snapshots with `submitted > completed`. The Clang TSAN suite
+above completed after the original GCC startup failure. The 1800-second example was not run as part
+of this verification.
 
 ## Checkpoints
 
