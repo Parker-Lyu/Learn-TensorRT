@@ -64,8 +64,10 @@ void FrameScheduler::start() {
 void FrameScheduler::capture(std::size_t stream) {
     try {
         std::uint64_t frame_id = 0;
-        cv::Mat image;
         while (!stopping_) {
+            // Decode into a fresh Mat header. Reusing a destination lets VideoCapture overwrite
+            // pixels still referenced by queued or in-flight frames of the same dimensions.
+            cv::Mat image;
             if (const char* failure = std::getenv("LESSON21_FAIL_SOURCE_FRAME");
                 failure != nullptr && frame_id == std::stoull(failure)) {
                 throw std::runtime_error("injected source read failure");
@@ -98,29 +100,36 @@ std::vector<ScheduledFrame> FrameScheduler::next_batch(
     rethrow_source_error();
     std::vector<ScheduledFrame> batch;
     const auto deadline = Clock::now() + timeout;
-    while (batch.size() < maximum) {
-        bool found = false;
-        for (std::size_t checked = 0; checked < queues_.size(); ++checked) {
-            const std::size_t index = (cursor_ + checked) % queues_.size();
-            auto item = queues_[index]->try_pop();
-            if (!item) continue;
-            if (scheduling_ == SchedulingPolicy::LatestFirst) {
-                while (auto newer = queues_[index]->try_pop()) {
-                    item = std::move(newer);
-                    ++stale_;
+    try {
+        while (batch.size() < maximum) {
+            bool found = false;
+            for (std::size_t checked = 0; checked < queues_.size(); ++checked) {
+                const std::size_t index = (cursor_ + checked) % queues_.size();
+                auto item = queues_[index]->try_pop();
+                if (!item) continue;
+                if (scheduling_ == SchedulingPolicy::LatestFirst) {
+                    while (auto newer = queues_[index]->try_pop()) {
+                        item = std::move(newer);
+                        ++stale_;
+                    }
                 }
+                item->metadata.batch_index = batch.size();
+                batch.push_back(std::move(*item));
+                cursor_ = (index + 1) % queues_.size();
+                found = true;
+                break;
             }
-            item->metadata.batch_index = batch.size();
-            batch.push_back(std::move(*item));
-            cursor_ = (index + 1) % queues_.size();
-            found = true;
-            break;
+            if (!found) {
+                rethrow_source_error();
+                if (done() || Clock::now() >= deadline) break;
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
         }
-        if (!found) {
-            rethrow_source_error();
-            if (done() || Clock::now() >= deadline) break;
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
-        }
+    } catch (...) {
+        // A source can fail after we have already removed part of a batch from its queues.
+        // Those frames are no longer queue-owned, but must still appear in abort accounting.
+        batch_discarded_ += batch.size();
+        throw;
     }
     return batch;
 }
@@ -146,7 +155,7 @@ std::size_t FrameScheduler::evicted() const {
 }
 
 std::size_t FrameScheduler::discarded() const {
-    std::size_t result = rejected_on_close_;
+    std::size_t result = rejected_on_close_ + batch_discarded_;
     for (const auto& queue : queues_) result += queue->discarded();
     return result;
 }

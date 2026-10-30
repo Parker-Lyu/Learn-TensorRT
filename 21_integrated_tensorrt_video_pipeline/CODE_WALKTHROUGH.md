@@ -121,7 +121,7 @@ This is safer than using `-1` for failure because `std::size_t` is unsigned and 
 - `integrated_pipeline_core`: pure C++ queue, slot, and identity logic.
 - `integrated_frame_scheduler`: frame sources and scheduler; depends on OpenCV.
 - `integrated_tensorrt_backend`: CUDA, NPP, and TensorRT backend.
-- `integrated_yolo_postprocess`: reuses the Lesson 11 YOLO pre/postprocessing code; this lesson invokes only postprocessing during result output.
+- `integrated_yolo_postprocess`: reuses Lesson 11 YOLO postprocessing and coordinate geometry directly from committed source.
 - `integrated_tensorrt_video_pipeline`: CPU identity smoke program.
 - `integrated_tensorrt_gpu_smoke`: tests only the GPU backend, without the complete scheduler.
 - `integrated_tensorrt_video_pipeline_gpu`: complete application.
@@ -183,7 +183,8 @@ The parser treats an argument as the next positional argument whenever its first
 - `Slot::~Slot()`: waits for the slot's stream and releases resources according to their type.
 - `TensorRtBackend::Impl::Impl()`: deserializes the engine and creates a separate stream, events, and execution context for every slot.
 - `ensure_capacity()`: grows buffers for the current batch's largest source image and TensorRT I/O sizes.
-- `submit()`: asynchronously queues an entire batch's H2D, preprocessing, inference, and D2H operations on one slot stream.
+- `stage_images()/enqueue_upload()/enqueue_preprocess()/enqueue_inference_and_download()`: host staging, H2D, GPU preprocessing, and inference/D2H, matching the data-flow order.
+- `submit()`: validates the model layout and batch identity, then asynchronously queues an entire batch's H2D, preprocessing, inference, and D2H operations on one slot stream.
 - `ready()`: queries the `done` event without blocking.
 - `collect()`: waits for a specified slot, copies pinned output into a C++ vector, reads stage timings, and releases the slot.
 - `identity()`: reads GPU, compute capability, CUDA, and TensorRT version information.
@@ -196,6 +197,7 @@ The parser treats an argument as the next positional argument whenever its first
 ### 5.7 Postprocessing and Metrics
 
 - `ResultWriter::write()`: slices TensorRT output by batch; reuses Lesson 11 YOLO decoding/NMS; maps boxes back to original-image coordinates; writes detection JSONL and the first annotated image; and records end-to-end latency.
+- `PipelineMetrics::record_submission()`: increments submitted immediately after successful submission, before collection.
 - `PipelineMetrics::record_batch()`: accumulates stage timing, batch distribution, and per-stream latency, while streaming every batch's raw sample to JSONL.
 - `PipelineMetrics::write()`: generates the final `metrics.json`.
 
@@ -233,3 +235,33 @@ Assume the command has two sources, `BATCH=4`, and `SLOTS=2`:
 12. `ResultWriter` uses `transform` in the metadata to map detection boxes back to source-image coordinates and writes identity as `(stream_id, frame_id)`.
 
 Key point: **a slot index identifies a reusable execution resource; it is not the identity of a frame or batch.**
+## 9. Accounting and timing at the failure boundary
+
+The main loop uses one `collect_batch` operation for both ready-event collection and the blocking
+fallback, including fault injection. `completed` means the entire batch passed postprocessing and
+result handling. GPU completion alone does not imply result dispatch. Abort stops capture, discards
+queued work, quiesces submitted CUDA work, and attempts to save terminal metrics while preserving
+the original exception. Initialization failures before the loop do not produce a terminal summary.
+
+The real pipeline now uses `Accounting::validate_terminal()`:
+
+```text
+captured = admitted + rejected_on_admission
+admitted = evicted + submitted + discarded_on_abort
+submitted = completed + failed_in_flight
+```
+
+Frames removed during a failed batch assembly count as unsubmitted abort discards. Submitted frames
+without successful result dispatch count as `failed_in_flight`, which need not indicate a GPU error.
+Legacy fields remain readable by lesson 22: `failed = failed_in_flight` and
+`aborted = discarded_on_abort + rejected_on_admission`.
+
+`cpu_postprocess_ms` measures slicing, metadata preparation, decode/NMS and coordinate restoration;
+`result_output_ms` measures annotation, JPEG and buffered JSONL output. `queue_wait_ms` spans
+successful source read through submission preparation, including backpressure and batch fill.
+It overlaps `batch_fill_wait_ms`; adding these fields double-counts waiting. Video decode precedes
+the capture timestamp and is excluded from end-to-end latency.
+
+Each capture iteration supplies an empty `cv::Mat` destination so a decoder cannot reuse pixels
+still referenced by queued or in-flight frames. Image sequences can share immutable pixels.
+The decoder-style `Mat::create()` test checks this ownership boundary.

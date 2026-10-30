@@ -55,8 +55,26 @@ int run_integrated_pipeline(const PipelineConfig& config) {
     const auto deadline = config.duration.count() == 0
         ? Clock::time_point::max() : started + config.duration;
     auto next_snapshot = started;
-    scheduler.start();
+    std::size_t staged_frames = 0;
+    bool duration_reached = false;
+    std::exception_ptr causal_error;
+
+    // Both ready-event collection and the blocking fallback cross the same result boundary.
+    // Fault injection must not depend on which path happens to observe GPU completion.
+    auto collect_batch = [&](PendingBatch current) {
+        GpuBatchResult result = backend.collect(current.slot);
+        if (const char* failure = std::getenv("LESSON21_FAIL_POSTPROCESS_BATCH");
+            failure != nullptr && result.metadata.batch_id == std::stoull(failure)) {
+            throw std::runtime_error("injected postprocess failure");
+        }
+        std::vector<double> frame_latencies;
+        const ResultTiming timing = writer.write(result, current.images, frame_latencies);
+        metrics.record_batch(result, current.queue_wait_ms, current.batch_fill_wait_ms,
+                             timing.cpu_postprocess_ms, timing.result_output_ms, frame_latencies);
+    };
+
     try {
+        scheduler.start();
         while (!scheduler.done() || !pending.empty()) {
             if (Clock::now() >= next_snapshot) {
                 snapshots << "{\"elapsed_seconds\":"
@@ -72,7 +90,10 @@ int run_integrated_pipeline(const PipelineConfig& config) {
                 snapshots.flush();
                 next_snapshot = Clock::now() + config.metrics_interval;
             }
-            if (Clock::now() >= deadline) scheduler.stop(true);
+            if (Clock::now() >= deadline) {
+                duration_reached = true;
+                scheduler.stop(true);
+            }
             while (backend.available_slots() != 0 && !scheduler.done()) {
                 const auto fill_started = Clock::now();
                 auto scheduled = scheduler.next_batch(config.maximum_batch,
@@ -80,6 +101,7 @@ int run_integrated_pipeline(const PipelineConfig& config) {
                 const double batch_fill_ms = std::chrono::duration<double, std::milli>(
                     Clock::now() - fill_started).count();
                 if (scheduled.empty()) break;
+                staged_frames = scheduled.size();
                 const auto reserved = backend.try_reserve();
                 if (!reserved) throw std::logic_error("available slot could not be reserved");
                 std::vector<cv::Mat> images;
@@ -94,6 +116,8 @@ int run_integrated_pipeline(const PipelineConfig& config) {
                 }
                 queue_wait_ms /= static_cast<double>(scheduled.size());
                 backend.submit(*reserved, images, std::move(metadata));
+                metrics.record_submission(images.size());
+                staged_frames = 0;
                 pending.push_back({*reserved, std::move(images), queue_wait_ms, batch_fill_ms});
                 if (const char* abort_after = std::getenv("LESSON21_ABORT_AFTER_SUBMISSIONS");
                     abort_after != nullptr && next_batch >= std::stoull(abort_after)) {
@@ -106,52 +130,54 @@ int run_integrated_pipeline(const PipelineConfig& config) {
                 if (!backend.ready(iterator->slot)) continue;
                 PendingBatch current = std::move(*iterator);
                 pending.erase(iterator);
-                GpuBatchResult result = backend.collect(current.slot);
-                if (const char* failure = std::getenv("LESSON21_FAIL_POSTPROCESS_BATCH");
-                    failure != nullptr && result.metadata.batch_id == std::stoull(failure)) {
-                    throw std::runtime_error("injected postprocess failure");
-                }
-                std::vector<double> frame_latencies;
-                const double postprocess_ms = writer.write(result, current.images, frame_latencies);
-                metrics.record_batch(result, current.queue_wait_ms, current.batch_fill_wait_ms,
-                                     postprocess_ms, frame_latencies);
+                collect_batch(std::move(current));
                 collected = true;
                 break;
             }
             if (!collected && !pending.empty()) {
                 PendingBatch current = std::move(pending.front());
                 pending.pop_front();
-                GpuBatchResult result = backend.collect(current.slot);
-                std::vector<double> frame_latencies;
-                const double postprocess_ms = writer.write(result, current.images, frame_latencies);
-                metrics.record_batch(result, current.queue_wait_ms, current.batch_fill_wait_ms,
-                                     postprocess_ms, frame_latencies);
+                collect_batch(std::move(current));
             }
         }
         scheduler.stop(false);
         scheduler.rethrow_source_error();
     } catch (...) {
-        const std::exception_ptr causal = std::current_exception();
+        causal_error = std::current_exception();
         scheduler.stop(true);
         for (const PendingBatch& batch : pending) {
             try { backend.collect(batch.slot); } catch (...) { /* Preserve the first error. */ }
         }
-        std::rethrow_exception(causal);
+        // Quiescing is not successful dispatch: outstanding submitted frames are failed.
+        // Keep the original error even if metrics or cleanup also fail.
     }
 
     const double elapsed = std::chrono::duration<double>(Clock::now() - started).count();
-    const std::uint64_t aborted = scheduler.discarded();
-    metrics.write(config.output_directory / "metrics.json", config, identity,
-                  scheduler.captured(), scheduler.evicted(), aborted,
-                  scheduler.rejected_on_close(), scheduler.queue_peak(), elapsed);
-    const bool accounting_ok = scheduler.captured() ==
-        metrics.completed() + scheduler.evicted() + aborted;
-    std::cout << "backend=tensorrt captured=" << scheduler.captured()
-              << " processed=" << metrics.completed()
-              << " dropped=" << scheduler.evicted() + aborted
+    Accounting accounting;
+    accounting.captured = scheduler.captured();
+    accounting.rejected_on_admission = scheduler.rejected_on_close();
+    accounting.admitted = accounting.captured - accounting.rejected_on_admission;
+    accounting.evicted = scheduler.evicted();
+    accounting.submitted = metrics.submitted();
+    accounting.completed = metrics.completed();
+    accounting.failed_in_flight = accounting.submitted - accounting.completed;
+    accounting.discarded_on_abort = scheduler.discarded() -
+        accounting.rejected_on_admission + staged_frames;
+    const bool normal_drain = !causal_error && !duration_reached;
+    try {
+        metrics.write(config.output_directory / "metrics.json", config, identity, accounting,
+                      scheduler.queue_peak(), elapsed, normal_drain);
+    } catch (const std::exception& error) {
+        if (!causal_error) throw;
+        std::cerr << "failed to save abort metrics: " << error.what() << '\n';
+    }
+    if (causal_error) std::rethrow_exception(causal_error);
+    std::cout << "backend=tensorrt captured=" << accounting.captured
+              << " processed=" << accounting.completed
+              << " dropped=" << accounting.evicted + scheduler.discarded()
               << " queue_peak=" << scheduler.queue_peak()
               << " fps=" << (elapsed > 0.0 ? metrics.completed() / elapsed : 0.0) << '\n';
-    return accounting_ok ? 0 : 1;
+    return 0;
 }
 
 }  // namespace lesson21

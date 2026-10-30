@@ -21,3 +21,12 @@ assert metrics["per_stream_processed"]=={"0":4,"1":4}
 assert metrics["environment"]["tensorrt"].startswith("10.14")
 assert metrics["environment"]["cuda_runtime"] >= 13000
 assert metrics["environment"]["gpu"]
+
+# The real pipeline must use the same terminal accounting contract as the CPU core.
+assert metrics["schema_version"] == 3 and metrics["normal_drain"] is True
+assert metrics["captured"] == metrics["admitted"] + metrics["rejected_on_admission"]
+assert metrics["admitted"] == metrics["evicted"] + metrics["submitted"] + metrics["discarded_on_abort"]
+assert metrics["submitted"] == metrics["completed"] + metrics["failed_in_flight"]
+assert metrics["failed_in_flight"] == metrics["discarded_on_abort"] == 0
+assert metrics["cpu_postprocess_ms"] > 0 and metrics["result_output_ms"] > 0
+assert all(sample["result_output_ms"] > 0 for sample in metrics["batch_samples"])

@@ -16,6 +16,8 @@ namespace lesson21 {
 
 using Clock = std::chrono::steady_clock;
 
+enum class SchedulingPolicy { RoundRobin, LatestFirst };
+
 enum class SlotState { Free, Reserved, Submitted, Completing, Failed };
 
 struct Transform {
@@ -94,6 +96,8 @@ public:
     }
     bool push(T value) {
         std::unique_lock<std::mutex> lock(mutex_);
+        // A rejected push must never mutate a closed queue, including a full drain queue.
+        if (closed_) return false;
         if (policy_ == OverloadPolicy::Block) {
             not_full_.wait(lock, [this] { return closed_ || values_.size() < capacity_; });
             if (closed_) return false;

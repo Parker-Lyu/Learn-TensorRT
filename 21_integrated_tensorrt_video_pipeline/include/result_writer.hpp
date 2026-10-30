@@ -10,11 +10,16 @@
 
 namespace lesson21 {
 
+struct ResultTiming {
+    double cpu_postprocess_ms{};
+    double result_output_ms{};
+};
+
 class ResultWriter {
 public:
     ResultWriter(const std::filesystem::path& output_directory,
                  std::size_t maximum_detection_records);
-    double write(const GpuBatchResult& result, const std::vector<cv::Mat>& source_images,
+    ResultTiming write(const GpuBatchResult& result, const std::vector<cv::Mat>& source_images,
                  std::vector<double>& frame_latencies_ms);
 
 private:

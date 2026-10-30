@@ -1,13 +1,62 @@
 #include "pipeline_core.hpp"
 
+#include <chrono>
+#include <future>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 
 #define CHECK(x) do { if (!(x)) throw std::runtime_error("check failed: " #x); } while (false)
 
+namespace {
+void closed_drop_queue_preserves_drain_contents() {
+    lesson21::BoundedQueue<int> queue(2, lesson21::OverloadPolicy::DropOldest);
+    queue.push(1);
+    queue.push(2);
+    queue.close(false);
+    CHECK(!queue.push(3));
+    CHECK(queue.evicted() == 0);
+    CHECK(queue.pop().value() == 1);
+    CHECK(queue.pop().value() == 2);
+    CHECK(!queue.pop());
+}
+
+void close_wakes_blocked_producer_and_consumer() {
+    using namespace std::chrono_literals;
+    lesson21::BoundedQueue<int> full(1, lesson21::OverloadPolicy::Block);
+    full.push(1);
+    auto producer = std::async(std::launch::async, [&] { return full.push(2); });
+    const bool blocked = producer.wait_for(20ms) == std::future_status::timeout;
+    full.close(true);
+    CHECK(producer.wait_for(2s) == std::future_status::ready);
+    CHECK(!producer.get());
+    CHECK(blocked);
+    CHECK(full.discarded() == 1);
+
+    lesson21::BoundedQueue<int> empty(1, lesson21::OverloadPolicy::Block);
+    auto consumer = std::async(std::launch::async, [&] { return empty.pop(); });
+    empty.close(false);
+    CHECK(consumer.wait_for(2s) == std::future_status::ready);
+    CHECK(!consumer.get());
+}
+
+void abort_accounting_distinguishes_rejections_and_in_flight_failures() {
+    // 12 captured = 2 admission rejections + 10 admitted;
+    // 10 admitted = 1 evicted + 6 submitted + 3 unsubmitted abort discards.
+    lesson21::Accounting accounting{12, 10, 2, 1, 6, 4, 2, 3};
+    accounting.validate_terminal(false);
+    bool rejected = false;
+    try { accounting.validate_terminal(true); }
+    catch (const std::logic_error&) { rejected = true; }
+    CHECK(rejected);
+}
+}  // namespace
+
 int main() {
     try {
+        closed_drop_queue_preserves_drain_contents();
+        close_wakes_blocked_producer_and_consumer();
+        abort_accounting_distinguishes_rejections_and_in_flight_failures();
         lesson21::SlotPool pool(2);
         const auto a = pool.reserve();
         const auto b = pool.reserve();

@@ -10,8 +10,6 @@
 
 namespace lesson21 {
 
-enum class SchedulingPolicy;
-
 struct PipelineConfig {
     std::string engine_path;
     std::vector<std::string> source_paths;
@@ -23,7 +21,7 @@ struct PipelineConfig {
     std::string overload_name{"block"};
     std::size_t queue_capacity{4};
     std::chrono::milliseconds capture_interval{0};
-    SchedulingPolicy scheduling_policy;
+    SchedulingPolicy scheduling_policy{SchedulingPolicy::RoundRobin};
     std::string scheduling_name{"round-robin"};
     std::chrono::seconds duration{0};
     bool repeat_source{false};

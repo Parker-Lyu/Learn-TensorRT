@@ -13,7 +13,6 @@
 
 namespace lesson21 {
 
-enum class SchedulingPolicy { RoundRobin, LatestFirst };
 struct ScheduledFrame { cv::Mat image; FrameMetadata metadata; };
 
 class FrameScheduler {
@@ -56,6 +55,7 @@ private:
     std::atomic<std::size_t> captured_{0};
     std::atomic<std::size_t> finished_{0};
     std::atomic<std::size_t> stale_{0};
+    std::atomic<std::size_t> batch_discarded_{0};
     std::atomic<std::size_t> rejected_on_close_{0};
     std::atomic<bool> stopping_{false};
     std::size_t cursor_{0};

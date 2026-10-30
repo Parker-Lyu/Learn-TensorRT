@@ -10,7 +10,9 @@
 namespace lesson21 {
 
 // FrameSource performs one incremental decode/read per call. The scheduler timestamps a frame only
-// after read() succeeds, so capture-to-result latency includes video decode time.
+// after read() succeeds, so capture-to-result latency excludes video decode time.
+// Returned pixels must remain immutable while any downstream Mat still references them.
+// The scheduler supplies an empty destination for each read; sources may also share immutable images.
 class FrameSource {
 public:
     virtual ~FrameSource() = default;

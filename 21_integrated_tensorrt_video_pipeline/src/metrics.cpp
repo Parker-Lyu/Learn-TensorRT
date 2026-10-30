@@ -44,14 +44,26 @@ void PipelineMetrics::write_raw_sample(const BatchTimingSample& sample) {
         << ",\"gpu_preprocess_ms\":" << sample.gpu_preprocess_ms
         << ",\"tensorrt_ms\":" << sample.tensorrt_ms
         << ",\"d2h_ms\":" << sample.d2h_ms
-        << ",\"cpu_postprocess_ms\":" << sample.cpu_postprocess_ms << "}\n";
+        << ",\"cpu_postprocess_ms\":" << sample.cpu_postprocess_ms
+        << ",\"result_output_ms\":" << sample.result_output_ms << "}\n";
+}
+
+void PipelineMetrics::record_submission(std::size_t frame_count) {
+    if (frame_count == 0) throw std::invalid_argument("cannot submit an empty batch");
+    submitted_ += frame_count;
 }
 
 void PipelineMetrics::record_batch(const GpuBatchResult& result, double queue_wait_ms,
                                    double batch_fill_wait_ms, double cpu_postprocess_ms,
+                                   double result_output_ms,
                                    const std::vector<double>& frame_latencies_ms) {
     const std::size_t batch_size = result.metadata.frames.size();
-    submitted_ += batch_size;
+    if (batch_size == 0 || frame_latencies_ms.size() != batch_size) {
+        throw std::invalid_argument("completed batch requires one latency per frame");
+    }
+    if (batch_size > submitted_ - completed_) {
+        throw std::logic_error("completion exceeds submitted frames");
+    }
     completed_ += batch_size;
     host_staging_total_ms_ += result.host_staging_ms;
     h2d_total_ms_ += result.h2d_ms;
@@ -59,11 +71,12 @@ void PipelineMetrics::record_batch(const GpuBatchResult& result, double queue_wa
     inference_total_ms_ += result.inference_ms;
     d2h_total_ms_ += result.d2h_ms;
     postprocess_total_ms_ += cpu_postprocess_ms;
+    output_total_ms_ += result_output_ms;
     ++batch_distribution_[batch_size];
     const BatchTimingSample sample{
         result.metadata.batch_id, batch_size, queue_wait_ms, batch_fill_wait_ms,
         result.host_staging_ms, result.capacity_growth_ms, result.h2d_ms,
-        result.preprocess_ms, result.inference_ms, result.d2h_ms, cpu_postprocess_ms};
+        result.preprocess_ms, result.inference_ms, result.d2h_ms, cpu_postprocess_ms, result_output_ms};
     write_raw_sample(sample);
     if (batches_.size() < kRetainedBatchSamples) batches_.push_back(sample);
     else batches_[static_cast<std::size_t>(result.metadata.batch_id % kRetainedBatchSamples)] = sample;
@@ -78,21 +91,31 @@ void PipelineMetrics::record_batch(const GpuBatchResult& result, double queue_wa
 }
 
 void PipelineMetrics::write(const std::filesystem::path& path, const PipelineConfig& config,
-                            const RuntimeIdentity& identity, std::uint64_t captured,
-                            std::uint64_t evicted, std::uint64_t aborted,
-                            std::uint64_t rejected_on_admission,
-                            std::size_t queue_peak, double elapsed_seconds) const {
+                            const RuntimeIdentity& identity, const Accounting& accounting,
+                            std::size_t queue_peak, double elapsed_seconds, bool normal_drain) const {
+    accounting.validate_terminal(normal_drain);
+    if (accounting.submitted != submitted_ || accounting.completed != completed_) {
+        throw std::logic_error("metrics and terminal accounting disagree");
+    }
     std::ofstream output(path);
     if (!output) throw std::runtime_error("cannot write metrics: " + path.string());
-    const std::uint64_t failed = captured >= completed_ + evicted + aborted
-        ? captured - completed_ - evicted - aborted : 0;
+    const auto captured = accounting.captured;
+    const auto evicted = accounting.evicted;
+    const auto rejected_on_admission = accounting.rejected_on_admission;
+    // Legacy `aborted` includes admission rejections for lesson 22's total-frame equation.
+    const auto aborted = accounting.discarded_on_abort + rejected_on_admission;
+    const auto failed = accounting.failed_in_flight;
     std::uint64_t total_batches = 0;
     for (const auto& [size, count] : batch_distribution_) {
         static_cast<void>(size);
         total_batches += count;
     }
     output << std::fixed << std::setprecision(6);
-    output << "{\"schema_version\":2,\"clock_domains\":{"
+    output << "{\"schema_version\":3,\"normal_drain\":"
+           << (normal_drain ? "true" : "false")
+           << ",\"failed_in_flight\":" << accounting.failed_in_flight
+           << ",\"discarded_on_abort\":" << accounting.discarded_on_abort
+           << ",\"clock_domains\":{"
            << "\"host\":\"std::chrono::steady_clock\","
            << "\"gpu\":\"CUDA events on each slot stream\"},"
            << "\"captured\":" << captured
@@ -116,6 +139,7 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
            << ",\"inference_ms\":" << inference_total_ms_
            << ",\"d2h_ms\":" << d2h_total_ms_
            << ",\"cpu_postprocess_ms\":" << postprocess_total_ms_
+           << ",\"result_output_ms\":" << output_total_ms_
            << ",\"p50_ms\":" << percentile(latencies_, 0.50)
            << ",\"p90_ms\":" << percentile(latencies_, 0.90)
            << ",\"p99_ms\":" << percentile(latencies_, 0.99)
@@ -170,9 +194,12 @@ void PipelineMetrics::write(const std::filesystem::path& path, const PipelineCon
                << ",\"gpu_preprocess_ms\":" << sample.gpu_preprocess_ms
                << ",\"tensorrt_ms\":" << sample.tensorrt_ms
                << ",\"d2h_ms\":" << sample.d2h_ms
-               << ",\"cpu_postprocess_ms\":" << sample.cpu_postprocess_ms << '}';
+               << ",\"cpu_postprocess_ms\":" << sample.cpu_postprocess_ms
+               << ",\"result_output_ms\":" << sample.result_output_ms << '}';
     }
     output << "]}\n";
+    output.flush();
+    if (!output) throw std::runtime_error("cannot finish metrics output");
 }
 
 }  // namespace lesson21

@@ -20,16 +20,25 @@ ResultWriter::ResultWriter(const std::filesystem::path& output_directory,
     if (!detections_) throw std::runtime_error("cannot open detections output");
 }
 
-double ResultWriter::write(const GpuBatchResult& result,
-                           const std::vector<cv::Mat>& source_images,
-                           std::vector<double>& frame_latencies_ms) {
-    const auto started = Clock::now();
+ResultTiming ResultWriter::write(const GpuBatchResult& result,
+                                  const std::vector<cv::Mat>& source_images,
+                                  std::vector<double>& frame_latencies_ms) {
+    ResultTiming timing;
     const std::size_t count = result.metadata.frames.size();
     if (count == 0 || source_images.size() != count || result.output.size() % count != 0) {
         throw std::invalid_argument("result output does not match batch metadata");
     }
+    if (result.output_shape.size() != 3 ||
+        result.output_shape[0] != static_cast<std::int64_t>(count) ||
+        result.output_shape[1] < 5 || result.output_shape[2] <= 0 ||
+        result.output.size() / count % static_cast<std::uint64_t>(result.output_shape[1]) != 0 ||
+        result.output.size() / count / static_cast<std::uint64_t>(result.output_shape[1]) !=
+            static_cast<std::uint64_t>(result.output_shape[2])) {
+        throw std::invalid_argument("expected YOLO output layout [batch, channels, candidates]");
+    }
     const std::size_t elements_per_image = result.output.size() / count;
     for (std::size_t index = 0; index < count; ++index) {
+        const auto postprocess_started = Clock::now();
         const auto begin = result.output.begin() + static_cast<std::ptrdiff_t>(index * elements_per_image);
         std::vector<float> slice(begin, begin + static_cast<std::ptrdiff_t>(elements_per_image));
         const Transform& transform = result.metadata.frames[index].transform;
@@ -41,6 +50,9 @@ double ResultWriter::write(const GpuBatchResult& result,
             0, 0, transform.scale};
         const auto detections = lesson11::decode_yolov8_output(
             slice, {1, result.output_shape.at(1), result.output_shape.at(2)}, letterbox, {});
+        timing.cpu_postprocess_ms += std::chrono::duration<double, std::milli>(
+            Clock::now() - postprocess_started).count();
+        const auto output_started = Clock::now();
         if (!annotation_written_) {
             cv::Mat annotated = source_images[index].clone();
             for (const auto& detection : detections) {
@@ -55,6 +67,8 @@ double ResultWriter::write(const GpuBatchResult& result,
             annotation_written_ = true;
         }
         if (detection_records_written_ >= maximum_detection_records_) {
+            timing.result_output_ms += std::chrono::duration<double, std::milli>(
+                Clock::now() - output_started).count();
             frame_latencies_ms.push_back(std::chrono::duration<double, std::milli>(
                 Clock::now() - result.metadata.frames[index].captured_at).count());
             continue;
@@ -71,11 +85,14 @@ double ResultWriter::write(const GpuBatchResult& result,
                         << value.box.x2 << ',' << value.box.y2 << "]}";
         }
         detections_ << "]}\n";
+        if (!detections_) throw std::runtime_error("cannot write detections output");
         ++detection_records_written_;
+        timing.result_output_ms += std::chrono::duration<double, std::milli>(
+            Clock::now() - output_started).count();
         frame_latencies_ms.push_back(std::chrono::duration<double, std::milli>(
             Clock::now() - result.metadata.frames[index].captured_at).count());
     }
-    return std::chrono::duration<double, std::milli>(Clock::now() - started).count();
+    return timing;
 }
 
 }  // namespace lesson21

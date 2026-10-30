@@ -120,7 +120,7 @@ backend.submit(*reserved, ...); // * 取出其中的编号
 - `integrated_pipeline_core`：纯 C++ 队列/slot/身份逻辑。
 - `integrated_frame_scheduler`：帧源和调度器，依赖 OpenCV。
 - `integrated_tensorrt_backend`：CUDA、NPP、TensorRT 后端。
-- `integrated_yolo_postprocess`：复用第 11 课的 YOLO 前后处理代码；本课实际只在结果写出中调用后处理。
+- `integrated_yolo_postprocess`：复用第 11 课的 YOLO 后处理和坐标几何代码，不依赖其构建产物。
 - `integrated_tensorrt_video_pipeline`：CPU 身份冒烟程序。
 - `integrated_tensorrt_gpu_smoke`：只测试 GPU backend，不包含完整调度器。
 - `integrated_tensorrt_video_pipeline_gpu`：完整应用。
@@ -182,7 +182,8 @@ backend.submit(*reserved, ...); // * 取出其中的编号
 - `Slot::~Slot()`：等待本 slot 的 stream，再按资源类型释放。
 - `TensorRtBackend::Impl::Impl()`：反序列化 engine；为每个 slot 创建独立 stream、events 和 execution context。
 - `ensure_capacity()`：按当前 batch 最大源图和 TensorRT I/O 大小扩充缓存。
-- `submit()`：把一整个 batch 的 H2D、预处理、推理、D2H 异步排进同一个 slot stream。
+- `stage_images()/enqueue_upload()/enqueue_preprocess()/enqueue_inference_and_download()`：分别负责主机暂存、H2D、GPU 预处理和推理/D2H，顺序与数据流图一致。
+- `submit()`：先校验模型布局和 batch 身份，再把一整个 batch 的 H2D、预处理、推理、D2H 异步排进同一个 slot stream。
 - `ready()`：非阻塞查询 `done` event。
 - `collect()`：等待指定 slot 完成，把 pinned output 拷进 C++ vector，读取各阶段耗时，再释放 slot。
 - `identity()`：读取 GPU、compute capability、CUDA 和 TensorRT 版本。
@@ -195,6 +196,7 @@ backend.submit(*reserved, ...); // * 取出其中的编号
 ### 5.7 后处理和指标
 
 - `ResultWriter::write()`：按 batch 切 TensorRT 输出；复用第 11 课 YOLO decode/NMS；把框映射回原图；写检测 JSONL 和第一张标注图；记录端到端延迟。
+- `PipelineMetrics::record_submission()`：提交成功后立即递增 submitted，尚未收集的 batch 也能出现在运行指标中。
 - `PipelineMetrics::record_batch()`：累计阶段时间、batch 分布和每路延迟，并把每个 batch 的原始样本流式写入 JSONL。
 - `PipelineMetrics::write()`：生成最终 `metrics.json`。
 
@@ -232,3 +234,27 @@ backend.submit(*reserved, ...); // * 取出其中的编号
 12. `ResultWriter` 用 metadata 中的 `transform` 把检测框还原到源图坐标，并用 `(stream_id, frame_id)` 写结果身份。
 
 要点：**slot 编号是可复用的执行资源编号，不是 frame 或 batch 的身份。**
+## 9. 用计数和时间理解失败边界
+
+主循环的 `collect_batch` 统一处理“事件已就绪”和“阻塞等待”两条路径，故障注入也经过
+同一个边界。`completed` 表示整个 batch 已通过后处理和结果处理；GPU 完成并不自动等于
+结果已交付。异常发生时先停止采集并清理队列，等待已提交 CUDA 工作，再写终态指标并保留原始异常。
+
+`Accounting::validate_terminal()` 现在也用于真实流水线：
+
+```text
+captured = admitted + rejected_on_admission
+admitted = evicted + submitted + discarded_on_abort
+submitted = completed + failed_in_flight
+```
+
+组批中途发生源错误，已出队但尚未提交的帧归入 `discarded_on_abort`。已提交但未成功交付的帧
+归入 `failed_in_flight`，它不等于“GPU 执行报错”。`failed` 和 `aborted` 保留第 22 课兼容字段；
+其中 `aborted = discarded_on_abort + rejected_on_admission`。初始化失败尚未进入主循环时没有终态汇总。
+
+`cpu_postprocess_ms` 只统计输出切片、元数据准备和 decode/NMS/坐标还原；画框、JPEG 和缓冲
+JSONL 写入归入 `result_output_ms`。`queue_wait_ms` 从成功读取帧到提交准备，包含背压与组批等待，
+因此不能再加上 `batch_fill_wait_ms`。视频解码发生在时间戳之前，不在端到端延迟内。
+
+采集循环每次提供一个空 `cv::Mat` 解码目标，避免下一次解码覆盖仍在排队或推理中的像素。
+图像序列仍可共享只读像素。测试中的解码器式 `Mat::create()` 会检验这条所有权约定。

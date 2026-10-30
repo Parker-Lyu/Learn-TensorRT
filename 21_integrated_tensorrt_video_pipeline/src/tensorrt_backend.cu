@@ -162,13 +162,26 @@ struct TensorRtBackend::Impl {
         if (!runtime) throw std::runtime_error("create TensorRT runtime failed");
         engine.reset(runtime->deserializeCudaEngine(bytes.data(), bytes.size()));
         if (!engine) throw std::runtime_error("deserialize TensorRT engine failed");
+        if (engine->getNbIOTensors() != 2) {
+            throw std::invalid_argument("expected exactly one input and one output tensor");
+        }
         for (int index = 0; index < engine->getNbIOTensors(); ++index) {
             const char* name = engine->getIOTensorName(index);
+            if (engine->getTensorDataType(name) != nvinfer1::DataType::kFLOAT ||
+                engine->getTensorFormat(name) != nvinfer1::TensorFormat::kLINEAR ||
+                engine->getTensorLocation(name) != nvinfer1::TensorLocation::kDEVICE) {
+                throw std::invalid_argument("expected FP32 linear device I/O tensors");
+            }
             if (engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT) input_name = name;
             else output_name = name;
         }
         if (input_name.empty() || output_name.empty()) {
             throw std::runtime_error("expected exactly one input and one output tensor");
+        }
+        const auto input_shape = engine->getTensorShape(input_name.c_str());
+        if (input_shape.nbDims != 4 || input_shape.d[1] != 3 ||
+            input_shape.d[2] != size.height || input_shape.d[3] != size.width) {
+            throw std::invalid_argument("expected NCHW input with 3 channels and configured size");
         }
         slots.reserve(slot_count);
         for (std::size_t index = 0; index < slot_count; ++index) {
@@ -218,6 +231,97 @@ struct TensorRtBackend::Impl {
             std::chrono::duration<double, std::milli>(Clock::now() - started).count();
     }
 
+    void stage_images(Slot& slot, const std::vector<cv::Mat>& images) {
+        const auto staging_started = Clock::now();
+        auto* staging = static_cast<unsigned char*>(slot.pinned_source);
+        for (std::size_t batch = 0; batch < images.size(); ++batch) {
+            const cv::Mat& image = images[batch];
+            unsigned char* destination = staging + batch * slot.source_stride;
+            const std::size_t row_bytes = static_cast<std::size_t>(image.cols) * image.elemSize();
+            for (int row = 0; row < image.rows; ++row) {
+                std::memcpy(destination + static_cast<std::size_t>(row) * row_bytes,
+                            image.ptr(row), row_bytes);
+            }
+        }
+        slot.host_staging_ms =
+            std::chrono::duration<double, std::milli>(Clock::now() - staging_started).count();
+    }
+
+    void enqueue_upload(Slot& slot, const std::vector<cv::Mat>& images) {
+        const auto* staging = static_cast<const unsigned char*>(slot.pinned_source);
+        check_cuda(cudaEventRecord(slot.h2d_start, slot.stream), "record H2D start");
+        for (std::size_t batch = 0; batch < images.size(); ++batch) {
+            const std::size_t bytes = images[batch].total() * images[batch].elemSize();
+            check_cuda(cudaMemcpyAsync(
+                static_cast<unsigned char*>(slot.device_source) + batch * slot.source_stride,
+                staging + batch * slot.source_stride, bytes,
+                cudaMemcpyHostToDevice, slot.stream), "upload pinned frame");
+        }
+        check_cuda(cudaEventRecord(slot.h2d_end, slot.stream), "record H2D end");
+    }
+
+    void enqueue_preprocess(Slot& slot, const std::vector<cv::Mat>& images) {
+        check_cuda(cudaEventRecord(slot.preprocess_start, slot.stream),
+                   "record preprocessing start");
+        const std::size_t letterbox_stride = static_cast<std::size_t>(input_size.area()) * 3;
+        for (std::size_t batch = 0; batch < images.size(); ++batch) {
+            const cv::Mat& image = images[batch];
+            auto* source = static_cast<Npp8u*>(slot.device_source) + batch * slot.source_stride;
+            auto* letterbox = static_cast<Npp8u*>(slot.device_letterbox) +
+                batch * letterbox_stride;
+            check_cuda(cudaMemsetAsync(letterbox, 114, letterbox_stride, slot.stream),
+                       "fill letterbox");
+            const float scale = std::min(
+                static_cast<float>(input_size.width) / image.cols,
+                static_cast<float>(input_size.height) / image.rows);
+            const int resized_width = std::max(1, static_cast<int>(std::round(image.cols * scale)));
+            const int resized_height = std::max(1, static_cast<int>(std::round(image.rows * scale)));
+            const int pad_x = (input_size.width - resized_width) / 2;
+            const int pad_y = (input_size.height - resized_height) / 2;
+            slot.metadata.frames[batch].transform =
+                {scale, static_cast<float>(pad_x), static_cast<float>(pad_y),
+                 image.cols, image.rows};
+            Npp8u* destination = letterbox +
+                (static_cast<std::size_t>(pad_y) * input_size.width + pad_x) * 3;
+            check_npp(nppiResize_8u_C3R_Ctx(
+                source, image.cols * 3, {image.cols, image.rows},
+                {0, 0, image.cols, image.rows}, destination, input_size.width * 3,
+                {input_size.width, input_size.height},
+                {0, 0, resized_width, resized_height}, NPPI_INTER_LINEAR, slot.npp),
+                "NPP resize");
+            normalize<<<dim3((input_size.width + 15) / 16, (input_size.height + 15) / 16),
+                        dim3(16, 16), 0, slot.stream>>>(
+                letterbox, static_cast<float*>(slot.input),
+                input_size.width, input_size.height, static_cast<int>(batch));
+            check_cuda(cudaGetLastError(), "launch normalize kernel");
+        }
+        check_cuda(cudaEventRecord(slot.preprocess_end, slot.stream),
+                   "record preprocessing end");
+    }
+
+    void enqueue_inference_and_download(Slot& slot) {
+        if (std::getenv("LESSON21_FAIL_TENSOR_ADDRESS") != nullptr ||
+            !slot.context->setTensorAddress(input_name.c_str(), slot.input) ||
+            !slot.context->setTensorAddress(output_name.c_str(), slot.output)) {
+            throw std::runtime_error("bind TensorRT tensors failed");
+        }
+        check_cuda(cudaEventRecord(slot.inference_start, slot.stream),
+                   "record inference start");
+        if (std::getenv("LESSON21_FAIL_ENQUEUE") != nullptr ||
+            !slot.context->enqueueV3(slot.stream)) {
+            throw std::runtime_error("enqueueV3 failed");
+        }
+        check_cuda(cudaEventRecord(slot.inference_end, slot.stream),
+                   "record inference end");
+        check_cuda(cudaEventRecord(slot.d2h_start, slot.stream), "record D2H start");
+        check_cuda(cudaMemcpyAsync(slot.pinned_output, slot.output,
+                                   slot.output_elements * sizeof(float),
+                                   cudaMemcpyDeviceToHost, slot.stream),
+                   "download output to pinned memory");
+        check_cuda(cudaEventRecord(slot.d2h_end, slot.stream), "record D2H end");
+        check_cuda(cudaEventRecord(slot.done, slot.stream), "record completion event");
+    }
+
     void submit(std::size_t index, const std::vector<cv::Mat>& images, BatchMetadata metadata) {
         if (index >= slots.size() || images.empty() || images.size() > 4 ||
             metadata.frames.size() != images.size()) {
@@ -232,7 +336,11 @@ struct TensorRtBackend::Impl {
                 failure != nullptr && metadata.batch_id == std::stoull(failure)) {
                 throw std::runtime_error("injected submit failure");
             }
-            for (const cv::Mat& image : images) {
+            for (std::size_t batch = 0; batch < images.size(); ++batch) {
+                if (metadata.frames[batch].batch_index != batch) {
+                    throw std::invalid_argument("metadata batch index does not match image order");
+                }
+                const cv::Mat& image = images[batch];
                 if (image.empty() || image.type() != CV_8UC3) {
                     throw std::invalid_argument("input must be CV_8UC3");
                 }
@@ -243,6 +351,10 @@ struct TensorRtBackend::Impl {
                 throw std::invalid_argument("batch is outside the TensorRT profile");
             }
             const nvinfer1::Dims output_shape = slot.context->getTensorShape(output_name.c_str());
+            if (output_shape.nbDims != 3 ||
+                output_shape.d[0] != static_cast<int>(images.size()) || output_shape.d[1] < 5) {
+                throw std::invalid_argument("expected YOLO output [batch, 4+classes, candidates]");
+            }
             std::size_t output_elements = 1;
             for (int dimension = 0; dimension < output_shape.nbDims; ++dimension) {
                 if (output_shape.d[dimension] <= 0) {
@@ -260,85 +372,10 @@ struct TensorRtBackend::Impl {
             slot.output_elements = output_elements;
             slot.metadata = metadata;
 
-            const auto staging_started = Clock::now();
-            auto* staging = static_cast<unsigned char*>(slot.pinned_source);
-            for (std::size_t batch = 0; batch < images.size(); ++batch) {
-                const cv::Mat& image = images[batch];
-                unsigned char* destination = staging + batch * slot.source_stride;
-                const std::size_t row_bytes = static_cast<std::size_t>(image.cols) * image.elemSize();
-                for (int row = 0; row < image.rows; ++row) {
-                    std::memcpy(destination + static_cast<std::size_t>(row) * row_bytes,
-                                image.ptr(row), row_bytes);
-                }
-            }
-            slot.host_staging_ms =
-                std::chrono::duration<double, std::milli>(Clock::now() - staging_started).count();
-
-            check_cuda(cudaEventRecord(slot.h2d_start, slot.stream), "record H2D start");
-            for (std::size_t batch = 0; batch < images.size(); ++batch) {
-                const std::size_t bytes = images[batch].total() * images[batch].elemSize();
-                check_cuda(cudaMemcpyAsync(
-                    static_cast<unsigned char*>(slot.device_source) + batch * slot.source_stride,
-                    staging + batch * slot.source_stride, bytes,
-                    cudaMemcpyHostToDevice, slot.stream), "upload pinned frame");
-            }
-            check_cuda(cudaEventRecord(slot.h2d_end, slot.stream), "record H2D end");
-            check_cuda(cudaEventRecord(slot.preprocess_start, slot.stream),
-                       "record preprocessing start");
-            const std::size_t letterbox_stride = static_cast<std::size_t>(input_size.area()) * 3;
-            for (std::size_t batch = 0; batch < images.size(); ++batch) {
-                const cv::Mat& image = images[batch];
-                auto* source = static_cast<Npp8u*>(slot.device_source) + batch * slot.source_stride;
-                auto* letterbox = static_cast<Npp8u*>(slot.device_letterbox) +
-                    batch * letterbox_stride;
-                check_cuda(cudaMemsetAsync(letterbox, 114, letterbox_stride, slot.stream),
-                           "fill letterbox");
-                const float scale = std::min(
-                    static_cast<float>(input_size.width) / image.cols,
-                    static_cast<float>(input_size.height) / image.rows);
-                const int resized_width = std::max(1, static_cast<int>(std::round(image.cols * scale)));
-                const int resized_height = std::max(1, static_cast<int>(std::round(image.rows * scale)));
-                const int pad_x = (input_size.width - resized_width) / 2;
-                const int pad_y = (input_size.height - resized_height) / 2;
-                slot.metadata.frames[batch].transform =
-                    {scale, static_cast<float>(pad_x), static_cast<float>(pad_y),
-                     image.cols, image.rows};
-                Npp8u* destination = letterbox +
-                    (static_cast<std::size_t>(pad_y) * input_size.width + pad_x) * 3;
-                check_npp(nppiResize_8u_C3R_Ctx(
-                    source, image.cols * 3, {image.cols, image.rows},
-                    {0, 0, image.cols, image.rows}, destination, input_size.width * 3,
-                    {input_size.width, input_size.height},
-                    {0, 0, resized_width, resized_height}, NPPI_INTER_LINEAR, slot.npp),
-                    "NPP resize");
-                normalize<<<dim3((input_size.width + 15) / 16, (input_size.height + 15) / 16),
-                            dim3(16, 16), 0, slot.stream>>>(
-                    letterbox, static_cast<float*>(slot.input),
-                    input_size.width, input_size.height, static_cast<int>(batch));
-                check_cuda(cudaGetLastError(), "launch normalize kernel");
-            }
-            check_cuda(cudaEventRecord(slot.preprocess_end, slot.stream),
-                       "record preprocessing end");
-            if (std::getenv("LESSON21_FAIL_TENSOR_ADDRESS") != nullptr ||
-                !slot.context->setTensorAddress(input_name.c_str(), slot.input) ||
-                !slot.context->setTensorAddress(output_name.c_str(), slot.output)) {
-                throw std::runtime_error("bind TensorRT tensors failed");
-            }
-            check_cuda(cudaEventRecord(slot.inference_start, slot.stream),
-                       "record inference start");
-            if (std::getenv("LESSON21_FAIL_ENQUEUE") != nullptr ||
-                !slot.context->enqueueV3(slot.stream)) {
-                throw std::runtime_error("enqueueV3 failed");
-            }
-            check_cuda(cudaEventRecord(slot.inference_end, slot.stream),
-                       "record inference end");
-            check_cuda(cudaEventRecord(slot.d2h_start, slot.stream), "record D2H start");
-            check_cuda(cudaMemcpyAsync(slot.pinned_output, slot.output,
-                                       output_elements * sizeof(float),
-                                       cudaMemcpyDeviceToHost, slot.stream),
-                       "download output to pinned memory");
-            check_cuda(cudaEventRecord(slot.d2h_end, slot.stream), "record D2H end");
-            check_cuda(cudaEventRecord(slot.done, slot.stream), "record completion event");
+            stage_images(slot, images);
+            enqueue_upload(slot, images);
+            enqueue_preprocess(slot, images);
+            enqueue_inference_and_download(slot);
             slot_pool.mark_submitted(index, std::move(metadata));
         } catch (...) {
             cudaStreamSynchronize(slot.stream);

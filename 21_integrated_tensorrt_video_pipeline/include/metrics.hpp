@@ -22,19 +22,20 @@ struct BatchTimingSample {
     double tensorrt_ms{};
     double d2h_ms{};
     double cpu_postprocess_ms{};
+    double result_output_ms{};
 };
 
 class PipelineMetrics {
 public:
     explicit PipelineMetrics(const std::filesystem::path& output_directory);
+    void record_submission(std::size_t frame_count);
     void record_batch(const GpuBatchResult& result, double queue_wait_ms,
                       double batch_fill_wait_ms, double cpu_postprocess_ms,
+                      double result_output_ms,
                       const std::vector<double>& frame_latencies_ms);
     void write(const std::filesystem::path& path, const PipelineConfig& config,
-               const RuntimeIdentity& identity, std::uint64_t captured,
-               std::uint64_t evicted, std::uint64_t aborted,
-               std::uint64_t rejected_on_admission, std::size_t queue_peak,
-               double elapsed_seconds) const;
+               const RuntimeIdentity& identity, const Accounting& accounting,
+               std::size_t queue_peak, double elapsed_seconds, bool normal_drain) const;
 
     std::uint64_t submitted() const noexcept { return submitted_; }
     std::uint64_t completed() const noexcept { return completed_; }
@@ -55,6 +56,7 @@ private:
     double inference_total_ms_{0.0};
     double d2h_total_ms_{0.0};
     double postprocess_total_ms_{0.0};
+    double output_total_ms_{0.0};
     std::map<std::size_t, std::uint64_t> batch_distribution_;
     std::map<std::size_t, std::uint64_t> per_stream_completed_;
     std::map<std::size_t, std::vector<double>> per_stream_latencies_;
