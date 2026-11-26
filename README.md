@@ -29,6 +29,41 @@ inference. You finish with runnable, measurable deployment artifacts, not just `
 Watch the short project overview on [YouTube](https://www.youtube.com/watch?v=K1spF7xL_0o) to see the
 course scope, deployment workflow, and the engineering path from PyTorch to production TensorRT inference.
 
+## What You'll Be Able to Do
+
+After completing the core lessons, you should be able to **build and validate a C++17 TensorRT
+inference pipeline, diagnose performance bottlenecks with Nsight, and evaluate optimizations by
+comparing model accuracy, P95 latency, and throughput**.
+
+
+[MaskDINO-TensorRT](https://github.com/Parker-Lyu/MaskDINO-TensorRT) shows how to build and optimize
+a TensorRT inference pipeline for panoptic segmentation using the techniques you learn in this course.
+
+<table>
+  <tr>
+    <td align="center">
+      <h2>−73.2%</h2>
+      Single-slot end-to-end P95 latency<br><sub>51.93 → 13.90 ms</sub>
+    </td>
+    <td align="center">
+      <h2>4.37×</h2>
+      Experimental peak offline throughput<br><sub>20.38 → 89.02 images/s</sub>
+    </td>
+    <td align="center">
+      <h2>−79.2%</h2>
+      Single-slot peak process VRAM<br><sub>5.19 → 1.08 GiB</sub>
+    </td>
+    <td align="center">
+      <h2>53.1856</h2>
+      Full COCO val2017 PQ<br><sub>Baseline 53.1863 (Δ −0.0006)</sub>
+    </td>
+  </tr>
+</table>
+
+
+
+[![MaskDINO single-slot P95 latency and offline throughput across PyTorch and TensorRT configurations](https://raw.githubusercontent.com/Parker-Lyu/MaskDINO-TensorRT/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/docs/precision-performance.svg)](https://github.com/Parker-Lyu/MaskDINO-TensorRT/blob/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/README.md#inference-performance-comparison)
+
 
 ## Target Audience
 

@@ -27,6 +27,37 @@ CUDA와 NPP로 데이터를 효율적으로 이동하며, YOLOv8 후처리를 �
 [YouTube](https://www.youtube.com/watch?v=K1spF7xL_0o)에서 짧은 프로젝트 소개 영상을 보고,
 과정의 범위, 배포 워크플로, PyTorch에서 프로덕션 TensorRT 추론으로 이어지는 엔지니어링 경로를 확인하세요.
 
+## 과정을 마치면 할 수 있는 일
+
+핵심 과정을 마치면 **C++17과 TensorRT로 추론 파이프라인을 구축하고 검증하며, Nsight로 성능 병목을 찾고,
+모델 정확도, P95 지연 시간, 처리량을 비교해 최적화 효과를 평가**할 수 있습니다.
+
+[MaskDINO-TensorRT](https://github.com/Parker-Lyu/MaskDINO-TensorRT)는 이 과정에서 배운 기법을 활용해
+파놉틱 세그멘테이션용 TensorRT 추론 파이프라인을 구축하고 최적화하는 실제 사례입니다.
+
+<table>
+  <tr>
+    <td align="center">
+      <h2>−73.2%</h2>
+      단일 슬롯의 엔드투엔드 P95 지연 시간<br><sub>51.93 → 13.90 ms</sub>
+    </td>
+    <td align="center">
+      <h2>4.37×</h2>
+      실험 구성의 최대 오프라인 처리량<br><sub>20.38 → 89.02장/초</sub>
+    </td>
+    <td align="center">
+      <h2>−79.2%</h2>
+      단일 슬롯 추론 프로세스의 최대 VRAM 사용량<br><sub>5.19 → 1.08 GiB</sub>
+    </td>
+    <td align="center">
+      <h2>53.1856</h2>
+      COCO val2017 전체 PQ<br><sub>기준값 53.1863(Δ −0.0006)</sub>
+    </td>
+  </tr>
+</table>
+
+[![PyTorch 및 각 TensorRT 구성에서 측정한 MaskDINO의 단일 슬롯 P95 지연 시간과 오프라인 처리량](https://raw.githubusercontent.com/Parker-Lyu/MaskDINO-TensorRT/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/docs/precision-performance.svg)](https://github.com/Parker-Lyu/MaskDINO-TensorRT/blob/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/README.md#inference-performance-comparison)
+
 
 ## 대상 독자
 

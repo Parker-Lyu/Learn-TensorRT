@@ -26,6 +26,37 @@ Triton、DeepStream、Jetson DLA、OpenVINO、Python 绑定和 LLM 推理。最�
 在 [YouTube](https://www.youtube.com/watch?v=K1spF7xL_0o) 上观看项目简介，了解课程范围、
 部署工作流，以及从 PyTorch 走向生产级 TensorRT 推理的工程路径。
 
+## 学完后你能做什么
+
+完成核心课程后，你将能够**构建并验证 C++17 TensorRT 推理流水线，使用 Nsight 定位性能瓶颈，
+并通过对比模型精度、P95 延迟和吞吐量来评估优化效果**。
+
+[MaskDINO-TensorRT](https://github.com/Parker-Lyu/MaskDINO-TensorRT) 展示了如何运用课程中学到的技术，
+构建并优化用于全景分割的 TensorRT 推理流水线。
+
+<table>
+  <tr>
+    <td align="center">
+      <h2>−73.2%</h2>
+      单槽端到端 P95 延迟<br><sub>51.93 → 13.90 ms</sub>
+    </td>
+    <td align="center">
+      <h2>4.37×</h2>
+      实验配置的峰值离线吞吐量<br><sub>20.38 → 89.02 张/秒</sub>
+    </td>
+    <td align="center">
+      <h2>−79.2%</h2>
+      单槽推理进程峰值显存<br><sub>5.19 → 1.08 GiB</sub>
+    </td>
+    <td align="center">
+      <h2>53.1856</h2>
+      COCO val2017 全量评估的 PQ<br><sub>基线 53.1863（Δ −0.0006）</sub>
+    </td>
+  </tr>
+</table>
+
+[![MaskDINO 在 PyTorch 和不同 TensorRT 配置下的单槽 P95 延迟与离线吞吐量](https://raw.githubusercontent.com/Parker-Lyu/MaskDINO-TensorRT/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/docs/precision-performance.svg)](https://github.com/Parker-Lyu/MaskDINO-TensorRT/blob/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/README.md#inference-performance-comparison)
+
 
 ## 目标读者
 

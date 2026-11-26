@@ -27,6 +27,37 @@ CUDA と NPP による効率的なデータ転送、YOLOv8 の後処理を実装
 [YouTube](https://www.youtube.com/watch?v=K1spF7xL_0o) の短いプロジェクト紹介で、
 コースの範囲、デプロイワークフロー、PyTorch から本番向け TensorRT 推論に至るエンジニアリングの道筋を確認できます。
 
+## コース修了後にできること
+
+コアレッスンを修了すると、**C++17 と TensorRT で推論パイプラインを構築・検証し、Nsight で性能のボトルネックを特定し、
+モデル精度、P95 レイテンシ、スループットを比較して最適化の効果を評価**できるようになります。
+
+[MaskDINO-TensorRT](https://github.com/Parker-Lyu/MaskDINO-TensorRT) は、本コースで学ぶ手法を使って、
+パノプティックセグメンテーション向けの TensorRT 推論パイプラインを構築・最適化する実例です。
+
+<table>
+  <tr>
+    <td align="center">
+      <h2>−73.2%</h2>
+      単一スロットのエンドツーエンド P95 レイテンシ<br><sub>51.93 → 13.90 ms</sub>
+    </td>
+    <td align="center">
+      <h2>4.37×</h2>
+      実験構成のピークオフラインスループット<br><sub>20.38 → 89.02 枚/秒</sub>
+    </td>
+    <td align="center">
+      <h2>−79.2%</h2>
+      単一スロットの推論プロセスのピーク VRAM 使用量<br><sub>5.19 → 1.08 GiB</sub>
+    </td>
+    <td align="center">
+      <h2>53.1856</h2>
+      COCO val2017 全体での PQ<br><sub>ベースライン 53.1863（Δ −0.0006）</sub>
+    </td>
+  </tr>
+</table>
+
+[![MaskDINO の PyTorch および各 TensorRT 構成における単一スロットの P95 レイテンシとオフラインスループット](https://raw.githubusercontent.com/Parker-Lyu/MaskDINO-TensorRT/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/docs/precision-performance.svg)](https://github.com/Parker-Lyu/MaskDINO-TensorRT/blob/0c1bf27ac3b54319bca85b96c12ef0d84cc4e7fa/README.md#inference-performance-comparison)
+
 
 ## 対象者
 
